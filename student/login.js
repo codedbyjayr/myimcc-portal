@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 1. Wait for the dynamic Supabase client to load
   let supabase;
   try {
-    supabase = await getSupabaseClient();
+    supabase = await getSupabaseClientAsync();
   } catch (e) {
     console.error("Failed to init Supabase", e);
     return;

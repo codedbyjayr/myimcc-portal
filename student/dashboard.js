@@ -4,14 +4,12 @@
    ===================================================================== */
 
 // ── Supabase Client ───────────────────────────────────────────────────
-// ⚠ Replace these with your real project values from the Supabase dashboard.
-const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
-// Use window.supabase so we read the UMD global BEFORE the local `const supabase`
-// enters its temporal-dead-zone (the original `supabase.createClient(...)` threw
-// a ReferenceError because the local const shadowed the global on the RHS).
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// DO NOT re-declare `const supabase = createClient(...)` here.
+// The client is created by shared/supabase-config.js and stored in
+// window.__myimcc_supabase_client__. We alias it locally for
+// backward compatibility with the rest of this file.
+let supabase;  // set by waitForSupabase() at bottom of file
 // ── State (preserved exactly) ─────────────────────────────────────────
 const state = {
   page: 'dashboard',
@@ -1267,7 +1265,7 @@ async function loadFacultyEval() {
           <div class="eval-question">
             <div class="eval-q-label">${q.label}</div>
             <div class="eval-stars" data-key="${q.key}">
-              ${[1,2,3,4,5].map(n => `<span class="eval-star" data-val="${n}" style="font-size:22px;cursor:pointer;color:var(--ink-300);transition:color 0.15s;">★</span>`).join('')}
+              ${[1, 2, 3, 4, 5].map(n => `<span class="eval-star" data-val="${n}" style="font-size:22px;cursor:pointer;color:var(--ink-300);transition:color 0.15s;">★</span>`).join('')}
             </div>
           </div>
         `).join('')}
@@ -1425,4 +1423,16 @@ async function init() {
     console.error(err);
   }
 }
-init();
+// Wait for shared supabase-config.js to finish, then init
+(function waitForSupabase() {
+  if (window.__myimcc_supabase_client__) {
+    supabase = window.__myimcc_supabase_client__;
+    init();
+  } else {
+    window.addEventListener('supabase:ready', function onReady() {
+      window.removeEventListener('supabase:ready', onReady);
+      supabase = window.__myimcc_supabase_client__;
+      init();
+    });
+  }
+})();

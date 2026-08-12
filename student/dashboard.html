@@ -86,15 +86,23 @@
 
       <div class="nav-label">Account</div>
       <button class="nav-item" data-page="attendance">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="18" rx="2" />
+          <path d="M16 2v4M8 2v4M3 10h18" />
+        </svg>
         Attendance
       </button>
       <button class="nav-item" data-page="evaluation">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" />
+        </svg>
         Faculty Evaluation
       </button>
       <button class="nav-item" data-page="profile">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 00-16 0"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="8" r="5" />
+          <path d="M20 21a8 8 0 00-16 0" />
+        </svg>
         My Profile
       </button>
 
@@ -222,8 +230,8 @@
               <h3>Upcoming Deadlines</h3>
             </div>
             <div class="deadline">
-              <div class="deadline-top"><span class="t">Loading deadlines…</span><span
-                  class="pill pill-soft">—</span></div>
+              <div class="deadline-top"><span class="t">Loading deadlines…</span><span class="pill pill-soft">—</span>
+              </div>
               <div class="d" style="color:var(--ink-500);">—</div>
             </div>
           </div>
@@ -413,8 +421,8 @@
 
         <div class="card card-pad">
           <div class="card-head">
-            <h3 id="gradesTitle">Grades — Loading…<br><span
-                style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">Loading program info…</span></h3>
+            <h3 id="gradesTitle">Grades — Loading…<br><span style="font-weight:500;font-size:12px;color:var(--ink-500);"
+                id="gradesSubtitle">Loading program info…</span></h3>
             <div style="display:flex;gap:8px;align-items:center;">
               <span class="pill pill-soft" style="padding:6px 12px;" id="gradesTermPill">Loading…</span>
               <button class="btn-ghost" id="prospectusBtn"
@@ -466,7 +474,8 @@
           <div class="progress-bar">
             <div class="progress-fill" id="clearFill" style="width:0%;"></div>
           </div>
-          <div style="font-size:12px;color:var(--ink-500);margin-top:8px;" id="clearRemaining">Loading clearance status…</div>
+          <div style="font-size:12px;color:var(--ink-500);margin-top:8px;" id="clearRemaining">Loading clearance status…
+          </div>
         </div>
 
         <div class="dept-grid" id="deptGrid"></div>
@@ -506,10 +515,23 @@
           </div>
         </div>
         <div class="card card-pad">
-          <div class="card-head"><h3>Attendance History</h3></div>
+          <div class="card-head">
+            <h3>Attendance History</h3>
+          </div>
           <table>
-            <thead><tr><th>Date</th><th>Course</th><th>Status</th><th>Notes</th></tr></thead>
-            <tbody id="attBody"><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--ink-300);">Loading attendance...</td></tr></tbody>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Course</th>
+                <th>Status</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody id="attBody">
+              <tr>
+                <td colspan="4" style="text-align:center;padding:20px;color:var(--ink-300);">Loading attendance...</td>
+              </tr>
+            </tbody>
           </table>
         </div>
       </section>
@@ -522,10 +544,13 @@
             <span class="pill pill-soft" id="evalTermPill" style="padding:6px 12px;">Loading…</span>
           </div>
           <p style="font-size:13px;color:var(--ink-500);margin-top:-8px;margin-bottom:16px;">
-            Your feedback is <strong>completely anonymous</strong>. Instructors cannot see who submitted which evaluation.
-            Ratings are used to improve teaching quality. Please rate each instructor honestly based on your experience this semester.
+            Your feedback is <strong>completely anonymous</strong>. Instructors cannot see who submitted which
+            evaluation.
+            Ratings are used to improve teaching quality. Please rate each instructor honestly based on your experience
+            this semester.
           </p>
-          <div id="evalStatus" style="text-align:center;padding:20px;color:var(--ink-300);">Loading evaluation forms…</div>
+          <div id="evalStatus" style="text-align:center;padding:20px;color:var(--ink-300);">Loading evaluation forms…
+          </div>
           <div id="evalList"></div>
         </div>
       </section>
@@ -534,7 +559,9 @@
       <section class="page" id="page-profile">
         <div class="grid-2">
           <div class="card card-pad">
-            <div class="card-head"><h3>Profile Information</h3></div>
+            <div class="card-head">
+              <h3>Profile Information</h3>
+            </div>
             <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
               <div class="avatar" id="profileAvatar" style="width:64px;height:64px;font-size:22px;"></div>
               <div>
@@ -542,32 +569,46 @@
                 <div style="font-size:13px;color:var(--ink-500);" id="profileEmail">—</div>
               </div>
             </div>
-            <div class="fee-line"><span style="font-weight:600;">Student No:</span> <strong id="profileStudentNo">—</strong></div>
-            <div class="fee-line"><span style="font-weight:600;">Program:</span> <strong id="profileProgram">—</strong></div>
-            <div class="fee-line"><span style="font-weight:600;">Year Level:</span> <strong id="profileYear">—</strong></div>
-            <div class="fee-line"><span style="font-weight:600;">Section:</span> <strong id="profileSection">—</strong></div>
-            <div class="fee-line"><span style="font-weight:600;">Phone:</span> <strong id="profilePhone">—</strong></div>
-            <div class="fee-line"><span style="font-weight:600;">Address:</span> <strong id="profileAddress">—</strong></div>
+            <div class="fee-line"><span style="font-weight:600;">Student No:</span> <strong
+                id="profileStudentNo">—</strong></div>
+            <div class="fee-line"><span style="font-weight:600;">Program:</span> <strong id="profileProgram">—</strong>
+            </div>
+            <div class="fee-line"><span style="font-weight:600;">Year Level:</span> <strong id="profileYear">—</strong>
+            </div>
+            <div class="fee-line"><span style="font-weight:600;">Section:</span> <strong id="profileSection">—</strong>
+            </div>
+            <div class="fee-line"><span style="font-weight:600;">Phone:</span> <strong id="profilePhone">—</strong>
+            </div>
+            <div class="fee-line"><span style="font-weight:600;">Address:</span> <strong id="profileAddress">—</strong>
+            </div>
           </div>
           <div class="card card-pad">
-            <div class="card-head"><h3>Edit Contact Info</h3></div>
+            <div class="card-head">
+              <h3>Edit Contact Info</h3>
+            </div>
             <div class="field">
               <label>Phone Number</label>
-              <input type="text" class="field-input" id="editPhone" placeholder="0912 345 6789" style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;">
+              <input type="text" class="field-input" id="editPhone" placeholder="0912 345 6789"
+                style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;">
             </div>
             <div class="field">
               <label>Address</label>
-              <input type="text" class="field-input" id="editAddress" placeholder="Iligan City" style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;">
+              <input type="text" class="field-input" id="editAddress" placeholder="Iligan City"
+                style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;">
             </div>
             <div class="field">
               <label>Avatar URL</label>
-              <input type="text" class="field-input" id="editAvatar" placeholder="https://..." style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;">
+              <input type="text" class="field-input" id="editAvatar" placeholder="https://..."
+                style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;">
             </div>
-            <button class="btn btn-primary" id="saveProfileBtn" style="width:100%;justify-content:center;margin-top:8px;">Save Changes</button>
+            <button class="btn btn-primary" id="saveProfileBtn"
+              style="width:100%;justify-content:center;margin-top:8px;">Save Changes</button>
             <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
               <div style="font-size:12px;font-weight:700;color:var(--ink-500);margin-bottom:8px;">SECURITY</div>
-              <button class="btn btn-outline" style="width:100%;justify-content:center;" id="changePassBtn">Change Password</button>
-              <p style="font-size:11px;color:var(--ink-500);margin-top:8px;">Password changes are handled by Supabase Auth. You will receive a reset email at your school address.</p>
+              <button class="btn btn-outline" style="width:100%;justify-content:center;" id="changePassBtn">Change
+                Password</button>
+              <p style="font-size:11px;color:var(--ink-500);margin-top:8px;">Password changes are handled by Supabase
+                Auth. You will receive a reset email at your school address.</p>
             </div>
           </div>
         </div>
@@ -653,6 +694,7 @@
     </div>
   </div>
 
+  <script src="../shared/supabase-config.js"></script>
   <script src="dashboard.js"></script>
 </body>
 
