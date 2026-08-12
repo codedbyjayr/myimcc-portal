@@ -1,30 +1,14 @@
-// =====================================================================
-// MyIMCC Single Sign-On (SSO) + 2FA (TOTP) Authentication Logic
-// Supabase-native rewrite. Same UI flow / DOM elements as original.
-//   Step 1 (#stepSso)        — Institutional email → Google OAuth
-//   Step 2A (#stepEnroll)     — TOTP enrollment (new pairing)
-//   Step 2B (#stepChallenge)  — TOTP verification (existing pairing)
-//   (#stepUnauthorized)       — Invalid email domain
-// =====================================================================
+// login.js
+document.addEventListener('DOMContentLoaded', async () => {
+  // 1. Wait for the dynamic Supabase client to load
+  let supabase;
+  try {
+    supabase = await getSupabaseClient();
+  } catch (e) {
+    console.error("Failed to init Supabase", e);
+    return;
+  }
 
-// ⚠ Replace these with your real project values from the Supabase dashboard.
-const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// Allowed institutional email suffixes (kept in sync with the small hint text
-// shown under the email input in login.html — UI is untouched).
-const ALLOWED_SUFFIXES = [
-  '@student.imcc.edu.ph',
-  '@faculty.imcc.edu.ph',
-  '@admin.imcc.edu.ph',
-  '@imcc.edu.ph',
-  '@student.school.edu',
-  '@faculty.school.edu',
-  '@admin.school.edu',
-];
-
-document.addEventListener('DOMContentLoaded', () => {
   const stepSso = document.getElementById('stepSso');
   const stepEnroll = document.getElementById('stepEnroll');
   const stepChallenge = document.getElementById('stepChallenge');
@@ -48,11 +32,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const retrySsoBtn = document.getElementById('retrySsoBtn');
   const resetMfaBtn = document.getElementById('resetMfaBtn');
 
-  // Supabase MFA session state (kept in-memory only).
   let activeEmail = '';
-  let pendingFactorId = null;      // factor id returned by mfa.enroll()
-  let pendingChallengeId = null;   // challenge id returned by mfa.challenge()
-  let activeSecret = '';           // TOTP secret shown under the QR
+  let pendingFactorId = null;
+  let pendingChallengeId = null;
+  let activeSecret = '';
 
   function showStep(stepEl) {
     [stepSso, stepEnroll, stepChallenge, stepUnauthorized].forEach(el => {
@@ -74,78 +57,48 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  const toggleSecretBtn = document.getElementById('toggleSecretBtn');
-  let secretVisible = false;
-  if (toggleSecretBtn) {
-    toggleSecretBtn.addEventListener('click', () => {
-      secretVisible = !secretVisible;
-      if (secretVisible) {
-        enrollSecret.textContent = activeSecret;
-        toggleSecretBtn.textContent = 'Hide Key';
-      } else {
-        enrollSecret.textContent = '••••••••••••••••••••';
-        toggleSecretBtn.textContent = 'Show Key';
-      }
-    });
-  }
-
-  // ---------- Helpers ----------------------------------------------------
-
-  function isAllowedDomain(email) {
-    const lower = String(email || '').toLowerCase().trim();
-    return ALLOWED_SUFFIXES.some(suf => lower.endsWith(suf));
-  }
-
-  function roleFromEmail(email) {
-    const lower = String(email || '').toLowerCase();
-    if (lower.endsWith('@faculty.imcc.edu.ph') || lower.endsWith('@faculty.school.edu')) return 'Faculty';
-    if (lower.endsWith('@admin.imcc.edu.ph') || lower.endsWith('@admin.school.edu')) return 'Admin';
-    if (lower.endsWith('@imcc.edu.ph')) return 'Staff';
-    return 'Student';
-  }
-
+  // 2. Fixed routing: Use absolute paths from the root domain to prevent 404s
   function redirectUser(role) {
     const lower = role.toLowerCase();
     if (lower === 'faculty') {
-      window.location.href = 'faculty/teacher-dashboard.html';
+      window.location.href = '/faculty/teacher-dashboard.html';
     } else if (lower === 'admin') {
-      window.location.href = 'admin/admin-dashboard.html';
+      window.location.href = '/admin/admin-dashboard.html';
     } else if (lower === 'staff') {
-      window.location.href = 'staff/staff-dashboard.html';
+      window.location.href = '/staff/staff-dashboard.html';
     } else {
-      window.location.href = 'dashboard.html';
+      window.location.href = '/student/dashboard.html';
     }
   }
-
-  // ---------- Bootstrap: detect existing session / AAL ------------------
 
   async function bootstrap() {
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error || !session) {
-      // No active session — show SSO step.
       showStep(stepSso);
       return;
     }
 
-    // We have a session at AAL1. Decide enroll vs challenge.
+    // Check if user is already fully authenticated (AAL2)
+    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalData.currentLevel === 'aal2') {
+      const { data: { user } } = await supabase.auth.getUser();
+      redirectUser(roleFromEmail(user?.email || activeEmail));
+      return;
+    }
+
     const { data: factorData, error: fErr } = await supabase.auth.mfa.listFactors();
     if (fErr) {
-      console.warn('listFactors error:', fErr);
       showStep(stepSso);
       return;
     }
 
     const totpFactors = factorData?.totp || [];
     if (totpFactors.length === 0) {
-      // No TOTP factor yet — start enrollment.
       await startEnrollment();
     } else {
-      // Has at least one factor — challenge it.
       await startChallenge(totpFactors[0].id);
     }
   }
-
-  // ---------- Step 1: SSO ----------------------------------------------
 
   ssoForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -157,33 +110,29 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Domain gate (mirrors the original UI behaviour).
     if (!isAllowedDomain(email)) {
       showStep(stepUnauthorized);
       return;
     }
 
+    activeEmail = email;
     ssoBtn.disabled = true;
+
     try {
-      // Native Supabase OAuth — Google Workspace SSO. The browser is redirected
-      // to Google's consent screen and back to this same page (redirectTo).
-      // After the redirect, bootstrap() picks up the new session.
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           queryParams: { login_hint: email },
-          redirectTo: window.location.href,
+          // Use origin + pathname to avoid passing query params into the redirect
+          redirectTo: window.location.origin + window.location.pathname,
         },
       });
       if (oauthError) throw oauthError;
-      // Browser will redirect; nothing else to do here.
     } catch (err) {
       showError(ssoError, err.message || 'Authentication failed.');
       ssoBtn.disabled = false;
     }
   });
-
-  // ---------- Step 2A: TOTP Enrollment ----------------------------------
 
   async function startEnrollment() {
     try {
@@ -192,12 +141,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       pendingFactorId = data.id;
       activeSecret = data.totp.secret;
-      secretVisible = false;
 
-      // data.totp.qr_code is a base64 data-URL PNG — drop straight into <img>.
       enrollQrImg.src = data.totp.qr_code;
       enrollSecret.textContent = '••••••••••••••••••••';
-      if (toggleSecretBtn) toggleSecretBtn.textContent = 'Show Key';
       enrollCodeInput.value = '';
 
       showStep(stepEnroll);
@@ -217,17 +163,9 @@ document.addEventListener('DOMContentLoaded', () => {
       showError(enrollError, 'Please enter a valid 6-digit TOTP verification code.');
       return;
     }
-    if (!pendingFactorId) {
-      showError(enrollError, 'Session expired. Please restart sign-in.');
-      showStep(stepSso);
-      return;
-    }
 
     try {
-      // Create a challenge for the just-enrolled factor, then verify the code.
-      const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({
-        factorId: pendingFactorId,
-      });
+      const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({ factorId: pendingFactorId });
       if (chErr) throw chErr;
       pendingChallengeId = ch.id;
 
@@ -238,15 +176,12 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       if (vErr) throw vErr;
 
-      // AAL is now 2. Read the user's email to determine redirect target.
       const { data: { user } } = await supabase.auth.getUser();
       redirectUser(roleFromEmail(user?.email || activeEmail));
     } catch (err) {
       showError(enrollError, err.message || 'Verification failed. Check your app timer.');
     }
   });
-
-  // ---------- Step 2B: TOTP Challenge ----------------------------------
 
   async function startChallenge(factorId) {
     try {
@@ -272,11 +207,6 @@ document.addEventListener('DOMContentLoaded', () => {
       showError(challengeError, 'Please enter your 6-digit Authenticator code.');
       return;
     }
-    if (!pendingFactorId || !pendingChallengeId) {
-      showError(challengeError, 'Session expired. Please restart sign-in.');
-      showStep(stepSso);
-      return;
-    }
 
     try {
       const { error } = await supabase.auth.mfa.verify({
@@ -293,12 +223,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ---------- Reset 2FA (unenroll + re-enroll) --------------------------
-
   if (resetMfaBtn) {
     resetMfaBtn.addEventListener('click', async (e) => {
       e.preventDefault();
-      if (!confirm('Are you sure you want to reset your 2FA pairing key and scan a brand new QR code?')) return;
+      if (!confirm('Are you sure you want to reset your 2FA pairing key?')) return;
 
       try {
         const { data: factorData } = await supabase.auth.mfa.listFactors();
@@ -313,8 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ---------- Retry from Unauthorized screen ----------------------------
-
   if (retrySsoBtn) {
     retrySsoBtn.addEventListener('click', () => {
       showStep(stepSso);
@@ -322,6 +248,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ---------- Kick off --------------------------------------------------
   bootstrap();
 });
