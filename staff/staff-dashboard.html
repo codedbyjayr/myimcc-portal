@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#E7338A">
+<title>Staff Dashboard — MyIMCC Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<link rel="stylesheet" href="../shared/portal.css">
+<style>
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; flex-wrap: wrap; gap: 12px; }
+  .page-header h1 { font-size: 28px; font-weight: 800; color: var(--ink-900); margin: 0; }
+  .page-header p { color: var(--ink-500); font-size: 14px; margin: 4px 0 0; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; margin-bottom: 24px; box-shadow: var(--shadow); }
+  .card h2 { font-size: 16px; font-weight: 800; color: var(--ink-900); margin: 0 0 16px; }
+  table { width: 100%; font-size: 13px; border-collapse: collapse; }
+  table th { text-align: left; padding: 12px; border-bottom: 1px solid var(--line); color: var(--ink-500); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  table td { padding: 12px; border-bottom: 1px solid var(--line); color: var(--ink-900); }
+  table tr:hover td { background: var(--pink-50); }
+  .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+  .badge-cleared { background: var(--green-bg); color: var(--green); }
+  .badge-pending { background: var(--amber-bg); color: var(--amber); }
+  .badge-action { background: var(--red-bg); color: var(--red); }
+  .btn-clear { background: var(--pink-600); color: #fff; border: none; padding: 7px 14px; border-radius: 7px; font-size: 12px; cursor: pointer; font-weight: 600; }
+  .btn-clear:hover { filter: brightness(1.1); }
+  .btn-logout { background: none; border: 1px solid var(--line); color: var(--ink-700); padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-logout:hover { border-color: var(--pink-500); color: var(--pink-600); }
+  @media (max-width: 768px) { .container { padding: 20px 14px; } table { font-size: 12px; } table th, table td { padding: 8px 6px; } }
+</style>
+</head>
+<body data-theme="light">
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1>Staff Dashboard</h1>
+      <p>Manage clearances and student records</p>
+    </div>
+    <button class="btn-logout" onclick="signOut()">Sign Out</button>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total Clearances</div>
+      <div class="stat-value" id="totalClr">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Cleared</div>
+      <div class="stat-value" id="clearedCount" style="color:var(--green);">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Pending</div>
+      <div class="stat-value" id="pendingCount" style="color:var(--amber);">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Clearance Status — All Students</h2>
+    <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">
+      <input type="text" id="searchInput" placeholder="Search student name..." style="flex:1;min-width:200px;padding:9px 14px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
+      <select id="filterDept" style="padding:9px 14px;border:1px solid var(--line);border-radius:8px;font-size:13px;background:var(--card);color:var(--ink-900);">
+        <option value="">All Departments</option>
+      </select>
+      <select id="filterStatus" style="padding:9px 14px;border:1px solid var(--line);border-radius:8px;font-size:13px;background:var(--card);color:var(--ink-900);">
+        <option value="">All Statuses</option>
+        <option value="cleared">Cleared</option>
+        <option value="pending">Pending</option>
+        <option value="action_required">Action Required</option>
+      </select>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Student</th>
+          <th>Program</th>
+          <th>Department</th>
+          <th>Status</th>
+          <th>Note</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="clearanceTable">
+        <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--ink-300);">Loading clearance data...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="../shared/supabase-config.js"></script>
+<script>
+let allClearances = [];
+
+async function init() {
+  const auth = await requireAuth(['staff', 'admin']);
+  if (!auth) return;
+
+  await loadClearances();
+}
+
+async function loadClearances() {
+  try {
+    const { data, error } = await supabase
+      .from('clearances')
+      .select('*, profiles!inner(student_no, full_name, program)')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    allClearances = data || [];
+    renderTable();
+    renderStats();
+
+    // Populate department filter
+    const depts = [...new Set(allClearances.map(c => c.department_name))];
+    const filter = document.getElementById('filterDept');
+    filter.innerHTML = '<option value="">All Departments</option>' +
+      depts.map(d => `<option value="${d}">${d}</option>`).join('');
+  } catch (err) {
+    console.error('Clearance load error:', err);
+    document.getElementById('clearanceTable').innerHTML =
+      `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--red);">Error loading data: ${err.message}</td></tr>`;
+  }
+}
+
+function renderTable() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const deptFilter = document.getElementById('filterDept').value;
+  const statusFilter = document.getElementById('filterStatus').value;
+
+  const filtered = allClearances.filter(c => {
+    const name = (c.profiles?.full_name || '').toLowerCase();
+    const matchesSearch = !search || name.includes(search);
+    const matchesDept = !deptFilter || c.department_name === deptFilter;
+    const matchesStatus = !statusFilter || c.status === statusFilter;
+    return matchesSearch && matchesDept && matchesStatus;
+  });
+
+  if (filtered.length === 0) {
+    document.getElementById('clearanceTable').innerHTML =
+      '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--ink-300);">No clearance records found.</td></tr>';
+    return;
+  }
+
+  const badgeClass = { cleared: 'badge-cleared', pending: 'badge-pending', action_required: 'badge-action' };
+
+  document.getElementById('clearanceTable').innerHTML = filtered.map(c => `
+    <tr>
+      <td><strong>${c.profiles?.full_name || '—'}</strong><br><span style="font-size:11px;color:var(--ink-500);">${c.profiles?.student_no || ''}</span></td>
+      <td>${c.profiles?.program || '—'}</td>
+      <td>${c.department_name}</td>
+      <td><span class="badge ${badgeClass[c.status] || 'badge-pending'}">${c.status.replace('_',' ').toUpperCase()}</span></td>
+      <td style="font-size:11px;color:var(--ink-500);">${c.note || '—'}</td>
+      <td>${c.status !== 'cleared' ? `<button class="btn-clear" onclick="clearStudent('${c.student_id}','${c.department_code}')">Mark Cleared</button>` : '—'}</td>
+    </tr>
+  `).join('');
+}
+
+function renderStats() {
+  const cleared = allClearances.filter(c => c.status === 'cleared').length;
+  const pending = allClearances.filter(c => c.status !== 'cleared').length;
+  document.getElementById('totalClr').textContent = allClearances.length;
+  document.getElementById('clearedCount').textContent = cleared;
+  document.getElementById('pendingCount').textContent = pending;
+}
+
+async function clearStudent(studentId, deptCode) {
+  if (!confirm(`Mark this student as cleared for ${deptCode}?`)) return;
+  try {
+    const { error } = await supabase
+      .from('clearances')
+      .update({ status: 'cleared', cleared_at: new Date().toISOString() })
+      .eq('student_id', studentId)
+      .eq('department_code', deptCode);
+    if (error) throw error;
+
+    showToast('Clearance approved successfully');
+    await loadClearances();
+  } catch (err) {
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+function showToast(msg, isError) {
+  const t = document.createElement('div');
+  t.style.cssText = `position:fixed;bottom:24px;left:24px;padding:13px 20px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;background:${isError ? '#D6274A' : '#1B9C63'};z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.15);`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+document.getElementById('searchInput').addEventListener('input', renderTable);
+document.getElementById('filterDept').addEventListener('change', renderTable);
+document.getElementById('filterStatus').addEventListener('change', renderTable);
+
+init();
+</script>
+</body>
+</html>

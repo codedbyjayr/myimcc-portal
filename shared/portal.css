@@ -1,0 +1,102 @@
+/* =====================================================================
+   MyIMCC Portal — Shared Design Tokens & Base Styles
+   Used by staff, faculty, and admin dashboards.
+   Design language: Build studio luxury minimalism — generous whitespace,
+   subtle weight contrast, single accent (pink/maroon) with breathing room.
+   ===================================================================== */
+
+:root {
+  /* Brand */
+  --pink-500: #E7338A;
+  --pink-600: #E32B4F;
+  --pink-700: #9D1F3A;
+  --maroon-800: #6B162A;
+  --pink-50: #FEF3F8;
+  --pink-100: #FBDEEC;
+  --pink-200: #F6B6D5;
+
+  /* Neutrals */
+  --ink-900: #1B1424;
+  --ink-700: #3D3548;
+  --ink-500: #6B6478;
+  --ink-300: #A29CAE;
+  --line: #EDE6F0;
+  --bg: #F7F5FA;
+  --card: #FFFFFF;
+
+  /* Semantic */
+  --green: #1B9C63;
+  --green-bg: #E7F7EF;
+  --amber: #C77A08;
+  --amber-bg: #FCF0DC;
+  --red: #D6274A;
+  --red-bg: #FCE5EA;
+  --blue: #2A64D6;
+  --blue-bg: #E7EFFC;
+
+  /* Shadows */
+  --shadow: 0 1px 2px rgba(27,20,36,.04), 0 8px 24px rgba(27,20,36,.06);
+  --radius: 14px;
+}
+
+[data-theme="dark"] {
+  --pink-50: #2D1427;
+  --pink-100: #3E1730;
+  --ink-900: #F3EEF7;
+  --ink-700: #D9D2E2;
+  --ink-500: #A79FB5;
+  --ink-300: #6E6680;
+  --line: #312A3B;
+  --bg: #141019;
+  --card: #1D1724;
+  --green-bg: #0F2A20;
+  --amber-bg: #2C2107;
+  --red-bg: #2C1219;
+  --blue-bg: #101E33;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.4);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--ink-900);
+  transition: background .25s ease, color .25s ease;
+}
+h1, h2, h3, .display { font-family: 'Plus Jakarta Sans', sans-serif; }
+
+::selection { background: var(--pink-200); }
+
+/* Stat cards */
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--pink-500);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+.stat-label {
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  font-weight: 800;
+  color: var(--ink-500);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.stat-value {
+  font-size: 27px;
+  font-weight: 800;
+  color: var(--pink-600);
+}
+
+/* Accessibility */
+button:focus-visible, input:focus-visible, a:focus-visible {
+  outline: 2px solid var(--pink-500);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}

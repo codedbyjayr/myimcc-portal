@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#E7338A">
+<title>Faculty Dashboard — MyIMCC Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<link rel="stylesheet" href="../shared/portal.css">
+<style>
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; flex-wrap: wrap; gap: 12px; }
+  .page-header h1 { font-size: 28px; font-weight: 800; color: var(--ink-900); margin: 0; }
+  .page-header p { color: var(--ink-500); font-size: 14px; margin: 4px 0 0; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; margin-bottom: 24px; box-shadow: var(--shadow); }
+  .card h2 { font-size: 16px; font-weight: 800; color: var(--ink-900); margin: 0 0 16px; }
+  table { width: 100%; font-size: 13px; border-collapse: collapse; }
+  table th { text-align: left; padding: 12px; border-bottom: 1px solid var(--line); color: var(--ink-500); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  table td { padding: 12px; border-bottom: 1px solid var(--line); color: var(--ink-900); }
+  table tr:hover td { background: var(--pink-50); }
+  .btn { background: var(--pink-600); color: #fff; border: none; padding: 7px 14px; border-radius: 7px; font-size: 12px; cursor: pointer; font-weight: 600; }
+  .btn:hover { filter: brightness(1.1); }
+  .btn-logout { background: none; border: 1px solid var(--line); color: var(--ink-700); padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-logout:hover { border-color: var(--pink-500); color: var(--pink-600); }
+
+  /* Grade modal */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: center; justify-content: center; z-index: 200; padding: 20px; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: var(--card); border-radius: 14px; max-width: 600px; width: 100%; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+  .modal-head { padding: 20px 24px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+  .modal-head h3 { margin: 0; font-size: 18px; font-weight: 800; }
+  .modal-body { padding: 20px 24px; }
+  .grade-input { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; align-items: center; margin-bottom: 10px; }
+  .grade-input label { font-size: 12px; color: var(--ink-500); font-weight: 600; }
+  .grade-input input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; width: 100%; }
+  @media (max-width: 768px) { .container { padding: 20px 14px; } table { font-size: 12px; } .grade-input { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body data-theme="light">
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1>Faculty Dashboard</h1>
+      <p id="welcomeText">Manage your classes and grades</p>
+    </div>
+    <button class="btn-logout" onclick="signOut()">Sign Out</button>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">My Classes</div>
+      <div class="stat-value" id="classCount">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Students</div>
+      <div class="stat-value" id="studentCount">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Grades Pending</div>
+      <div class="stat-value" id="pendingGrades" style="color:var(--amber);">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>My Classes — Current Term</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Title</th>
+          <th>Schedule</th>
+          <th>Students</th>
+          <th>Graded</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="classesTable">
+        <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--ink-300);">Loading classes...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Attendance -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">Take Attendance</h2>
+      <select id="attendanceClass" class="input" style="width:auto;" onchange="loadAttendanceRoster()">
+        <option value="">Select a class...</option>
+      </select>
+    </div>
+    <input type="date" id="attendanceDate" class="input" style="width:auto;margin-bottom:14px;" onchange="loadAttendanceRoster()">
+    <div id="attendanceRoster" style="color:var(--ink-300);font-size:13px;text-align:center;padding:20px;">Select a class and date to take attendance.</div>
+  </div>
+
+  <!-- Announcements -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">Class Announcements</h2>
+      <button class="btn" onclick="openAnnouncementModal()">+ Post Announcement</button>
+    </div>
+    <div id="announcementList" style="color:var(--ink-300);font-size:13px;text-align:center;padding:20px;">Loading announcements...</div>
+  </div>
+
+  <!-- Schedule -->
+  <div class="card">
+    <h2>My Teaching Schedule</h2>
+    <table>
+      <thead><tr><th>Course</th><th>Day</th><th>Start</th><th>End</th><th>Room</th></tr></thead>
+      <tbody id="scheduleTable"><tr><td colspan="5" style="text-align:center;padding:20px;color:var(--ink-300);">Loading schedule...</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- Internal Messaging -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">Internal Messages</h2>
+      <button class="btn" onclick="openMessageModal()">+ New Message</button>
+    </div>
+    <div id="messageList" style="color:var(--ink-300);font-size:13px;text-align:center;padding:20px;">Loading messages...</div>
+  </div>
+</div>
+
+<!-- Grade Entry Modal -->
+<div class="modal-backdrop" id="gradeModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="gradeModalTitle">Grade Entry</h3>
+      <button onclick="closeGradeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--ink-500);">&times;</button>
+    </div>
+    <div class="modal-body" id="gradeModalBody">
+      <p>Loading roster...</p>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/supabase-config.js"></script>
+<script>
+let currentOfferingId = null;
+let currentRoster = [];
+
+async function init() {
+  const auth = await requireAuth(['faculty', 'admin']);
+  if (!auth) return;
+
+  document.getElementById('welcomeText').textContent =
+    `Welcome, ${auth.profile.full_name} — manage your classes and grades`;
+
+  await loadClasses();
+}
+
+async function loadClasses() {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: profile } = await supabase
+      .from('profiles').select('id, full_name').eq('id', user.id).single();
+
+    // Fetch offerings where instructor_name matches this faculty member
+    const { data: offerings, error } = await supabase
+      .from('course_offerings')
+      .select('*')
+      .ilike('instructor_name', `%${profile.full_name}%`)
+      .order('school_year', { ascending: false });
+
+    if (error) throw error;
+
+    const classes = await Promise.all((offerings || []).map(async (o) => {
+      const { count: studentCount } = await supabase
+        .from('enrollments')
+        .select('id', { count: 'exact', head: true })
+        .eq('offering_id', o.id)
+        .eq('status', 'enrolled');
+
+      const { count: gradedCount } = await supabase
+        .from('grades')
+        .select('id', { count: 'exact', head: true })
+        .eq('offering_id', o.id)
+        .not('final', 'is', null);
+
+      return { ...o, student_count: studentCount || 0, graded_count: gradedCount || 0 };
+    }));
+
+    // Stats
+    const totalStudents = classes.reduce((s, c) => s + c.student_count, 0);
+    const totalPending = classes.reduce((s, c) => s + (c.student_count - c.graded_count), 0);
+    document.getElementById('classCount').textContent = classes.length;
+    document.getElementById('studentCount').textContent = totalStudents;
+    document.getElementById('pendingGrades').textContent = totalPending;
+
+    // Table
+    if (classes.length === 0) {
+      document.getElementById('classesTable').innerHTML =
+        '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--ink-300);">No classes assigned for this term.</td></tr>';
+      return;
+    }
+
+    document.getElementById('classesTable').innerHTML = classes.map(c => `
+      <tr>
+        <td><strong>${c.code}</strong></td>
+        <td>${c.title}</td>
+        <td style="color:var(--ink-500);">${c.schedule || 'TBA'}</td>
+        <td>${c.student_count}</td>
+        <td>${c.graded_count} / ${c.student_count}</td>
+        <td><button class="btn" onclick="openRoster(${c.id}, '${c.code} — ${c.title}')">View Roster & Grades</button></td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    console.error('Load classes error:', err);
+    document.getElementById('classesTable').innerHTML =
+      `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--red);">Error: ${err.message}</td></tr>`;
+  }
+}
+
+async function openRoster(offeringId, title) {
+  currentOfferingId = offeringId;
+  document.getElementById('gradeModalTitle').textContent = title;
+  document.getElementById('gradeModal').classList.add('open');
+  document.getElementById('gradeModalBody').innerHTML = '<p>Loading roster...</p>';
+
+  try {
+    // Fetch enrolled students for this offering
+    const { data: enrollments, error } = await supabase
+      .from('enrollments')
+      .select('student_id, profiles!inner(student_no, full_name, program), grades(midterm, final, equivalent, remark)')
+      .eq('offering_id', offeringId)
+      .eq('status', 'enrolled');
+
+    if (error) throw error;
+
+    currentRoster = enrollments || [];
+
+    if (currentRoster.length === 0) {
+      document.getElementById('gradeModalBody').innerHTML =
+        '<p style="text-align:center;color:var(--ink-300);padding:24px;">No students enrolled in this class.</p>';
+      return;
+    }
+
+    const rows = currentRoster.map((e, i) => {
+      const g = e.grades || {};
+      return `
+        <div class="grade-input">
+          <div>
+            <strong>${e.profiles.full_name}</strong><br>
+            <span style="font-size:11px;color:var(--ink-500);">${e.profiles.student_no} · ${e.profiles.program}</span>
+          </div>
+          <div>
+            <label>Midterm</label>
+            <input type="number" step="0.01" min="1" max="5" value="${g.midterm || ''}" data-idx="${i}" data-field="midterm" placeholder="—">
+          </div>
+          <div>
+            <label>Final</label>
+            <input type="number" step="0.01" min="1" max="5" value="${g.final || ''}" data-idx="${i}" data-field="final" placeholder="—">
+          </div>
+          <div>
+            <label>Remark</label>
+            <select data-idx="${i}" data-field="remark" style="padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
+              <option value="Pending" ${g.remark === 'Pending' || !g.remark ? 'selected' : ''}>Pending</option>
+              <option value="Passed" ${g.remark === 'Passed' ? 'selected' : ''}>Passed</option>
+              <option value="Failed" ${g.remark === 'Failed' ? 'selected' : ''}>Failed</option>
+            </select>
+          </div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('gradeModalBody').innerHTML = `
+      ${rows}
+      <button class="btn" style="margin-top:16px;width:100%;padding:12px;" onclick="saveGrades()">Save Grades</button>
+    `;
+  } catch (err) {
+    document.getElementById('gradeModalBody').innerHTML =
+      `<p style="color:var(--red);">Error: ${err.message}</p>`;
+  }
+}
+
+async function saveGrades() {
+  const inputs = document.querySelectorAll('#gradeModalBody input, #gradeModalBody select');
+  const updates = {};
+
+  inputs.forEach(input => {
+    const idx = parseInt(input.dataset.idx);
+    const field = input.dataset.field;
+    const val = input.value.trim();
+    if (!updates[idx]) updates[idx] = {};
+    if (val) {
+      updates[idx][field] = field === 'remark' ? val : parseFloat(val);
+    }
+  });
+
+  try {
+    for (const [idx, gradeData] of Object.entries(updates)) {
+      const enrollment = currentRoster[parseInt(idx)];
+      if (!enrollment) continue;
+
+      // Upsert grade record
+      const gradeRow = {
+        student_id: enrollment.student_id,
+        offering_id: currentOfferingId,
+        ...gradeData,
+      };
+
+      // Compute equivalent if final is provided
+      if (gradeData.final) {
+        const final = parseFloat(gradeData.final);
+        gradeRow.equivalent = final; // Assuming 5-point scale where equivalent = final
+        if (!gradeData.remark || gradeData.remark === 'Pending') {
+          gradeRow.remark = final <= 3.0 ? 'Passed' : 'Failed';
+        }
+      }
+
+      const { error } = await supabase
+        .from('grades')
+        .upsert(gradeRow, { onConflict: 'student_id,offering_id' });
+
+      if (error) console.error('Grade save error for student:', enrollment.student_id, error);
+    }
+
+    showToast('Grades saved successfully');
+    closeGradeModal();
+    await loadClasses();
+  } catch (err) {
+    showToast('Error saving grades: ' + err.message, true);
+  }
+}
+
+function closeGradeModal() {
+  document.getElementById('gradeModal').classList.remove('open');
+  currentOfferingId = null;
+  currentRoster = [];
+}
+
+function showToast(msg, isError) {
+  const t = document.createElement('div');
+  t.style.cssText = `position:fixed;bottom:24px;left:24px;padding:13px 20px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;background:${isError ? '#D6274A' : '#1B9C63'};z-index:300;box-shadow:0 8px 24px rgba(0,0,0,.15);`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ── Attendance ───────────────────────────────────────────────────────
+let attendanceRoster = [];
+
+async function loadAttendanceClasses() {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: profile } = await supabase.from('profiles').select('id, full_name').eq('id', user.id).single();
+  const { data: offerings } = await supabase.from('course_offerings').select('id, code, title').ilike('instructor_name', `%${profile.full_name}%`);
+  const sel = document.getElementById('attendanceClass');
+  sel.innerHTML = '<option value="">Select a class...</option>' + (offerings || []).map(o => `<option value="${o.id}">${o.code} — ${o.title}</option>`).join('');
+}
+
+async function loadAttendanceRoster() {
+  const offeringId = parseInt(document.getElementById('attendanceClass').value);
+  const date = document.getElementById('attendanceDate').value;
+  const container = document.getElementById('attendanceRoster');
+  if (!offeringId || !date) { container.innerHTML = '<span style="color:var(--ink-300);">Select a class and date to take attendance.</span>'; return; }
+  container.innerHTML = 'Loading roster...';
+  try {
+    const { data: enrollments } = await supabase.from('enrollments').select('student_id, profiles!inner(student_no, full_name)').eq('offering_id', offeringId).eq('status', 'enrolled');
+    const { data: existing } = await supabase.from('attendance').select('student_id, status, notes').eq('offering_id', offeringId).eq('date', date);
+    const existingMap = {};
+    (existing || []).forEach(a => { existingMap[a.student_id] = a; });
+    attendanceRoster = enrollments || [];
+    if (attendanceRoster.length === 0) { container.innerHTML = '<span style="color:var(--ink-300);">No students enrolled in this class.</span>'; return; }
+    const statusColors = { present: 'badge-green', absent: 'badge-red', late: 'badge-amber', excused: 'badge-blue' };
+    container.innerHTML = `
+      <table style="width:100%;font-size:13px;">
+        <thead><tr><th>Student</th><th>No.</th><th>Current</th><th>Mark As</th></tr></thead>
+        <tbody>
+          ${attendanceRoster.map((e, i) => {
+            const existing = existingMap[e.student_id];
+            const status = existing?.status || 'unmarked';
+            return `<tr>
+              <td><strong>${e.profiles.full_name}</strong></td>
+              <td style="font-family:monospace;font-size:12px;">${e.profiles.student_no || '—'}</td>
+              <td><span class="badge ${status === 'unmarked' ? 'badge-amber' : statusColors[status]}">${status.toUpperCase()}</span></td>
+              <td>
+                <button class="btn btn-sm" style="background:var(--green);margin:2px;" onclick="markAttendance(${i}, 'present')">Present</button>
+                <button class="btn btn-sm" style="background:var(--red);margin:2px;" onclick="markAttendance(${i}, 'absent')">Absent</button>
+                <button class="btn btn-sm" style="background:var(--amber);margin:2px;" onclick="markAttendance(${i}, 'late')">Late</button>
+                <button class="btn btn-sm" style="background:var(--blue);margin:2px;" onclick="markAttendance(${i}, 'excused')">Excused</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  } catch (err) { container.innerHTML = `<span style="color:var(--red);">Error: ${err.message}</span>`; }
+}
+
+async function markAttendance(idx, status) {
+  const e = attendanceRoster[idx];
+  const offeringId = parseInt(document.getElementById('attendanceClass').value);
+  const date = document.getElementById('attendanceDate').value;
+  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const { error } = await supabase.from('attendance').upsert({
+      student_id: e.student_id, offering_id: offeringId, date: date,
+      status: status, marked_by: user.id
+    }, { onConflict: 'student_id,offering_id,date' });
+    if (error) throw error;
+    showToast(`${e.profiles.full_name} marked ${status}`);
+    await loadAttendanceRoster();
+  } catch (err) { showToast('Error: ' + err.message, true); }
+}
+
+// ── Announcements ────────────────────────────────────────────────────
+async function loadAnnouncements() {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).single();
+  const { data: anns } = await supabase.from('class_announcements').select('*, course_offerings(code, title)').eq('author_id', profile.id).order('created_at', { ascending: false });
+  const list = document.getElementById('announcementList');
+  if (!anns || anns.length === 0) { list.innerHTML = '<span style="color:var(--ink-300);">No announcements posted yet.</span>'; return; }
+  list.innerHTML = anns.map(a => `
+    <div style="padding:12px 0;border-bottom:1px solid var(--line);">
+      <div style="display:flex;justify-content:space-between;align-items:start;">
+        <div>
+          <strong>${a.title}</strong> <span style="font-size:11px;color:var(--ink-500);">— ${a.course_offerings?.code || ''} ${a.course_offerings?.title || ''}</span>
+        </div>
+        <span style="font-size:11px;color:var(--ink-500);">${new Date(a.created_at).toLocaleDateString()}</span>
+      </div>
+      <p style="margin:6px 0 0;font-size:13px;color:var(--ink-700);">${a.body}</p>
+    </div>`).join('');
+}
+
+function openAnnouncementModal() {
+  document.getElementById('gradeModalTitle').textContent = 'Post Class Announcement';
+  document.getElementById('gradeModal').classList.add('open');
+  document.getElementById('gradeModalBody').innerHTML = `
+    <div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:5px;">Class</label>
+      <select class="input" id="ann_class"><option value="">Select class...</option></select></div>
+    <div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:5px;">Title</label>
+      <input type="text" class="input" id="ann_title" placeholder="Midterm exam schedule"></div>
+    <div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:5px;">Message</label>
+      <textarea class="input" id="ann_body" rows="4" placeholder="Announcement details..."></textarea></div>
+    <button class="btn" style="width:100%;padding:12px;" onclick="postAnnouncement()">Post Announcement</button>
+  `;
+  supabase.from('course_offerings').select('id, code, title').ilike('instructor_name', '%').then(({ data }) => {
+    document.getElementById('ann_class').innerHTML = '<option value="">Select class...</option>' + (data || []).map(c => `<option value="${c.id}">${c.code} — ${c.title}</option>`).join('');
+  });
+}
+
+async function postAnnouncement() {
+  const { data: { user } } = await supabase.auth.getUser();
+  const offeringId = parseInt(document.getElementById('ann_class').value);
+  const title = document.getElementById('ann_title').value.trim();
+  const body = document.getElementById('ann_body').value.trim();
+  if (!offeringId || !title || !body) { showToast('All fields required', true); return; }
+  try {
+    const { error } = await supabase.from('class_announcements').insert({ author_id: user.id, offering_id: offeringId, title, body });
+    if (error) throw error;
+    showToast('Announcement posted'); closeGradeModal(); await loadAnnouncements();
+  } catch (err) { showToast('Error: ' + err.message, true); }
+}
+
+// ── Schedule ─────────────────────────────────────────────────────────
+async function loadSchedule() {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: profile } = await supabase.from('profiles').select('id, full_name').eq('id', user.id).single();
+  const { data: offerings } = await supabase.from('course_offerings').select('id, code, title').ilike('instructor_name', `%${profile.full_name}%`);
+  const offeringIds = (offerings || []).map(o => o.id);
+  if (offeringIds.length === 0) {
+    document.getElementById('scheduleTable').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ink-300);">No schedule found.</td></tr>'; return;
+  }
+  const { data: slots } = await supabase.from('timetable').select('*, course_offerings(code, title), rooms(name)').in('offering_id', offeringIds).order('day_of_week').order('start_time');
+  document.getElementById('scheduleTable').innerHTML = (slots || []).length ? slots.map(t => `<tr><td><strong>${t.course_offerings?.code || '—'}</strong> ${t.course_offerings?.title || ''}</td><td>${t.day_of_week}</td><td>${t.start_time}</td><td>${t.end_time}</td><td>${t.rooms?.name || 'TBA'}</td></tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--ink-300);">No timetable slots assigned.</td></tr>';
+}
+
+// ── Messaging ────────────────────────────────────────────────────────
+async function loadMessages() {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: msgs } = await supabase.from('messages').select('*, sender:profiles!sender_id(full_name), recipient:profiles!recipient_id(full_name)').or(`recipient_id.eq.${user.id},sender_id.eq.${user.id}`).order('created_at', { ascending: false }).limit(20);
+  const list = document.getElementById('messageList');
+  if (!msgs || msgs.length === 0) { list.innerHTML = '<span style="color:var(--ink-300);">No messages yet.</span>'; return; }
+  list.innerHTML = msgs.map(m => {
+    const isSent = m.sender_id === user.id;
+    const otherName = isSent ? m.recipient?.full_name : m.sender?.full_name;
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--line);">
+      <div style="display:flex;justify-content:space-between;">
+        <strong>${isSent ? '→ To: ' : '← From: '}${otherName || '—'}</strong>
+        <span style="font-size:11px;color:var(--ink-500);">${new Date(m.created_at).toLocaleDateString()}</span>
+      </div>
+      ${m.subject ? `<div style="font-size:12px;font-weight:600;margin:2px 0;">${m.subject}</div>` : ''}
+      <div style="font-size:13px;color:var(--ink-700);">${m.body}</div>
+      ${!isSent && !m.is_read ? '<span style="font-size:10px;color:var(--pink-600);font-weight:700;">NEW</span>' : ''}
+    </div>`;
+  }).join('');
+}
+
+function openMessageModal() {
+  document.getElementById('gradeModalTitle').textContent = 'New Internal Message';
+  document.getElementById('gradeModal').classList.add('open');
+  document.getElementById('gradeModalBody').innerHTML = `
+    <div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:5px;">To (Staff/Admin only)</label>
+      <select class="input" id="msg_recipient"><option value="">Select recipient...</option></select></div>
+    <div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:5px;">Subject</label>
+      <input type="text" class="input" id="msg_subject" placeholder="Subject"></div>
+    <div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:5px;">Message</label>
+      <textarea class="input" id="msg_body" rows="4" placeholder="Message..."></textarea></div>
+    <button class="btn" style="width:100%;padding:12px;" onclick="sendMessage()">Send Message</button>
+  `;
+  supabase.from('profiles').select('id, full_name').in('role', ['staff', 'admin', 'faculty']).neq('id', /* exclude self */ '00000000-0000-0000-0000-000000000000').then(({ data }) => {
+    document.getElementById('msg_recipient').innerHTML = '<option value="">Select recipient...</option>' + (data || []).map(p => `<option value="${p.id}">${p.full_name}</option>`).join('');
+  });
+}
+
+async function sendMessage() {
+  const { data: { user } } = await supabase.auth.getUser();
+  const recipientId = document.getElementById('msg_recipient').value;
+  const subject = document.getElementById('msg_subject').value.trim();
+  const body = document.getElementById('msg_body').value.trim();
+  if (!recipientId || !body) { showToast('Recipient and message required', true); return; }
+  try {
+    const { error } = await supabase.from('messages').insert({ sender_id: user.id, recipient_id: recipientId, subject: subject || null, body });
+    if (error) throw error;
+    showToast('Message sent'); closeGradeModal(); await loadMessages();
+  } catch (err) { showToast('Error: ' + err.message, true); }
+}
+
+// ── Init all ─────────────────────────────────────────────────────────
+loadAttendanceClasses();
+loadAnnouncements();
+loadSchedule();
+loadMessages();
+
+init();
+</script>
+</body>
+</html>

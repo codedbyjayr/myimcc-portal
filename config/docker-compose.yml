@@ -1,0 +1,58 @@
+version: "3.8"
+
+services:
+  # ── Portainer (container management UI) ─────────────────────────────
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: myimcc-portainer
+    restart: unless-stopped
+    ports:
+      - "9443:9443"   # HTTPS UI
+      - "9000:9000"   # HTTP UI (legacy)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - myimcc-net
+
+  # ── Ngrok (tunnel to Raspberry Pi) ──────────────────────────────────
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: myimcc-ngrok
+    restart: unless-stopped
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    # Tunnel to whatever serves the portal on port 8080
+    command: http host.docker.internal:8080 --domain=${NGROK_DOMAIN}
+    ports:
+      - "4040:4040"   # Ngrok inspector UI
+    networks:
+      - myimcc-net
+    depends_on:
+      - portainer
+
+  # ── Supabase Edge Functions runtime (optional, for local dev) ───────
+  # Only needed if running edge functions locally on the Pi.
+  # In production, Supabase hosted handles this.
+  # supabase-edge:
+  #   image: supabase/edge-runtime:latest
+  #   container_name: myimcc-edge
+  #   restart: unless-stopped
+  #   environment:
+  #     - SUPABASE_URL=${SUPABASE_URL}
+  #     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+  #     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+  #     - GROQ_API_KEY=${GROQ_API_KEY}
+  #   volumes:
+  #     - ./supabase/functions:/home/deno/functions
+  #   ports:
+  #     - "8081:8081"
+  #   networks:
+  #     - myimcc-net
+
+volumes:
+  portainer_data:
+
+networks:
+  myimcc-net:
+    driver: bridge

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#E7338A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Single Sign-On (SSO) — MyIMCC Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="login.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+<div class="login-wrap">
+
+  <!-- LEFT: Form / Auth Panel -->
+  <section class="login-left">
+    <div class="left-inner">
+      <div class="brand">
+        <div class="brand-mark">MI</div>
+        <div>
+          <div class="brand-name">MyIMCC</div>
+          <div class="brand-sub">ELITE PORTAL</div>
+        </div>
+      </div>
+
+      <!-- STEP 1: Institutional Email SSO -->
+      <div id="stepSso">
+        <div class="form-head">
+          <h1>Institutional Sign-In</h1>
+          <p>Sign in using your official school email account (Google Workspace / Microsoft Entra ID).</p>
+        </div>
+
+        <form id="ssoForm" novalidate>
+          <div class="field">
+            <label for="emailInput">Institutional School Email</label>
+            <input type="email" id="emailInput" placeholder="student@student.imcc.edu.ph or admin@imcc.edu.ph" autocomplete="email" required>
+            <small style="color:var(--ink-500);font-size:11px;margin-top:4px;display:block;">Allowed suffixes: @student.imcc.edu.ph, @faculty.imcc.edu.ph, @admin.imcc.edu.ph, @imcc.edu.ph</small>
+          </div>
+
+          <div id="ssoError" class="form-error" hidden></div>
+
+          <button type="submit" class="btn-login" id="ssoBtn">
+            <svg style="width:18px;height:18px;margin-right:8px;" viewBox="0 0 24 24"><path fill="currentColor" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.761H12.545z"/></svg>
+            <span id="ssoBtnText">Sign In with Google / School Account</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- STEP 2A: TOTP Enrollment (New Pairing Key) -->
+      <div id="stepEnroll" style="display:none;">
+        <div class="form-head">
+          <h1>Sync 2FA App</h1>
+          <p>Scan the QR code below with Google Authenticator to pair your smartphone app.</p>
+        </div>
+
+        <div style="text-align:center;margin:16px 0;">
+          <img id="enrollQrImg" src="" alt="MFA QR Code" style="width:180px;height:180px;border-radius:12px;border:1px solid #cbd5e1;padding:8px;background:#fff;">
+          <div id="enrollSecret" style="font-family:monospace;font-size:12px;font-weight:700;margin-top:8px;color:#475569;">••••••••••••••••••••</div>
+          <button type="button" id="toggleSecretBtn" style="margin-top:6px;background:none;border:1px solid #94a3b8;color:#475569;font-size:11px;padding:4px 12px;border-radius:6px;cursor:pointer;font-weight:600;">Show Key</button>
+        </div>
+
+        <form id="enrollForm" novalidate>
+          <div class="field">
+            <label for="enrollCodeInput">Enter 6-Digit Code from Authenticator:</label>
+            <input type="text" id="enrollCodeInput" maxlength="6" placeholder="123456" style="text-align:center;letter-spacing:6px;font-size:20px;font-weight:800;" required>
+          </div>
+          <div id="enrollError" class="form-error" hidden></div>
+
+          <button type="submit" class="btn-login" id="enrollBtn">
+            <span>Verify &amp; Activate 2FA</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- STEP 2B: TOTP Challenge (Existing Key) -->
+      <div id="stepChallenge" style="display:none;">
+        <div class="form-head">
+          <h1>Two-Factor Verification</h1>
+          <p>Enter the 6-digit verification code from your Google Authenticator app to proceed.</p>
+        </div>
+
+        <form id="challengeForm" novalidate>
+          <div class="field">
+            <label for="challengeCodeInput">6-Digit Authenticator Code</label>
+            <input type="text" id="challengeCodeInput" maxlength="6" placeholder="123456" style="text-align:center;letter-spacing:6px;font-size:20px;font-weight:800;" required autofocus>
+          </div>
+
+          <div id="challengeError" class="form-error" hidden></div>
+
+          <button type="submit" class="btn-login" id="challengeBtn">
+            <span>Verify TOTP Code</span>
+          </button>
+        </form>
+
+        <div style="text-align:center;margin-top:16px;">
+          <a href="#" id="resetMfaBtn" style="font-size:12px;color:var(--primary);font-weight:600;text-decoration:underline;">Lost or deleted Authenticator code? Reset &amp; Re-scan QR Code</a>
+        </div>
+      </div>
+
+      <!-- UNAUTHORIZED ACCESS ERROR SCREEN -->
+      <div id="stepUnauthorized" style="display:none;text-align:center;padding:20px 0;">
+        <div style="width:64px;height:64px;border-radius:50%;background:#fee2e2;color:#dc2626;display:inline-flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:16px;">🛑</div>
+        <h2 style="color:#991b1b;font-size:20px;font-weight:800;margin-bottom:8px;">Unauthorized Access</h2>
+        <p style="color:#7f1d1d;font-size:13px;line-height:1.6;margin-bottom:20px;">
+          Institutional Email Required.<br>
+          Your email domain is not permitted to access the MyIMCC portal. Please sign in using your official school email suffix (e.g. <b>@student.school.edu</b>, <b>@faculty.school.edu</b>, or <b>@admin.school.edu</b>).
+        </p>
+        <button type="button" class="btn-login" id="retrySsoBtn" style="background:#475569;">
+          ← Return to Sign-In
+        </button>
+      </div>
+
+      <div class="divider"><span>Security Notice</span></div>
+      <p class="footnote">The portal enforces 2-Step Identity Verification (SSO + TOTP) for all students, faculty, and administrative staff. Contact <b>IT Services (support@imcc.edu.ph)</b> for account assistance.</p>
+    </div>
+  </section>
+
+  <!-- RIGHT: Brand Panel -->
+  <section class="login-right">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+
+    <div class="right-content">
+      <div class="right-text">
+        <h2>Welcome to the<br>MyIMCC Elite Portal</h2>
+        <p>Production Single Sign-On (SSO) &amp; Time-Based One-Time Password (TOTP) Authentication.</p>
+      </div>
+
+      <div class="card-stack">
+        <div class="mini-card card-1">
+          <div class="mc-icon mc-icon-clear">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+          </div>
+          <div class="mc-body">
+            <div class="mc-label">MFA Clearance</div>
+            <div class="mc-bar"><div class="mc-bar-fill" style="width:100%;"></div></div>
+            <div class="mc-sub">Google Authenticator Verified</div>
+          </div>
+        </div>
+
+        <div class="mini-card card-2">
+          <div class="mc-icon mc-icon-grade">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+          <div class="mc-body">
+            <div class="mc-label">Identity Mapping</div>
+            <div class="mc-value">Institutional Domain</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="right-footer">Iligan Medical Center College</div>
+  </section>
+
+</div>
+
+<script src="login.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+# Environment and secret files
+# Exclude actual secrets
+config/.env
+shared/supabase-config.js
+
+# Dependencies and build artifacts
+node_modules/
+dist/
+build/
+
+# Environment and secret files
+.env
+*.env
+config/.env
+shared/supabase-config.js

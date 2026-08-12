@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#E7338A">
+<title>Admin Dashboard — MyIMCC Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<link rel="stylesheet" href="../shared/portal.css">
+<style>
+  .dashboard { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .sidebar { background: var(--card); border-right: 1px solid var(--line); padding: 22px 18px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 6px 6px 20px; }
+  .sidebar-brand-mark { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, var(--pink-500), var(--maroon-800)); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 13px; }
+  .sidebar-brand-text { font-weight: 800; font-size: 15px; color: var(--ink-900); }
+  .sidebar-brand-sub { font-size: 10px; color: var(--pink-600); font-weight: 700; }
+  .sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .nav-label { font-size: 10px; letter-spacing: .09em; color: var(--ink-300); font-weight: 700; margin: 14px 10px 6px; }
+  .nav-item { padding: 10px 12px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-700); transition: all .15s; text-decoration: none; border: 1px solid transparent; background: none; text-align: left; width: 100%; font-family: inherit; display: flex; align-items: center; gap: 9px; }
+  .nav-item svg { width: 16px; height: 16px; opacity: .7; flex-shrink: 0; }
+  .nav-item:hover { background: var(--pink-50); color: var(--pink-600); }
+  .nav-item.active { background: var(--pink-50); color: var(--pink-600); border-color: var(--pink-100); }
+  .sidebar-footer { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--line); }
+  .btn-logout { background: none; border: 1px solid var(--line); color: var(--ink-700); padding: 10px 16px; border-radius: 10px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%; }
+  .btn-logout:hover { border-color: var(--pink-500); color: var(--pink-600); }
+  .main { padding: 32px; overflow-y: auto; }
+  .page-header { margin-bottom: 28px; }
+  .page-header h1 { font-size: 26px; font-weight: 800; color: var(--ink-900); margin: 0 0 6px; }
+  .page-header p { color: var(--ink-500); font-size: 14px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px; margin-bottom: 20px; box-shadow: var(--shadow); }
+  .card h2 { font-size: 15px; font-weight: 800; color: var(--ink-900); margin: 0 0 14px; }
+  .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .card-head h2 { margin: 0; }
+  .btn { background: var(--pink-600); color: #fff; border: none; padding: 9px 16px; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 600; font-family: inherit; }
+  .btn:hover { filter: brightness(1.1); }
+  .btn-outline { background: var(--card); border: 1px solid var(--line); color: var(--ink-700); }
+  .btn-outline:hover { border-color: var(--pink-500); color: var(--pink-600); }
+  .btn-sm { padding: 6px 12px; font-size: 11px; }
+  .btn-danger { background: var(--red); }
+  table { width: 100%; font-size: 13px; border-collapse: collapse; }
+  table th { text-align: left; padding: 10px; border-bottom: 1px solid var(--line); color: var(--ink-500); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  table td { padding: 11px 10px; border-bottom: 1px solid var(--line); color: var(--ink-900); }
+  table tr:hover td { background: var(--pink-50); }
+  .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+  .badge-green { background: var(--green-bg); color: var(--green); }
+  .badge-amber { background: var(--amber-bg); color: var(--amber); }
+  .badge-red { background: var(--red-bg); color: var(--red); }
+  .badge-blue { background: var(--blue-bg); color: var(--blue); }
+  .badge-pink { background: var(--pink-50); color: var(--pink-600); }
+  .input { padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; font-family: inherit; width: 100%; }
+  .input:focus { outline: none; border-color: var(--pink-500); }
+  .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--ink-700); margin-bottom: 5px; }
+  .section { display: none; }
+  .section.active { display: block; }
+  .role-select { display: flex; gap: 6px; }
+  .role-select button { padding: 5px 11px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); font-size: 11px; font-weight: 700; cursor: pointer; }
+  .role-select button.active { background: var(--pink-600); color: #fff; border-color: var(--pink-600); }
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: center; justify-content: center; z-index: 200; padding: 20px; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: var(--card); border-radius: 14px; max-width: 560px; width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+  .modal-head { padding: 20px 24px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+  .modal-head h3 { margin: 0; font-size: 17px; font-weight: 800; }
+  .modal-body { padding: 20px 24px; }
+  .modal-foot { padding: 16px 24px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; }
+  @media (max-width: 900px) { .dashboard { grid-template-columns: 1fr; } .sidebar { position: relative; height: auto; flex-direction: row; border-right: none; border-bottom: 1px solid var(--line); padding: 12px; overflow-x: auto; } .sidebar-nav { flex-direction: row; gap: 4px; } .nav-label { display: none; } .main { padding: 20px; } }
+  @media (max-width: 640px) { .main { padding: 16px; } .stats-grid { grid-template-columns: 1fr; } table { font-size: 12px; } table th, table td { padding: 8px 6px; } }
+</style>
+</head>
+<body data-theme="light">
+<div class="dashboard">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-mark">MI</div>
+      <div>
+        <div class="sidebar-brand-text">MyIMCC</div>
+        <div class="sidebar-brand-sub">ADMIN</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">Management</div>
+      <button class="nav-item active" data-section="overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        Overview
+      </button>
+      <button class="nav-item" data-section="users">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        User Management
+      </button>
+      <button class="nav-item" data-section="academic">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20l9-5-9-5-9 5 9 5z"/><path d="M12 12L3 7l9-5 9 5-9 5z"/></svg>
+        Academic Structure
+      </button>
+      <button class="nav-item" data-section="schedule">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Master Schedule
+      </button>
+      <div class="nav-label">Operations</div>
+      <button class="nav-item" data-section="finance">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg>
+        Finance
+      </button>
+      <button class="nav-item" data-section="clearance">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+        Clearance
+      </button>
+      <div class="nav-label">System</div>
+      <button class="nav-item" data-section="curriculum">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+        Curriculum
+      </button>
+      <button class="nav-item" data-section="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        System Settings
+      </button>
+      <button class="nav-item" data-section="sso">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+        SSO & Sessions
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div id="adminName" style="font-size:12px;color:var(--ink-700);font-weight:600;margin-bottom:8px;text-align:center;"></div>
+      <button class="btn-logout" onclick="signOut()">Sign Out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- OVERVIEW -->
+    <section class="section active" id="section-overview">
+      <div class="page-header">
+        <h1>Dashboard Overview</h1>
+        <p>System metrics and recent activity</p>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Total Students</div><div class="stat-value" id="totalStudents">—</div></div>
+        <div class="stat-card"><div class="stat-label">Enrolled This Term</div><div class="stat-value" id="enrolledThisTerm">—</div></div>
+        <div class="stat-card"><div class="stat-label">Active Faculty</div><div class="stat-value" style="color:var(--blue);" id="totalFaculty">—</div></div>
+        <div class="stat-card"><div class="stat-label">Collected (Term)</div><div class="stat-value" style="color:var(--green);" id="collectedThisTerm">₱—</div></div>
+        <div class="stat-card"><div class="stat-label">Pending Balance</div><div class="stat-value" style="color:var(--red);" id="pendingBalance">₱—</div></div>
+      </div>
+      <div class="card">
+        <h2>Recent Activity</h2>
+        <div id="activityLog" style="font-size:13px;">Loading...</div>
+      </div>
+    </section>
+
+    <!-- USER MANAGEMENT -->
+    <section class="section" id="section-users">
+      <div class="page-header">
+        <h1>User Management</h1>
+        <p>Create, edit, deactivate, or change roles for staff and student accounts</p>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>All Users</h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('csvInput').click()">📥 Bulk Import CSV</button>
+            <input type="file" id="csvInput" accept=".csv" style="display:none" onchange="importCSV(event)">
+            <button class="btn btn-sm" onclick="openUserModal()">+ Create User</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+          <input type="text" id="userSearch" class="input" placeholder="Search by name or email..." style="flex:1;min-width:200px;">
+          <select id="userRoleFilter" class="input" style="width:auto;">
+            <option value="">All Roles</option>
+            <option value="student">Students</option>
+            <option value="faculty">Faculty</option>
+            <option value="staff">Staff</option>
+            <option value="admin">Admins</option>
+          </select>
+          <select id="userStatusFilter" class="input" style="width:auto;">
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Student No</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="userTable"><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--ink-300);">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ACADEMIC STRUCTURE -->
+    <section class="section" id="section-academic">
+      <div class="page-header">
+        <h1>Academic Structure</h1>
+        <p>Manage departments, academic years, sections, and rooms</p>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Departments</div><div class="stat-value" id="deptCount">—</div></div>
+        <div class="stat-card"><div class="stat-label">Sections</div><div class="stat-value" style="color:var(--blue);" id="sectionCount">—</div></div>
+        <div class="stat-card"><div class="stat-label">Rooms</div><div class="stat-value" style="color:var(--green);" id="roomCount">—</div></div>
+        <div class="stat-card"><div class="stat-label">Active AY</div><div class="stat-value" style="font-size:18px;" id="activeAY">—</div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Departments</h2><button class="btn btn-sm" onclick="openDeptModal()">+ Add Department</button></div>
+        <table><thead><tr><th>Code</th><th>Name</th><th>Head</th><th>Actions</th></tr></thead>
+        <tbody id="deptTable"><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--ink-300);">Loading...</td></tr></tbody></table>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Sections</h2><button class="btn btn-sm" onclick="openSectionModal()">+ Add Section</button></div>
+        <table><thead><tr><th>Name</th><th>Program</th><th>Year Level</th><th>Adviser</th></tr></thead>
+        <tbody id="sectionTable"><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--ink-300);">Loading...</td></tr></tbody></table>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Rooms</h2><button class="btn btn-sm" onclick="openRoomModal()">+ Add Room</button></div>
+        <table><thead><tr><th>Name</th><th>Building</th><th>Type</th><th>Capacity</th></tr></thead>
+        <tbody id="roomTable"><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--ink-300);">Loading...</td></tr></tbody></table>
+      </div>
+    </section>
+
+    <!-- MASTER SCHEDULE -->
+    <section class="section" id="section-schedule">
+      <div class="page-header">
+        <h1>Master Schedule</h1>
+        <p>Manage the school timetable, room assignments, and teacher schedules</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Weekly Timetable</h2><button class="btn btn-sm" onclick="openTimetableModal()">+ Add Slot</button></div>
+        <table>
+          <thead><tr><th>Course</th><th>Day</th><th>Start</th><th>End</th><th>Room</th><th>Teacher</th></tr></thead>
+          <tbody id="timetableTable"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--ink-300);">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- FINANCE -->
+    <section class="section" id="section-finance">
+      <div class="page-header"><h1>Finance</h1><p>Student billing and payment tracking</p></div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Collected</div><div class="stat-value" style="color:var(--green);" id="finCollected">₱—</div></div>
+        <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value" style="color:var(--amber);" id="finPending">₱—</div></div>
+        <div class="stat-card"><div class="stat-label">Outstanding</div><div class="stat-value" style="color:var(--red);" id="finOutstanding">₱—</div></div>
+      </div>
+      <div class="card">
+        <h2>Student Billing Summary</h2>
+        <table><thead><tr><th>Student</th><th>Program</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
+        <tbody id="financeTable"><tr><td colspan="5" style="text-align:center;padding:20px;color:var(--ink-300);">Loading...</td></tr></tbody></table>
+      </div>
+    </section>
+
+    <!-- CLEARANCE -->
+    <section class="section" id="section-clearance">
+      <div class="page-header"><h1>Clearance</h1><p>Student clearance status tracking</p></div>
+      <div class="card">
+        <table><thead><tr><th>Student</th><th>Department</th><th>Status</th><th>Officer</th><th>Note</th></tr></thead>
+        <tbody id="clearanceTable"><tr><td colspan="5" style="text-align:center;padding:20px;color:var(--ink-300);">Loading...</td></tr></tbody></table>
+      </div>
+    </section>
+
+    <!-- CURRICULUM -->
+    <section class="section" id="section-curriculum">
+      <div class="page-header"><h1>Curriculum</h1><p>Course offerings and academic programs</p></div>
+      <div class="card">
+        <div class="card-head"><h2>Course Offerings</h2><button class="btn btn-sm" onclick="openCourseModal()">+ Add Course</button></div>
+        <table><thead><tr><th>Code</th><th>Title</th><th>Year</th><th>Sem</th><th>Units</th><th>Prereq</th></tr></thead>
+        <tbody id="curriculumTable"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--ink-300);">Loading...</td></tr></tbody></table>
+      </div>
+    </section>
+
+    <!-- SYSTEM SETTINGS -->
+    <section class="section" id="section-settings">
+      <div class="page-header"><h1>System Settings</h1><p>Manage Groq AI configuration, portal settings, and chat logs</p></div>
+      <div class="card">
+        <div class="card-head"><h2>⚙️ Portal Configuration</h2><button class="btn btn-sm" onclick="saveSettings()">Save Changes</button></div>
+        <div id="settingsContainer" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">Loading settings...</div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>🤖 AI Chat Logs</h2></div>
+        <table><thead><tr><th>User</th><th>Question</th><th>Response</th><th>Time</th></tr></thead>
+        <tbody id="chatLogTable"><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--ink-300);">Loading...</td></tr></tbody></table>
+      </div>
+    </section>
+
+    <!-- SSO & SESSIONS -->
+    <section class="section" id="section-sso">
+      <div class="page-header"><h1>SSO & Sessions</h1><p>Manage SSO navigation links and active sessions</p></div>
+      <div class="card">
+        <div class="card-head"><h2>SSO Navigation Links</h2><button class="btn btn-sm" onclick="openSSOLinkModal()">+ Add Link</button></div>
+        <table><thead><tr><th>Label</th><th>URL</th><th>Icon</th><th>Visible To</th><th>Active</th><th>Action</th></tr></thead>
+        <tbody id="ssoLinksTable"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--ink-300);">Loading...</td></tr></tbody></table>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>API Keys (LMS / Career Hub)</h2><button class="btn btn-sm" onclick="generateAPIKey()">+ Generate Key</button></div>
+        <p style="color:var(--ink-500);font-size:13px;">API keys for external system integration (LMS, Career Hub). Store securely — keys are shown only once.</p>
+        <div id="apiKeysList" style="margin-top:12px;">No API keys configured.</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Generic Modal -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <div class="modal-head"><h3 id="modalTitle">Modal</h3><button onclick="closeModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--ink-500);">&times;</button></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot" id="modalFoot"></div>
+  </div>
+</div>
+
+<script src="../shared/supabase-config.js"></script>
+<script>
+const peso = n => '₱' + Number(n || 0).toLocaleString('en-US');
+let allUsers = [];
+let allDepts = [];
+let allRooms = [];
+let allSections = [];
+let allCourses = [];
+let allTimetable = [];
+
+async function init() {
+  const auth = await requireAuth(['admin']);
+  if (!auth) return;
+  document.getElementById('adminName').textContent = auth.profile.full_name;
+  await loadOverview();
+}
+
+// Navigation
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+    const section = btn.dataset.section;
+    document.getElementById('section-' + section).classList.add('active');
+    loadSection(section);
+  });
+});
+
+async function loadSection(section) {
+  const loaders = {
+    overview: loadOverview, users: loadUsers, academic: loadAcademic,
+    schedule: loadTimetable, finance: loadFinance, clearance: loadClearance,
+    curriculum: loadCurriculum, settings: loadSettings, sso: loadSSO
+  };
+  if (loaders[section]) await loaders[section]();
+}
+
+// ── Overview ─────────────────────────────────────────────────────────
+async function loadOverview() {
+  try {
+    const { count: totalStudents } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'student');
+    const { count: totalFaculty } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'faculty');
+    const { count: enrolled } = await supabase.from('enrollments').select('id', { count: 'exact', head: true }).eq('status', 'enrolled');
+    const { data: paid } = await supabase.from('billing_summary').select('total_paid, balance');
+    const collected = (paid || []).reduce((s, p) => s + Number(p.total_paid || 0), 0);
+    const pending = (paid || []).reduce((s, p) => s + Number(p.balance || 0), 0);
+    document.getElementById('totalStudents').textContent = totalStudents || 0;
+    document.getElementById('totalFaculty').textContent = totalFaculty || 0;
+    document.getElementById('enrolledThisTerm').textContent = enrolled || 0;
+    document.getElementById('collectedThisTerm').textContent = peso(collected);
+    document.getElementById('pendingBalance').textContent = peso(pending);
+    const { data: activities } = await supabase.from('activities').select('*, profiles(full_name)').order('created_at', { ascending: false }).limit(10);
+    const log = (activities || []).map(a => `<div style="padding:10px 0;border-bottom:1px solid var(--line);"><strong>${a.profiles?.full_name || '—'}</strong> — ${a.description}<br><span style="font-size:11px;color:var(--ink-500);">${new Date(a.created_at).toLocaleString()}</span></div>`).join('');
+    document.getElementById('activityLog').innerHTML = log || '<div style="color:var(--ink-300);">No recent activity</div>';
+  } catch (err) { console.error('Overview error:', err); }
+}
+
+// ── User Management ──────────────────────────────────────────────────
+async function loadUsers() {
+  try {
+    const { data, error } = await supabase.from('profiles').select('*').order('full_name');
+    if (error) throw error;
+    allUsers = data || [];
+    renderUsers();
+  } catch (err) { console.error('Users error:', err); }
+}
+
+function renderUsers() {
+  const search = document.getElementById('userSearch').value.toLowerCase();
+  const roleFilter = document.getElementById('userRoleFilter').value;
+  const statusFilter = document.getElementById('userStatusFilter').value;
+  const filtered = allUsers.filter(u => {
+    const matchesSearch = !search || (u.full_name || '').toLowerCase().includes(search) || (u.email || '').toLowerCase().includes(search);
+    const matchesRole = !roleFilter || u.role === roleFilter;
+    const matchesStatus = !statusFilter || (statusFilter === 'active' && u.is_active !== false) || (statusFilter === 'inactive' && u.is_active === false);
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+  const badgeClass = { student: 'badge-blue', faculty: 'badge-pink', staff: 'badge-amber', admin: 'badge-green' };
+  document.getElementById('userTable').innerHTML = filtered.length ? filtered.map(u => `
+    <tr>
+      <td><strong>${u.full_name}</strong></td>
+      <td style="font-size:12px;">${u.email}</td>
+      <td><span class="badge ${badgeClass[u.role] || 'badge-amber'}">${u.role.toUpperCase()}</span></td>
+      <td style="font-family:monospace;font-size:12px;">${u.student_no || '—'}</td>
+      <td><span class="badge ${u.is_active === false ? 'badge-red' : 'badge-green'}">${u.is_active === false ? 'INACTIVE' : 'ACTIVE'}</span></td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="openUserModal('${u.id}')">Edit</button>
+        ${u.is_active !== false ? `<button class="btn btn-outline btn-sm" style="color:var(--red);" onclick="toggleUserStatus('${u.id}', false)">Deactivate</button>` : `<button class="btn btn-sm" onclick="toggleUserStatus('${u.id}', true)">Activate</button>`}
+      </td>
+    </tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--ink-300);">No users found</td></tr>';
+}
+
+async function toggleUserStatus(userId, activate) {
+  try {
+    const { error } = await supabase.from('profiles').update({ is_active: activate, deactivated_at: activate ? null : new Date().toISOString() }).eq('id', userId);
+    if (error) throw error;
+    showToast(`User ${activate ? 'activated' : 'deactivated'}`);
+    await loadUsers();
+  } catch (err) { showToast('Error: ' + err.message, true); }
+}
+
+async function openUserModal(userId) {
+  const user = userId ? allUsers.find(u => u.id === userId) : null;
+  document.getElementById('modalTitle').textContent = user ? 'Edit User' : 'Create User';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="form-row">
+      <div class="form-group"><label>Full Name</label><input type="text" class="input" id="mu_name" value="${user?.full_name || ''}" placeholder="Juan Dela Cruz"></div>
+      <div class="form-group"><label>Email</label><input type="email" class="input" id="mu_email" value="${user?.email || ''}" placeholder="student@imcc.edu.ph"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Role</label>
+        <select class="input" id="mu_role">
+          <option value="student" ${user?.role === 'student' ? 'selected' : ''}>Student</option>
+          <option value="faculty" ${user?.role === 'faculty' ? 'selected' : ''}>Faculty</option>
+          <option value="staff" ${user?.role === 'staff' ? 'selected' : ''}>Staff</option>
+          <option value="admin" ${user?.role === 'admin' ? 'selected' : ''}>Admin</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Student No</label><input type="text" class="input" id="mu_student_no" value="${user?.student_no || ''}" placeholder="2025-0001"></div>
+      <div class="form-group"><label>Program</label><input type="text" class="input" id="mu_program" value="${user?.program || ''}" placeholder="BSIT"></div>
+      <div class="form-group"><label>Year Level</label><input type="text" class="input" id="mu_year_level" value="${user?.year_level || ''}" placeholder="2nd Year"></div>
+    </div>`;
+  document.getElementById('modalFoot').innerHTML = `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveUser('${userId || ''}')">${user ? 'Update' : 'Create'} User</button>`;
+  document.getElementById('modalBackdrop').classList.add('open');
+}
+
+async function saveUser(userId) {
+  const data = {
+    full_name: document.getElementById('mu_name').value.trim(),
+    email: document.getElementById('mu_email').value.trim(),
+    role: document.getElementById('mu_role').value,
+    student_no: document.getElementById('mu_student_no').value.trim() || null,
+    program: document.getElementById('mu_program').value.trim() || null,
+    year_level: document.getElementById('mu_year_level').value.trim() || null,
+  };
+  if (!data.full_name || !data.email) { showToast('Name and email are required', true); return; }
+  try {
+    if (userId) {
+      const { error } = await supabase.from('profiles').update(data).eq('id', userId);
+      if (error) throw error;
+      showToast('User updated successfully');
+    } else {
+      // Note: For Supabase, creating a new auth user requires the service role key (Edge Function or admin panel)
+      // For now, update the profile if it exists or show instructions
+      showToast('To create a new user: send an invite from Supabase Dashboard → Authentication → Users → Add User, then edit their profile here.');
+    }
+    closeModal();
+    await loadUsers();
+  } catch (err) { showToast('Error: ' + err.message, true); }
+}
+
+async function importCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const lines = text.split('\n').filter(l => l.trim());
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  let imported = 0;
+  for (let i = 1; i < lines.length; i++) {
+    const vals = lines[i].split(',').map(v => v.trim());
+    const row = {};
+    headers.forEach((h, j) => row[h] = vals[j]);
+    const profile = {
+      email: row.email, full_name: row.name || row.full_name,
+      role: row.role || 'student', student_no: row.student_no || null,
+      program: row.program || null, year_level: row.year_level || null
+    };
+    if (profile.email && profile.full_name) {
+      const { error } = await supabase.from('profiles').upsert(profile, { onConflict: 'email' });
+      if (!error) imported++;
+    }
+  }
+  showToast(`${imported} users imported successfully`);
+  await loadUsers();
+}
+
+// ── Academic Structure ───────────────────────────────────────────────
+async function loadAcademic() {
+  try {
+    const [{ data: depts }, { data: sections }, { data: rooms }, { data: ay }] = await Promise.all([
+      supabase.from('departments').select('*').order('name'),
+      supabase.from('sections').select('*, profiles(full_name)').order('name'),
+      supabase.from('rooms').select('*').order('name'),
+      supabase.from('academic_years').select('*').eq('is_active', true).limit(1).single()
+    ]);
+    allDepts = depts || []; allSections = sections || []; allRooms = rooms || [];
+    document.getElementById('deptCount').textContent = allDepts.length;
+    document.getElementById('sectionCount').textContent = allSections.length;
+    document.getElementById('roomCount').textContent = allRooms.length;
+    document.getElementById('activeAY').textContent = ay?.label || '—';
+    document.getElementById('deptTable').innerHTML = allDepts.map(d => `<tr><td style="font-family:monospace;font-weight:600;color:var(--pink-600);">${d.code}</td><td>${d.name}</td><td>${d.head_name || '—'}</td><td><button class="btn btn-outline btn-sm" onclick="openDeptModal(${d.id})">Edit</button></td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--ink-300);">No departments</td></tr>';
+    document.getElementById('sectionTable').innerHTML = allSections.map(s => `<tr><td><strong>${s.name}</strong></td><td>${s.program || '—'}</td><td>${s.year_level || '—'}</td><td>${s.profiles?.full_name || '—'}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--ink-300);">No sections</td></tr>';
+    document.getElementById('roomTable').innerHTML = allRooms.map(r => `<tr><td><strong>${r.name}</strong></td><td>${r.building || '—'}</td><td><span class="badge badge-blue">${r.type}</span></td><td>${r.capacity || '—'}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--ink-300);">No rooms</td></tr>';
+  } catch (err) { console.error('Academic error:', err); }
+}
+
+function openDeptModal(deptId) {
+  const dept = deptId ? allDepts.find(d => d.id === deptId) : null;
+  document.getElementById('modalTitle').textContent = dept ? 'Edit Department' : 'Add Department';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="form-row"><div class="form-group"><label>Code</label><input type="text" class="input" id="md_code" value="${dept?.code || ''}" placeholder="IT"></div>
+    <div class="form-group"><label>Name</label><input type="text" class="input" id="md_name" value="${dept?.name || ''}" placeholder="Information Technology"></div>
+    <div class="form-group"><label>Head Name</label><input type="text" class="input" id="md_head" value="${dept?.head_name || ''}" placeholder="Prof. Maria Santos"></div></div>`;
+  document.getElementById('modalFoot').innerHTML = `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveDept(${deptId || ''})">Save</button>`;
+  document.getElementById('modalBackdrop').classList.add('open');
+}
+
+async function saveDept(deptId) {
+  const data = { code: document.getElementById('md_code').value.trim(), name: document.getElementById('md_name').value.trim(), head_name: document.getElementById('md_head').value.trim() };
+  if (!data.code || !data.name) { showToast('Code and name required', true); return; }
+  try {
+    if (deptId) { const { error } = await supabase.from('departments').update(data).eq('id', deptId); if (error) throw error; }
+    else { const { error } = await supabase.from('departments').insert(data); if (error) throw error; }
+    showToast('Department saved'); closeModal(); await loadAcademic();
+  } catch (err) { showToast('Error: ' + err.message, true); }
+}
+
+function openSectionModal() {
+  document.getElementById('modalTitle').textContent = 'Add Section';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="form-row"><div class="form-group"><label>Name</label><input type="text" class="input" id="ms_name" placeholder="BSIT 2-A"></div>
+    <div class="form-group"><label>Program</label><input type="text" class="input" id="ms_program" placeholder="BSIT"></div>
+    <div class="form-group"><label>Year Level</label><input type="text" class="input" id="ms_year" placeholder="2nd Year"></div></div>`;
+  document.getElementById('modalFoot').innerHTML = `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveSection()">Save</button>`;
+  document.getElementById('modalBackdrop').classList.add('open');
+}
+
+async function saveSection() {
+  const data = { name: document.getElementById('ms_name').value.trim(), program: document.getElementById('ms_program').value.trim(), year_level: document.getElementById('ms_year').value.trim() };
+  if (!data.name) { showToast('Name required', true); return; }
+  try { const { error } = await supabase.from('sections').insert(data); if (error) throw error; showToast('Section saved'); closeModal(); await loadAcademic(); }
+  catch (err) { showToast('Error: ' + err.message, true); }
+}
+
+function openRoomModal() {
+  document.getElementById('modalTitle').textContent = 'Add Room';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="form-row"><div class="form-group"><label>Name</label><input type="text" class="input" id="mr_name" placeholder="Room 101"></div>
+    <div class="form-group"><label>Building</label><input type="text" class="input" id="mr_building" placeholder="Main Building"></div>
+    <div class="form-group"><label>Type</label><select class="input" id="mr_type"><option value="classroom">Classroom</option><option value="lab">Lab</option><option value="auditorium">Auditorium</option><option value="office">Office</option></select></div>
+    <div class="form-group"><label>Capacity</label><input type="number" class="input" id="mr_capacity" placeholder="40"></div></div>`;
+  document.getElementById('modalFoot').innerHTML = `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveRoom()">Save</button>`;
+  document.getElementById('modalBackdrop').classList.add('open');
+}
+
+async function saveRoom() {
+  const data = { name: document.getElementById('mr_name').value.trim(), building: document.getElementById('mr_building').value.trim(), type: document.getElementById('mr_type').value, capacity: parseInt(document.getElementById('mr_capacity').value) || null };
+  if (!data.name) { showToast('Name required', true); return; }
+  try { const { error } = await supabase.from('rooms').insert(data); if (error) throw error; showToast('Room saved'); closeModal(); await loadAcademic(); }
+  catch (err) { showToast('Error: ' + err.message, true); }
+}
+
+// ── Timetable ────────────────────────────────────────────────────────
+async function loadTimetable() {
+  try {
+    const { data, error } = await supabase.from('timetable').select('*, course_offerings(code, title), rooms(name)').order('day_of_week').order('start_time');
+    if (error) throw error;
+    allTimetable = data || [];
+    document.getElementById('timetableTable').innerHTML = allTimetable.length ? allTimetable.map(t => `
+      <tr><td><strong>${t.course_offerings?.code || '—'}</strong> ${t.course_offerings?.title || ''}</td><td>${t.day_of_week}</td><td>${t.start_time}</td><td>${t.end_time}</td><td>${t.rooms?.name || 'TBA'}</td><td>${t.teacher_id ? 'Assigned' : 'TBA'}</td></tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--ink-300);">No timetable entries</td></tr>';
+  } catch (err) { console.error('Timetable error:', err); }
+}
+
+function openTimetableModal() {
+  document.getElementById('modalTitle').textContent = 'Add Timetable Slot';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="form-row"><div class="form-group"><label>Course</label><select class="input" id="mt_course"><option value="">Select course...</option></select></div>
+    <div class="form-group"><label>Day</label><select class="input" id="mt_day"><option>Mon</option><option>Tue</option><option>Wed</option><option>Thu</option><option>Fri</option><option>Sat</option></select></div></div>
+    <div class="form-row"><div class="form-group"><label>Start Time</label><input type="time" class="input" id="mt_start"></div>
+    <div class="form-group"><label>End Time</label><input type="time" class="input" id="mt_end"></div>
+    <div class="form-group"><label>Room</label><select class="input" id="mt_room"><option value="">Select room...</option></select></div></div>`;
+  document.getElementById('modalFoot').innerHTML = `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveTimetable()">Save</button>`;
+  document.getElementById('modalBackdrop').classList.add('open');
+  // Populate selects
+  supabase.from('course_offerings').select('id, code, title').then(({ data }) => {
+    document.getElementById('mt_course').innerHTML = '<option value="">Select...</option>' + (data || []).map(c => `<option value="${c.id}">${c.code} — ${c.title}</option>`).join('');
+  });
+  supabase.from('rooms').select('id, name').then(({ data }) => {
+    document.getElementById('mt_room').innerHTML = '<option value="">Select...</option>' + (data || []).map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+  });
+}
+
+async function saveTimetable() {
+  const data = { offering_id: parseInt(document.getElementById('mt_course').value), day_of_week: document.getElementById('mt_day').value, start_time: document.getElementById('mt_start').value, end_time: document.getElementById('mt_end').value, room_id: parseInt(document.getElementById('mt_room').value) || null };
+  if (!data.offering_id || !data.start_time) { showToast('Course and time required', true); return; }
+  try { const { error } = await supabase.from('timetable').insert(data); if (error) throw error; showToast('Slot saved'); closeModal(); await loadTimetable(); }
+  catch (err) { showToast('Error: ' + err.message, true); }
+}
+
+// ── Finance ──────────────────────────────────────────────────────────
+async function loadFinance() {
+  try {
+    const { data: billing } = await supabase.from('billing_summary').select('*, profiles!inner(full_name, program)').order('balance', { ascending: false });
+    const collected = (billing || []).reduce((s, b) => s + Number(b.total_paid || 0), 0);
+    const pending = (billing || []).reduce((s, b) => s + Number(b.balance || 0), 0);
+    document.getElementById('finCollected').textContent = peso(collected);
+    document.getElementById('finPending').textContent = peso(pending);
+    document.getElementById('finOutstanding').textContent = peso(pending);
+    document.getElementById('financeTable').innerHTML = (billing || []).length ? billing.map(b => `<tr><td><strong>${b.profiles?.full_name || '—'}</strong></td><td>${b.profiles?.program || '—'}</td><td style="color:var(--green);font-weight:700;">${peso(b.total_paid || 0)}</td><td style="color:var(--red);font-weight:700;">${peso(b.balance || 0)}</td><td><span class="badge ${b.balance > 0 ? 'badge-amber' : 'badge-green'}">${b.balance > 0 ? 'PENDING' : 'SETTLED'}</span></td></tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--ink-300);">No billing data</td></tr>';
+  } catch (err) { console.error('Finance error:', err); }
+}
+
+// ── Clearance ────────────────────────────────────────────────────────
+async function loadClearance() {
+  try {
+    const { data } = await supabase.from('clearances').select('*, profiles!inner(full_name)').order('created_at', { ascending: false });
+    document.getElementById('clearanceTable').innerHTML = (data || []).length ? data.map(c => `<tr><td><strong>${c.profiles?.full_name || '—'}</strong></td><td>${c.department_name}</td><td><span class="badge ${c.status === 'cleared' ? 'badge-green' : 'badge-amber'}">${c.status}</span></td><td>${c.officer_name || '—'}</td><td style="font-size:11px;color:var(--ink-500);">${c.note || '—'}</td></tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--ink-300);">No clearance data</td></tr>';
+  } catch (err) { console.error('Clearance error:', err); }
+}
+
+// ── Curriculum ───────────────────────────────────────────────────────
+async function loadCurriculum() {
+  try {
+    const { data: courses } = await supabase.from('course_offerings').select('*').order('year').order('semester');
+    allCourses = courses || [];
+    document.getElementById('curriculumTable').innerHTML = allCourses.length ? allCourses.map(c => `<tr><td style="font-family:monospace;font-weight:600;color:var(--pink-600);">${c.code}</td><td>${c.title}</td><td>Year ${c.year || '—'}</td><td>Sem ${c.semester || '—'}</td><td>${c.units}</td><td style="font-size:11px;color:var(--ink-500);">${c.prerequisites || '—'}</td></tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--ink-300);">No courses</td></tr>';
+  } catch (err) { console.error('Curriculum error:', err); }
+}
+
+function openCourseModal() {
+  document.getElementById('modalTitle').textContent = 'Add Course';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="form-row"><div class="form-group"><label>Code</label><input type="text" class="input" id="mc_code" placeholder="IT 206"></div>
+    <div class="form-group"><label>Title</label><input type="text" class="input" id="mc_title" placeholder="Network Security"></div></div>
+    <div class="form-row"><div class="form-group"><label>Units</label><input type="number" step="0.5" class="input" id="mc_units" value="3.0"></div>
+    <div class="form-group"><label>Fee</label><input type="number" class="input" id="mc_fee" value="4000"></div>
+    <div class="form-group"><label>Year</label><input type="number" class="input" id="mc_year" value="2"></div>
+    <div class="form-group"><label>Semester</label><input type="number" class="input" id="mc_sem" value="2"></div></div>
+    <div class="form-row"><div class="form-group"><label>School Year</label><input type="text" class="input" id="mc_sy" value="2025-2026"></div>
+    <div class="form-group"><label>Program</label><input type="text" class="input" id="mc_program" value="BSIT"></div>
+    <div class="form-group"><label>Prerequisites</label><input type="text" class="input" id="mc_prereq" placeholder="IT 201"></div></div>`;
+  document.getElementById('modalFoot').innerHTML = `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveCourse()">Save</button>`;
+  document.getElementById('modalBackdrop').classList.add('open');
+}
+
+async function saveCourse() {
+  const data = {
+    code: document.getElementById('mc_code').value.trim(), title: document.getElementById('mc_title').value.trim(),
+    units: parseFloat(document.getElementById('mc_units').value) || 3.0, fee: parseFloat(document.getElementById('mc_fee').value) || 0,
+    year: parseInt(document.getElementById('mc_year').value) || null, semester: parseInt(document.getElementById('mc_sem').value) || null,
+    school_year: document.getElementById('mc_sy').value.trim(), program: document.getElementById('mc_program').value.trim(),
+    prerequisites: document.getElementById('mc_prereq').value.trim() || null
+  };
+  if (!data.code || !data.title) { showToast('Code and title required', true); return; }
+  try { const { error } = await supabase.from('course_offerings').insert(data); if (error) throw error; showToast('Course saved'); closeModal(); await loadCurriculum(); }
+  catch (err) { showToast('Error: ' + err.message, true); }
+}
+
+// ── Settings ─────────────────────────────────────────────────────────
+async function loadSettings() {
+  try {
+    const { data: settings } = await supabase.from('system_settings').select('*').order('category').order('key');
+    const grouped = {};
+    (settings || []).forEach(s => { if (!grouped[s.category]) grouped[s.category] = []; grouped[s.category].push(s); });
+    let html = '';
+    for (const [cat, items] of Object.entries(grouped)) {
+      html += `<div style="grid-column:1/-1;"><h3 style="font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-500);margin:16px 0 8px;">${cat}</h3></div>`;
+      items.forEach(s => {
+        html += `<div class="form-group"><label>${s.description || s.key}</label><input type="text" class="input" data-setting-id="${s.id}" value="${s.value}"></div>`;
+      });
+    }
+    document.getElementById('settingsContainer').innerHTML = html || '<p>No settings found.</p>';
+
+    // Chat logs
+    const { data: logs } = await supabase.from('chat_logs').select('*, profiles(full_name)').order('created_at', { ascending: false }).limit(20);
+    document.getElementById('chatLogTable').innerHTML = (logs || []).length ? logs.map(l => `<tr><td>${l.profiles?.full_name || '—'}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${l.user_message}</td><td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;">${l.bot_response}</td><td style="font-size:11px;color:var(--ink-500);">${new Date(l.created_at).toLocaleString()}</td></tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--ink-300);">No chat logs</td></tr>';
+  } catch (err) { console.error('Settings error:', err); }
+}
+
+async function saveSettings() {
+  const inputs = document.querySelectorAll('[data-setting-id]');
+  try {
+    for (const input of inputs) {
+      const { error } = await supabase.from('system_settings').update({ value: input.value, updated_at: new Date().toISOString() }).eq('id', input.dataset.settingId);
+      if (error) console.error('Setting update error:', error);
+    }
+    showToast('Settings saved successfully');
+  } catch (err) { showToast('Error: ' + err.message, true); }
+}
+
+// ── SSO & Sessions ───────────────────────────────────────────────────
+async function loadSSO() {
+  try {
+    const { data: links } = await supabase.from('sso_links').select('*').order('sort_order');
+    document.getElementById('ssoLinksTable').innerHTML = (links || []).length ? links.map(l => `<tr><td><strong>${l.icon} ${l.label}</strong></td><td style="font-size:12px;"><a href="${l.url}" target="_blank">${l.url}</a></td><td>${l.icon}</td><td><span class="badge badge-blue">${l.roles}</span></td><td><span class="badge ${l.is_active ? 'badge-green' : 'badge-red'}">${l.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td><td><button class="btn btn-outline btn-sm" onclick="toggleSSOLink(${l.id}, ${!l.is_active})">${l.is_active ? 'Disable' : 'Enable'}</button></td></tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--ink-300);">No SSO links</td></tr>';
+  } catch (err) { console.error('SSO error:', err); }
+}
+
+async function toggleSSOLink(id, activate) {
+  try { const { error } = await supabase.from('sso_links').update({ is_active: activate }).eq('id', id); if (error) throw error; showToast(`Link ${activate ? 'enabled' : 'disabled'}`); await loadSSO(); }
+  catch (err) { showToast('Error: ' + err.message, true); }
+}
+
+function openSSOLinkModal() {
+  document.getElementById('modalTitle').textContent = 'Add SSO Link';
+  document.getElementById('modalBody').innerHTML = `
+    <div class="form-row"><div class="form-group"><label>Label</label><input type="text" class="input" id="ml_label" placeholder="LMS"></div>
+    <div class="form-group"><label>URL</label><input type="text" class="input" id="ml_url" placeholder="https://lms.imcc.edu.ph"></div>
+    <div class="form-group"><label>Icon (emoji)</label><input type="text" class="input" id="ml_icon" value="🔗" placeholder="📚"></div>
+    <div class="form-group"><label>Visible To</label><input type="text" class="input" id="ml_roles" value="student,faculty" placeholder="student,faculty,staff,admin"></div></div>`;
+  document.getElementById('modalFoot').innerHTML = `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveSSOLink()">Save</button>`;
+  document.getElementById('modalBackdrop').classList.add('open');
+}
+
+async function saveSSOLink() {
+  const data = { label: document.getElementById('ml_label').value.trim(), url: document.getElementById('ml_url').value.trim(), icon: document.getElementById('ml_icon').value.trim() || '🔗', roles: document.getElementById('ml_roles').value.trim() };
+  if (!data.label || !data.url) { showToast('Label and URL required', true); return; }
+  try { const { error } = await supabase.from('sso_links').insert(data); if (error) throw error; showToast('Link saved'); closeModal(); await loadSSO(); }
+  catch (err) { showToast('Error: ' + err.message, true); }
+}
+
+function generateAPIKey() {
+  showToast('API key generation requires Supabase Edge Function with service role key. Use Supabase Dashboard → Authentication → API Keys to create one.');
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────
+function closeModal() { document.getElementById('modalBackdrop').classList.remove('open'); }
+function showToast(msg, isError) {
+  const t = document.createElement('div');
+  t.style.cssText = `position:fixed;bottom:24px;left:24px;padding:13px 20px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;background:${isError ? '#D6274A' : '#1B9C63'};z-index:300;box-shadow:0 8px 24px rgba(0,0,0,.15);`;
+  t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 3000);
+}
+
+document.getElementById('userSearch')?.addEventListener('input', renderUsers);
+document.getElementById('userRoleFilter')?.addEventListener('change', renderUsers);
+document.getElementById('userStatusFilter')?.addEventListener('change', renderUsers);
+
+init();
+</script>
+</body>
+</html>

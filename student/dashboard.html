@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyIMCC Elite Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="dashboard.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+
+<body data-theme="light">
+  <div class="app">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">MI</div>
+        <div>
+          <div class="brand-name">MyIMCC</div>
+          <div class="brand-sub">ELITE PORTAL</div>
+        </div>
+      </div>
+      <div class="user-chip">
+        <div class="avatar" id="sidebarAvatar"></div>
+        <div>
+          <div class="name" id="sidebarName"></div>
+          <div class="id" id="sidebarStudentNo"></div>
+        </div>
+      </div>
+
+      <div class="nav-label">Main Menu</div>
+      <button class="nav-item active" data-page="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="9" rx="1.5" />
+          <rect x="14" y="3" width="7" height="5" rx="1.5" />
+          <rect x="14" y="12" width="7" height="9" rx="1.5" />
+          <rect x="3" y="16" width="7" height="5" rx="1.5" />
+        </svg>
+        Dashboard
+      </button>
+      <button class="nav-item" data-page="enrollment">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 20l9-5-9-5-9 5 9 5z" />
+          <path d="M12 12L3 7l9-5 9 5-9 5z" />
+        </svg>
+        Enrollment
+      </button>
+      <button class="nav-item" data-page="billing">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="M3 10h18" />
+        </svg>
+        Billing &amp; History
+      </button>
+      <button class="nav-item" data-page="grades">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+        Grades &amp; Evaluation
+      </button>
+      <button class="nav-item" data-page="clearance">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8 12l3 3 5-6" />
+        </svg>
+        Online Clearance
+      </button>
+      <a href="cor.html" class="nav-item" style="text-decoration:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+          <path d="M14 2v6h6" />
+          <path d="M16 13H8" />
+          <path d="M16 17H8" />
+        </svg>
+        Certificate (COR)
+      </a>
+
+      <div class="nav-label">Quick Links</div>
+      <div id="ssoLinksNav"></div>
+
+      <div class="nav-label">Account</div>
+      <button class="nav-item" data-page="attendance">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Attendance
+      </button>
+      <button class="nav-item" data-page="evaluation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+        Faculty Evaluation
+      </button>
+      <button class="nav-item" data-page="profile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 00-16 0"/></svg>
+        My Profile
+      </button>
+
+      <div class="sidebar-foot" id="sidebarFoot">
+        —<br>
+        —
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div class="banner" id="topBanner">🔔 Loading announcements…</div>
+
+    <div class="topbar">
+      <div class="page-title" id="pageTitle">Dashboard</div>
+      <div class="topbar-right">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4-4" />
+          </svg>
+          Search portal...
+        </div>
+        <div class="user-menu-wrap">
+          <button class="icon-btn" id="bellBtn" title="Notifications" aria-label="Notifications">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 8a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6" />
+              <path d="M10 20a2 2 0 004 0" />
+            </svg>
+            <span class="dot"></span>
+          </button>
+          <div class="dropdown" id="bellDropdown" style="min-width:270px;">
+            <div class="notif-title">NOTIFICATIONS</div>
+            <div id="notifList">
+              <div class="notif-item">
+                <div class="t">Loading notifications…</div>
+                <div class="d">&nbsp;</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button class="theme-toggle" id="themeToggle">
+          <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z" />
+          </svg>
+          <span id="themeLabel">Dark</span>
+        </button>
+        <div class="user-menu-wrap">
+          <button class="user-btn" id="userBtn">
+            <div class="avatar" id="topAvatar" style="width:30px;height:30px;font-size:11px;"></div>
+            <span id="topName"></span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+          <div class="dropdown" id="userDropdown">
+            <a href="cor.html" class="ddi">📄 View &amp; Print COR</a>
+            <button class="ddi" id="mfaSetupBtn"
+              style="background:none;border:none;width:100%;text-align:left;cursor:pointer;">🔒 Setup Google
+              MFA</button>
+            <a href="#" class="ddi">Help &amp; Support</a>
+            <button class="ddi" id="signOutBtn"
+              style="color:var(--red);border-top:1px solid var(--line);margin-top:4px;padding-top:10px;">Sign
+              Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ================= DASHBOARD ================= -->
+      <section class="page active" id="page-dashboard">
+        <div class="hero">
+          <div>
+            <h2 id="heroGreeting"></h2>
+            <p id="heroSubtitle">Loading term info…</p>
+            <div class="meta" id="sidebarMeta"></div>
+          </div>
+          <div class="hero-actions">
+            <button class="btn btn-solid-w" data-goto="enrollment">Enroll Now</button>
+            <button class="btn btn-white" data-goto="billing">Pay Balance</button>
+          </div>
+        </div>
+
+        <div class="grid-4">
+          <div class="stat">
+            <div class="stat-top"><span class="stat-label">GWA</span>
+              <div class="stat-icon">◎</div>
+            </div>
+            <div class="stat-value" id="stat-gwa">—</div>
+            <div class="stat-sub">Current semester</div>
+          </div>
+          <div class="stat c2">
+            <div class="stat-top"><span class="stat-label">UNITS ENROLLED</span>
+              <div class="stat-icon">✎</div>
+            </div>
+            <div class="stat-value" id="stat-units">—</div>
+            <div class="stat-sub" id="stat-subjects">Loading…</div>
+          </div>
+          <div class="stat c3">
+            <div class="stat-top"><span class="stat-label">BALANCE DUE</span>
+              <div class="stat-icon">₱</div>
+            </div>
+            <div class="stat-value" id="stat-balance">—</div>
+            <div class="stat-sub" id="stat-due">Loading…</div>
+          </div>
+          <div class="stat c4">
+            <div class="stat-top"><span class="stat-label">CLEARANCE</span>
+              <div class="stat-icon">◉</div>
+            </div>
+            <div class="stat-value" id="stat-clearance">—</div>
+            <div class="stat-sub">Cleared departments</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card card-pad">
+            <div class="card-head">
+              <h3>Recent Activity</h3>
+            </div>
+            <div id="activityList"></div>
+          </div>
+          <div class="card card-pad" id="deadlinesCard">
+            <div class="card-head">
+              <h3>Upcoming Deadlines</h3>
+            </div>
+            <div class="deadline">
+              <div class="deadline-top"><span class="t">Loading deadlines…</span><span
+                  class="pill pill-soft">—</span></div>
+              <div class="d" style="color:var(--ink-500);">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="height:22px;"></div>
+        <div class="quick-grid">
+          <button class="quick-card" data-goto="enrollment">
+            <div class="quick-icon">✎</div>
+            <div class="t">Enrollment</div>
+            <div class="d">Manage subject enrollment</div>
+          </button>
+          <button class="quick-card" data-goto="billing">
+            <div class="quick-icon">◈</div>
+            <div class="t">Billing</div>
+            <div class="d">View payments &amp; history</div>
+          </button>
+          <button class="quick-card" data-goto="grades">
+            <div class="quick-icon">◎</div>
+            <div class="t">Grades</div>
+            <div class="d">Grades &amp; AI prediction</div>
+          </button>
+          <button class="quick-card" data-goto="clearance">
+            <div class="quick-icon">◉</div>
+            <div class="t">Clearance</div>
+            <div class="d">Track department clearances</div>
+          </button>
+        </div>
+      </section>
+
+      <!-- ================= ENROLLMENT ================= -->
+      <section class="page" id="page-enrollment">
+        <div class="steps">
+          <div class="step active" id="stepTab1">
+            <div class="step-num">1</div>Course Selection
+          </div>
+          <div class="step-line"></div>
+          <div class="step" id="stepTab2">
+            <div class="step-num">2</div>Fee Review
+          </div>
+          <div class="step-line"></div>
+          <div class="step" id="stepTab3">
+            <div class="step-num">3</div>Confirmation
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div>
+            <!-- STEP 1 -->
+            <div class="card card-pad" id="enrollStep1">
+              <div class="card-head">
+                <h3>Available Courses — 2nd Semester 2025–2026</h3>
+              </div>
+              <div id="courseList"></div>
+            </div>
+
+            <!-- STEP 2 -->
+            <div class="card card-pad" id="enrollStep2" style="display:none;">
+              <div class="card-head">
+                <h3>Review Your Fees</h3>
+              </div>
+              <p style="font-size:13px;color:var(--ink-500);margin-top:-8px;">Please confirm the subjects and fees
+                below before finalizing your enrollment.</p>
+              <div id="reviewCourseList"></div>
+              <div style="margin-top:14px;">
+                <button class="btn btn-outline" id="backToStep1">← Back to Course Selection</button>
+              </div>
+            </div>
+
+            <!-- STEP 3 -->
+            <div class="card card-pad" id="enrollStep3" style="display:none;">
+              <div class="confirm-box">
+                <div class="confirm-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                </div>
+                <h3 style="margin:0 0 8px;">Enrollment Confirmed!</h3>
+                <p style="color:var(--ink-500);font-size:13.5px;max-width:420px;margin:0 auto 22px;">You are
+                  officially enrolled for 2nd Semester, AY 2025–2026. A copy of your Certificate of Registration has
+                  been added to your records.</p>
+                <button class="btn btn-primary" data-goto="dashboard">Go to Dashboard</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- BILLING SUMMARY (sticky) -->
+          <div class="card card-pad" style="align-self:start;position:sticky;top:90px;">
+            <div class="card-head">
+              <h3>Billing Summary</h3>
+            </div>
+            <div class="fee-group-label">TUITION FEES</div>
+            <div id="tuitionLines"></div>
+            <div class="fee-group-label">MISCELLANEOUS FEES</div>
+            <div id="miscFeeLines"></div>
+            <div class="fee-total">
+              <span class="l">Total</span>
+              <span class="v" id="feeTotal">₱0</span>
+            </div>
+            <div class="fee-sub" id="feeSub">0 units · 0 subjects</div>
+            <button class="btn btn-primary" id="proceedBtn" style="width:100%;justify-content:center;margin-top:16px;"
+              disabled>Proceed to Fee Review →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= BILLING ================= -->
+      <section class="page" id="page-billing">
+        <div class="grid-4" style="grid-template-columns:repeat(3,1fr);">
+          <div class="stat" style="border-left-color:var(--green);">
+            <div class="stat-top"><span class="stat-label">TOTAL PAID</span></div>
+            <div class="stat-value" style="color:var(--green);" id="bill-totalpaid">—</div>
+            <div class="stat-sub">All time</div>
+          </div>
+          <div class="stat c3">
+            <div class="stat-top"><span class="stat-label">CURRENT BALANCE</span></div>
+            <div class="stat-value" id="bill-balance">—</div>
+            <div class="stat-sub">This semester</div>
+          </div>
+          <div class="stat" style="border-left-color:var(--red);">
+            <div class="stat-top"><span class="stat-label">NEXT PAYMENT</span></div>
+            <div class="stat-value" style="color:var(--red);" id="bill-nextdate">—</div>
+            <div class="stat-sub" id="bill-nextlabel">Loading…</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card card-pad">
+            <div class="card-head">
+              <h3>Transaction History</h3><button class="btn-ghost" id="exportBtn">⭳ Export</button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>OR NUMBER</th>
+                  <th>DATE</th>
+                  <th>DESCRIPTION</th>
+                  <th>CHANNEL</th>
+                  <th>AMOUNT</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="txnBody"></tbody>
+            </table>
+          </div>
+          <div>
+            <div class="card card-pad" style="margin-bottom:18px;">
+              <div class="card-head">
+                <h3>Upcoming Payments</h3>
+              </div>
+              <div id="upayList"></div>
+            </div>
+            <div class="card card-pad">
+              <div class="card-head">
+                <h3>Installment Plan</h3>
+              </div>
+              <div id="instList"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= GRADES ================= -->
+      <section class="page" id="page-grades">
+        <div class="grid-4">
+          <div class="stat">
+            <div class="stat-top"><span class="stat-label">CURRENT GWA</span></div>
+            <div class="stat-value" id="grade-gwa">—</div>
+            <div class="stat-sub" id="grade-gwa-sub">Loading…</div>
+          </div>
+          <div class="stat" style="border-left-color:var(--green);">
+            <div class="stat-top"><span class="stat-label">HIGHEST GRADE</span></div>
+            <div class="stat-value" style="color:var(--green);" id="grade-highest">—</div>
+            <div class="stat-sub" id="grade-highest-course">Loading…</div>
+          </div>
+          <div class="stat c3">
+            <div class="stat-top"><span class="stat-label">AI PREDICTED GWA</span></div>
+            <div class="stat-value" id="grade-ai">—</div>
+            <div class="stat-sub">Based on midterm performance</div>
+          </div>
+          <div class="stat" style="border-left-color:var(--blue);">
+            <div class="stat-top"><span class="stat-label">SUBJECTS COMPLETED</span></div>
+            <div class="stat-value" style="color:var(--blue);" id="grade-completed">—</div>
+            <div class="stat-sub">Final grades released</div>
+          </div>
+        </div>
+
+        <div class="card card-pad">
+          <div class="card-head">
+            <h3 id="gradesTitle">Grades — Loading…<br><span
+                style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">Loading program info…</span></h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span class="pill pill-soft" style="padding:6px 12px;" id="gradesTermPill">Loading…</span>
+              <button class="btn-ghost" id="prospectusBtn"
+                style="padding:6px 12px;border:1px solid var(--line);border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;background:var(--bg);color:var(--ink-700);transition:all 0.2s;font-weight:700;">📋
+                View Degree Prospectus</button>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>SUBJECT CODE</th>
+                <th>COURSE TITLE</th>
+                <th>INSTRUCTOR</th>
+                <th>UNITS</th>
+                <th>MIDTERM</th>
+                <th>FINAL</th>
+                <th>EQUIVALENT</th>
+                <th>AI PREDICTION</th>
+                <th>REMARK</th>
+              </tr>
+            </thead>
+            <tbody id="gradesBody"></tbody>
+          </table>
+
+          <div class="ai-box">
+            <div class="ai-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+                <rect x="4" y="8" width="16" height="12" rx="2" />
+                <path d="M8 8V5a4 4 0 018 0v3" />
+                <circle cx="9" cy="14" r="1" />
+                <circle cx="15" cy="14" r="1" />
+              </svg></div>
+            <div>
+              <h4>AI Grade Prediction Insights</h4>
+              <p id="aiInsightText">Loading AI prediction insights…</p>
+              <div class="note">⚠ AI predictions are based on historical grade patterns and midterm scores. Actual
+                results may vary.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= CLEARANCE ================= -->
+      <section class="page" id="page-clearance">
+        <div class="progress-wrap">
+          <div class="progress-top">
+            <h3 style="margin:0;font-size:15px;">Overall Clearance Progress</h3>
+            <span class="frac" id="clearFrac">—</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="clearFill" style="width:0%;"></div>
+          </div>
+          <div style="font-size:12px;color:var(--ink-500);margin-top:8px;" id="clearRemaining">Loading clearance status…</div>
+        </div>
+
+        <div class="dept-grid" id="deptGrid"></div>
+
+        <div class="legend">
+          <div class="legend-left">
+            <div class="legend-item"><span class="sdot" style="background:var(--green);"></span>Cleared</div>
+            <div class="legend-item"><span class="sdot" style="background:var(--amber);"></span>Pending</div>
+            <div class="legend-item"><span class="sdot" style="background:var(--red);"></span>Action Required</div>
+          </div>
+          <button class="btn-ghost" id="adminToggle">Toggle Admin View to simulate faculty approval</button>
+        </div>
+      </section>
+
+      <!-- ================= ATTENDANCE ================= -->
+      <section class="page" id="page-attendance">
+        <div class="grid-4">
+          <div class="stat">
+            <div class="stat-top"><span class="stat-label">CLASSES TOTAL</span></div>
+            <div class="stat-value" id="att-total">—</div>
+            <div class="stat-sub">Scheduled sessions</div>
+          </div>
+          <div class="stat" style="border-left-color:var(--green);">
+            <div class="stat-top"><span class="stat-label">PRESENT</span></div>
+            <div class="stat-value" style="color:var(--green);" id="att-present">—</div>
+            <div class="stat-sub">Days attended</div>
+          </div>
+          <div class="stat" style="border-left-color:var(--amber);">
+            <div class="stat-top"><span class="stat-label">LATE</span></div>
+            <div class="stat-value" style="color:var(--amber);" id="att-late">—</div>
+            <div class="stat-sub">Late arrivals</div>
+          </div>
+          <div class="stat" style="border-left-color:var(--red);">
+            <div class="stat-top"><span class="stat-label">ABSENT</span></div>
+            <div class="stat-value" style="color:var(--red);" id="att-absent">—</div>
+            <div class="stat-sub">Missed classes</div>
+          </div>
+        </div>
+        <div class="card card-pad">
+          <div class="card-head"><h3>Attendance History</h3></div>
+          <table>
+            <thead><tr><th>Date</th><th>Course</th><th>Status</th><th>Notes</th></tr></thead>
+            <tbody id="attBody"><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--ink-300);">Loading attendance...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ================= FACULTY EVALUATION ================= -->
+      <section class="page" id="page-evaluation">
+        <div class="card card-pad" style="margin-bottom:18px;">
+          <div class="card-head">
+            <h3>Anonymous Faculty Evaluation</h3>
+            <span class="pill pill-soft" id="evalTermPill" style="padding:6px 12px;">Loading…</span>
+          </div>
+          <p style="font-size:13px;color:var(--ink-500);margin-top:-8px;margin-bottom:16px;">
+            Your feedback is <strong>completely anonymous</strong>. Instructors cannot see who submitted which evaluation.
+            Ratings are used to improve teaching quality. Please rate each instructor honestly based on your experience this semester.
+          </p>
+          <div id="evalStatus" style="text-align:center;padding:20px;color:var(--ink-300);">Loading evaluation forms…</div>
+          <div id="evalList"></div>
+        </div>
+      </section>
+
+      <!-- ================= PROFILE ================= -->
+      <section class="page" id="page-profile">
+        <div class="grid-2">
+          <div class="card card-pad">
+            <div class="card-head"><h3>Profile Information</h3></div>
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
+              <div class="avatar" id="profileAvatar" style="width:64px;height:64px;font-size:22px;"></div>
+              <div>
+                <div style="font-weight:800;font-size:18px;" id="profileName">—</div>
+                <div style="font-size:13px;color:var(--ink-500);" id="profileEmail">—</div>
+              </div>
+            </div>
+            <div class="fee-line"><span style="font-weight:600;">Student No:</span> <strong id="profileStudentNo">—</strong></div>
+            <div class="fee-line"><span style="font-weight:600;">Program:</span> <strong id="profileProgram">—</strong></div>
+            <div class="fee-line"><span style="font-weight:600;">Year Level:</span> <strong id="profileYear">—</strong></div>
+            <div class="fee-line"><span style="font-weight:600;">Section:</span> <strong id="profileSection">—</strong></div>
+            <div class="fee-line"><span style="font-weight:600;">Phone:</span> <strong id="profilePhone">—</strong></div>
+            <div class="fee-line"><span style="font-weight:600;">Address:</span> <strong id="profileAddress">—</strong></div>
+          </div>
+          <div class="card card-pad">
+            <div class="card-head"><h3>Edit Contact Info</h3></div>
+            <div class="field">
+              <label>Phone Number</label>
+              <input type="text" class="field-input" id="editPhone" placeholder="0912 345 6789" style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;">
+            </div>
+            <div class="field">
+              <label>Address</label>
+              <input type="text" class="field-input" id="editAddress" placeholder="Iligan City" style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;">
+            </div>
+            <div class="field">
+              <label>Avatar URL</label>
+              <input type="text" class="field-input" id="editAvatar" placeholder="https://..." style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;">
+            </div>
+            <button class="btn btn-primary" id="saveProfileBtn" style="width:100%;justify-content:center;margin-top:8px;">Save Changes</button>
+            <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);">
+              <div style="font-size:12px;font-weight:700;color:var(--ink-500);margin-bottom:8px;">SECURITY</div>
+              <button class="btn btn-outline" style="width:100%;justify-content:center;" id="changePassBtn">Change Password</button>
+              <p style="font-size:11px;color:var(--ink-500);margin-top:8px;">Password changes are handled by Supabase Auth. You will receive a reset email at your school address.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+  </div>
+
+  <div class="toast" id="toast"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path d="M20 6L9 17l-5-5" />
+    </svg><span id="toastMsg"></span></div>
+
+  <!-- FAQ Chatbot -->
+  <button class="chat-fab" id="chatFab" aria-label="Open FAQ assistant">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+    </svg>
+  </button>
+
+  <div class="chat-panel" id="chatPanel">
+    <div class="chat-header">
+      <div class="chat-header-title">
+        <div class="chat-avatar">MI</div>
+        <div>
+          <div class="chat-title">MyIMCC FAQ Assistant</div>
+          <div class="chat-subtitle">Answers grounded in the official portal FAQ</div>
+        </div>
+      </div>
+      <button class="chat-close" id="chatClose" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+      <div class="chat-msg bot">
+        <div class="chat-bubble">Hi! I can answer questions about enrollment, billing, grades, and clearance based on
+          the portal's official FAQ. What would you like to know?</div>
+      </div>
+    </div>
+
+    <div class="chat-input-row">
+      <input type="text" id="chatInput" class="chat-input" placeholder="Ask about enrollment, billing, clearance..."
+        autocomplete="off">
+      <button class="chat-send" id="chatSend" aria-label="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 2L11 13" />
+          <path d="M22 2l-7 20-4-9-9-4 20-7z" />
+        </svg>
+      </button>
+    </div>
+    <div class="chat-footnote">Not sure? Contact the Registrar's Office at registrar@imcc.edu.ph</div>
+  </div>
+
+  <!-- MFA Modal -->
+  <div class="modal-backdrop" id="mfaModal"
+    style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+    <div class="modal-card"
+      style="background:var(--bg-card, #ffffff);border:1px solid var(--line, #cbd5e1);border-radius:12px;padding:24px;max-width:420px;width:100%;box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="margin:0;font-size:18px;color:var(--ink-900);">Google Authenticator (TOTP) MFA</h3>
+        <button id="mfaCloseBtn"
+          style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--ink-500);">&times;</button>
+      </div>
+      <p style="font-size:13px;color:var(--ink-500);margin-bottom:16px;">Scan the QR code below using Google
+        Authenticator or Authy, then enter your 6-digit verification code.</p>
+      <div style="text-align:center;margin-bottom:16px;">
+        <img id="mfaQrImg" src="" alt="MFA QR Code"
+          style="width:160px;height:160px;border-radius:8px;border:1px solid var(--line, #cbd5e1);">
+        <div id="mfaSecretText"
+          style="font-family:monospace;font-weight:700;font-size:12px;margin-top:8px;color:var(--ink-700);"></div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px;color:var(--ink-700);">Enter
+          6-Digit Verification Code:</label>
+        <input type="text" id="mfaCodeInput" maxlength="6" placeholder="123456"
+          style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--line, #cbd5e1);font-size:16px;text-align:center;letter-spacing:4px;font-weight:700;">
+      </div>
+      <button id="mfaConfirmBtn" class="btn btn-primary" style="width:100%;justify-content:center;">Verify &amp;
+        Activate MFA</button>
+    </div>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+
+</html>
