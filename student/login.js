@@ -9,6 +9,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  // Domain & Role Helpers
+  function isAllowedDomain(email) {
+    const allowed = ['@student.imcc.edu.ph', '@faculty.imcc.edu.ph', '@admin.imcc.edu.ph', '@imcc.edu.ph'];
+    return allowed.some(domain => email.toLowerCase().endsWith(domain));
+  }
+
+  function roleFromEmail(email) {
+    if (!email) return 'student';
+    const lower = email.toLowerCase();
+    if (lower.endsWith('@faculty.imcc.edu.ph')) return 'faculty';
+    if (lower.endsWith('@admin.imcc.edu.ph')) return 'admin';
+    if (lower.includes('staff')) return 'staff';
+    return 'student';
+  }
+
   const stepSso = document.getElementById('stepSso');
   const stepEnroll = document.getElementById('stepEnroll');
   const stepChallenge = document.getElementById('stepChallenge');
@@ -50,6 +65,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       errorEl.hidden = false;
     }
   }
+
   function hideError(errorEl) {
     if (errorEl) {
       errorEl.textContent = '';
@@ -57,36 +73,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // 2. Fixed routing: Use absolute paths from the root domain to prevent 404s
+  // 2. Fixed routing: Works both on GitHub Pages (/myimcc-portal/...) and Localhost
   function redirectUser(role) {
+    const basePath = window.location.pathname.includes('/myimcc-portal') ? '/myimcc-portal' : '';
     const lower = role.toLowerCase();
+
     if (lower === 'faculty') {
-      window.location.href = '/faculty/teacher-dashboard.html';
+      window.location.href = `${basePath}/faculty/teacher-dashboard.html`;
     } else if (lower === 'admin') {
-      window.location.href = '/admin/admin-dashboard.html';
+      window.location.href = `${basePath}/admin/admin-dashboard.html`;
     } else if (lower === 'staff') {
-      window.location.href = '/staff/staff-dashboard.html';
+      window.location.href = `${basePath}/staff/staff-dashboard.html`;
     } else {
-      window.location.href = '/student/dashboard.html';
+      window.location.href = `${basePath}/student/dashboard.html`;
     }
   }
 
   async function bootstrap() {
-    const { data: { session }, error } = await supabase.auth.getSession();
+    const { data: { session }, error } = await supabaseClient.auth.getSession();
     if (error || !session) {
       showStep(stepSso);
       return;
     }
 
     // Check if user is already fully authenticated (AAL2)
-    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (aalData.currentLevel === 'aal2') {
-      const { data: { user } } = await supabase.auth.getUser();
+    const { data: aalData } = await supabaseClient.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalData?.currentLevel === 'aal2') {
+      const { data: { user } } = await supabaseClient.auth.getUser();
       redirectUser(roleFromEmail(user?.email || activeEmail));
       return;
     }
 
-    const { data: factorData, error: fErr } = await supabase.auth.mfa.listFactors();
+    const { data: factorData, error: fErr } = await supabaseClient.auth.mfa.listFactors();
     if (fErr) {
       showStep(stepSso);
       return;
@@ -100,128 +118,133 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  ssoForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    hideError(ssoError);
-    const email = emailInput.value.trim();
+  if (ssoForm) {
+    ssoForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError(ssoError);
+      const email = emailInput.value.trim();
 
-    if (!email) {
-      showError(ssoError, 'Please enter your official institutional email.');
-      return;
-    }
+      if (!email) {
+        showError(ssoError, 'Please enter your official institutional email.');
+        return;
+      }
 
-    if (!isAllowedDomain(email)) {
-      showStep(stepUnauthorized);
-      return;
-    }
+      if (!isAllowedDomain(email)) {
+        showStep(stepUnauthorized);
+        return;
+      }
 
-    activeEmail = email;
-    ssoBtn.disabled = true;
+      activeEmail = email;
+      ssoBtn.disabled = true;
 
-    try {
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          queryParams: { login_hint: email },
-          // Use origin + pathname to avoid passing query params into the redirect
-          redirectTo: window.location.origin + window.location.pathname,
-        },
-      });
-      if (oauthError) throw oauthError;
-    } catch (err) {
-      showError(ssoError, err.message || 'Authentication failed.');
-      ssoBtn.disabled = false;
-    }
-  });
+      try {
+        const { error: oauthError } = await supabaseClient.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            queryParams: { login_hint: email },
+            redirectTo: window.location.origin + window.location.pathname,
+          },
+        });
+        if (oauthError) throw oauthError;
+      } catch (err) {
+        showError(ssoError, err.message || 'Authentication failed.');
+        ssoBtn.disabled = false;
+      }
+    });
+  }
 
   async function startEnrollment() {
     try {
-      const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
+      const { data, error } = await supabaseClient.auth.mfa.enroll({ factorType: 'totp' });
       if (error) throw error;
 
       pendingFactorId = data.id;
       activeSecret = data.totp.secret;
 
-      enrollQrImg.src = data.totp.qr_code;
-      enrollSecret.textContent = '••••••••••••••••••••';
-      enrollCodeInput.value = '';
+      if (enrollQrImg) enrollQrImg.src = data.totp.qr_code;
+      if (enrollSecret) enrollSecret.textContent = '••••••••••••••••••••';
+      if (enrollCodeInput) enrollCodeInput.value = '';
 
       showStep(stepEnroll);
-      enrollCodeInput.focus();
+      if (enrollCodeInput) enrollCodeInput.focus();
     } catch (err) {
       showError(enrollError, err.message || 'Could not start MFA enrollment.');
       showStep(stepEnroll);
     }
   }
 
-  enrollForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    hideError(enrollError);
-    const code = enrollCodeInput.value.trim();
+  if (enrollForm) {
+    enrollForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError(enrollError);
+      const code = enrollCodeInput.value.trim();
 
-    if (!code || code.length !== 6) {
-      showError(enrollError, 'Please enter a valid 6-digit TOTP verification code.');
-      return;
-    }
+      if (!code || code.length !== 6) {
+        showError(enrollError, 'Please enter a valid 6-digit TOTP verification code.');
+        return;
+      }
 
-    try {
-      const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({ factorId: pendingFactorId });
-      if (chErr) throw chErr;
-      pendingChallengeId = ch.id;
+      try {
+        const { data: ch, error: chErr } = await supabaseClient.auth.mfa.challenge({ factorId: pendingFactorId });
+        if (chErr) throw chErr;
+        pendingChallengeId = ch.id;
 
-      const { error: vErr } = await supabase.auth.mfa.verify({
-        factorId: pendingFactorId,
-        challengeId: pendingChallengeId,
-        code,
-      });
-      if (vErr) throw vErr;
+        const { error: vErr } = await supabaseClient.auth.mfa.verify({
+          factorId: pendingFactorId,
+          challengeId: pendingChallengeId,
+          code,
+        });
+        if (vErr) throw vErr;
 
-      const { data: { user } } = await supabase.auth.getUser();
-      redirectUser(roleFromEmail(user?.email || activeEmail));
-    } catch (err) {
-      showError(enrollError, err.message || 'Verification failed. Check your app timer.');
-    }
-  });
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        redirectUser(roleFromEmail(user?.email || activeEmail));
+      } catch (err) {
+        showError(enrollError, err.message || 'Verification failed. Check your app timer.');
+      }
+    });
+  }
 
   async function startChallenge(factorId) {
     try {
-      const { data: ch, error } = await supabase.auth.mfa.challenge({ factorId });
+      const { data: ch, error } = await supabaseClient.auth.mfa.challenge({ factorId });
       if (error) throw error;
       pendingFactorId = factorId;
       pendingChallengeId = ch.id;
-      challengeCodeInput.value = '';
+      if (challengeCodeInput) challengeCodeInput.value = '';
       showStep(stepChallenge);
-      challengeCodeInput.focus();
+      if (challengeCodeInput) challengeCodeInput.focus();
     } catch (err) {
       showError(challengeError, err.message || 'Could not start verification.');
       showStep(stepChallenge);
     }
   }
 
-  challengeForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    hideError(challengeError);
-    const code = challengeCodeInput.value.trim();
+  if (challengeForm) {
+    challengeForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError(challengeError);
+      const code = challengeCodeInput.value.trim();
 
-    if (!code || code.length !== 6) {
-      showError(challengeError, 'Please enter your 6-digit Authenticator code.');
-      return;
-    }
+      if (!code || code.length !== 6) {
+        showError(challengeError, 'Please enter your 6-digit Authenticator code.');
+        return;
+      }
 
-    try {
-      const { error } = await supabase.auth.mfa.verify({
-        factorId: pendingFactorId,
-        challengeId: pendingChallengeId,
-        code,
-      });
-      if (error) throw error;
+      try {
+        const { error } = await supabaseClient.auth.mfa.verify({
+          factorId: pendingFactorId,
+          challengeId: pendingChallengeId,
+          code,
+        });
+        if (error) throw error;
 
-      const { data: { user } } = await supabase.auth.getUser();
-      redirectUser(roleFromEmail(user?.email || activeEmail));
-    } catch (err) {
-      showError(challengeError, err.message || 'Invalid TOTP code. Try again.');
-    }
-  });
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        redirectUser(roleFromEmail(user?.email || activeEmail));
+      } catch (err) {
+        showError(challengeError, err.message || 'Invalid TOTP code. Try again.');
+      }
+    });
+  }
 
   if (resetMfaBtn) {
     resetMfaBtn.addEventListener('click', async (e) => {
@@ -229,10 +252,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!confirm('Are you sure you want to reset your 2FA pairing key?')) return;
 
       try {
-        const { data: factorData } = await supabase.auth.mfa.listFactors();
+        const { data: factorData } = await supabaseClient.auth.mfa.listFactors();
         const totpFactors = factorData?.totp || [];
         for (const f of totpFactors) {
-          await supabase.auth.mfa.unenroll({ factorId: f.id });
+          await supabaseClient.auth.mfa.unenroll({ factorId: f.id });
         }
         await startEnrollment();
       } catch (err) {
@@ -244,7 +267,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (retrySsoBtn) {
     retrySsoBtn.addEventListener('click', () => {
       showStep(stepSso);
-      emailInput.focus();
+      if (emailInput) emailInput.focus();
     });
   }
 
