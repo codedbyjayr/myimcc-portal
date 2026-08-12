@@ -1,9 +1,9 @@
-// login.js
+// student/login.js
 document.addEventListener('DOMContentLoaded', async () => {
   // 1. Wait for the dynamic Supabase client to load
-  let supabase;
+  let supabaseClient;
   try {
-    supabase = await getSupabaseClientAsync();
+    supabaseClient = await getSupabaseClientAsync();
   } catch (e) {
     console.error("Failed to init Supabase", e);
     return;
