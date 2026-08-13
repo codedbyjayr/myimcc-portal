@@ -3,7 +3,7 @@
    ===================================================================== */
 
 // ── Supabase Client ───────────────────────────────────────────────────
-let supabase;  // set by waitForSupabase() at bottom of file
+let supabase; // set by waitForSupabase() at bottom of file
 
 // ── State ─────────────────────────────────────────────────────────────
 const state = {
@@ -401,7 +401,6 @@ function parseSchedule(scheduleStr) {
   if (!scheduleStr) return null;
   const s = scheduleStr.trim().toUpperCase();
 
-  // Format examples: "MWF 8:00 AM - 10:00 AM" or "TTH 13:00-14:30" or "M 09:00 - 12:00"
   const match = s.match(/^([A-Z]{1,4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?\s*[-–]\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
   if (!match) return null;
 
@@ -790,8 +789,7 @@ function renderGradesHeader() {
   if (!d) return;
   const setTitle = getEl('gradesTitle');
   if (setTitle) {
-    setTitle.innerHTML = `Grades — ${d.student.semester}, ${d.student.schoolYear}<br><span
-      style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">${d.student.program || '—'} ${d.student.yearLevel || ''}${d.student.section ? ' · Section ' + d.student.section : ''}</span>`;
+    setTitle.innerHTML = `Grades — ${d.student.semester}, ${d.student.schoolYear}<br><span style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">${d.student.program || '—'} ${d.student.yearLevel || ''}${d.student.section ? ' · Section ' + d.student.section : ''}</span>`;
   }
   setText('gradesTermPill', `${d.student.semester} ${d.student.schoolYear}`);
 
