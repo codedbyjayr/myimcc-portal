@@ -2,8 +2,8 @@
    MyIMCC Portal — Supabase Integration Layer
    ===================================================================== */
 
-// ── Supabase Client ───────────────────────────────────────────────────
-let supabase; // set by waitForSupabase() at bottom of file
+// ── Supabase Client Instance ─────────────────────────────────────────
+let supabaseClient; // set by waitForSupabase() at bottom of file
 
 // ── State ─────────────────────────────────────────────────────────────
 const state = {
@@ -30,14 +30,14 @@ const getEl = id => document.getElementById(id);
 
 // ── Auth Guard & Session Management ──────────────────────────────────
 async function getCurrentStudent() {
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const { data: { user }, error } = await supabaseClient.auth.getUser();
   if (error || !user) {
     window.location.href = 'login.html';
     return null;
   }
   state.currentUser = user;
 
-  const { data: profile, error: pErr } = await supabase
+  const { data: profile, error: pErr } = await supabaseClient
     .from('profiles')
     .select('*')
     .eq('id', user.id)
@@ -52,8 +52,8 @@ async function getCurrentStudent() {
 }
 
 function setupAuthListener() {
-  if (!supabase) return;
-  supabase.auth.onAuthStateChange(async (event, session) => {
+  if (!supabaseClient) return;
+  supabaseClient.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_OUT' || !session) {
       window.location.href = 'login.html';
       return;
@@ -158,7 +158,7 @@ async function loadDashboard() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  const { data: sem, error: semErr } = await supabase
+  const { data: sem, error: semErr } = await supabaseClient
     .from('student_semesters')
     .select('*')
     .eq('student_id', profile.id)
@@ -167,7 +167,7 @@ async function loadDashboard() {
 
   if (semErr) console.error('semester fetch error:', semErr);
 
-  const { data: clearances } = await supabase
+  const { data: clearances } = await supabaseClient
     .from('clearances')
     .select('status')
     .eq('student_id', profile.id);
@@ -175,7 +175,7 @@ async function loadDashboard() {
   const clearedCount = (clearances || []).filter(c => c.status === 'cleared').length;
   const totalClear = (clearances || []).length || 1;
 
-  const { data: nextDue } = await supabase
+  const { data: nextDue } = await supabaseClient
     .from('installments')
     .select('*')
     .eq('student_id', profile.id)
@@ -184,7 +184,7 @@ async function loadDashboard() {
     .limit(1)
     .maybeSingle();
 
-  const { data: activities } = await supabase
+  const { data: activities } = await supabaseClient
     .from('activities')
     .select('*')
     .eq('student_id', profile.id)
@@ -284,7 +284,7 @@ function renderDashboard() {
 
 // ── Announcements & Deadlines ─────────────────────────────────────────
 async function loadAnnouncements() {
-  const { data: rows } = await supabase
+  const { data: rows } = await supabaseClient
     .from('announcements')
     .select('*')
     .eq('is_active', true)
@@ -302,7 +302,7 @@ async function loadAnnouncements() {
 async function loadDeadlines() {
   const profile = state.studentProfile;
   if (!profile) return;
-  const { data: rows } = await supabase
+  const { data: rows } = await supabaseClient
     .from('deadlines')
     .select('*')
     .eq('is_active', true)
@@ -329,7 +329,7 @@ async function loadDeadlines() {
 async function loadNotifications() {
   const profile = state.studentProfile;
   if (!profile) return;
-  const { data: rows } = await supabase
+  const { data: rows } = await supabaseClient
     .from('activities')
     .select('*')
     .eq('student_id', profile.id)
@@ -349,7 +349,7 @@ async function loadEnrollment() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  const { data: currentSem } = await supabase
+  const { data: currentSem } = await supabaseClient
     .from('student_semesters')
     .select('school_year, semester')
     .eq('student_id', profile.id)
@@ -359,20 +359,20 @@ async function loadEnrollment() {
   const activeSchoolYear = currentSem?.school_year || '2025–2026';
   const activeSemester = currentSem?.semester || '2nd Semester';
 
-  const { data: offerings } = await supabase
+  const { data: offerings } = await supabaseClient
     .from('course_offerings')
     .select('*')
     .eq('semester', activeSemester)
     .eq('school_year', activeSchoolYear);
 
-  const { data: enrolled } = await supabase
+  const { data: enrolled } = await supabaseClient
     .from('enrollments')
     .select('offering_id')
     .eq('student_id', profile.id);
 
   const enrolledIds = new Set((enrolled || []).map(e => String(e.offering_id)));
 
-  const { data: misc } = await supabase
+  const { data: misc } = await supabaseClient
     .from('misc_fees')
     .select('*')
     .eq('semester', activeSemester)
@@ -591,7 +591,7 @@ async function confirmEnrollment() {
       offering_id: oid,
       status: 'enrolled',
     }));
-    const { error } = await supabase.from('enrollments').insert(inserts);
+    const { error } = await supabaseClient.from('enrollments').insert(inserts);
     if (error) throw error;
 
     setEnrollStep(3);
@@ -611,19 +611,19 @@ async function loadBilling() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  const { data: summary } = await supabase
+  const { data: summary } = await supabaseClient
     .from('billing_summary')
     .select('*')
     .eq('student_id', profile.id)
     .maybeSingle();
 
-  const { data: txns } = await supabase
+  const { data: txns } = await supabaseClient
     .from('transactions')
     .select('*')
     .eq('student_id', profile.id)
     .order('txn_date', { ascending: false });
 
-  const { data: inst } = await supabase
+  const { data: inst } = await supabaseClient
     .from('installments')
     .select('*')
     .eq('student_id', profile.id)
@@ -693,7 +693,7 @@ function renderUpay() {
 
 async function payInstallment(id) {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('installments')
       .update({ status: 'paid', paid_at: new Date().toISOString() })
       .eq('id', id)
@@ -724,7 +724,7 @@ async function loadGrades() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  const { data: rows } = await supabase
+  const { data: rows } = await supabaseClient
     .from('grades')
     .select('*, course_offerings(code, title, units, instructor_name)')
     .eq('student_id', profile.id);
@@ -829,14 +829,14 @@ function getOrdinalSuffix(n) {
 async function viewProspectus() {
   const profile = state.studentProfile;
   try {
-    const { data: courses } = await supabase
+    const { data: courses } = await supabaseClient
       .from('course_offerings')
       .select('*')
       .eq('program', profile.program)
       .order('year', { ascending: true })
       .order('semester', { ascending: true });
 
-    const { data: completed } = await supabase
+    const { data: completed } = await supabaseClient
       .from('enrollments')
       .select('offering_id, grades(final)')
       .eq('student_id', profile.id)
@@ -940,7 +940,7 @@ const statusMeta = {
 async function loadClearance() {
   const profile = state.studentProfile;
   if (!profile) return;
-  const { data: rows } = await supabase
+  const { data: rows } = await supabaseClient
     .from('clearances')
     .select('*')
     .eq('student_id', profile.id);
@@ -996,7 +996,7 @@ function renderClearance() {
 async function adminClear(code) {
   const profile = state.studentProfile;
   try {
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from('clearances')
       .update({ status: 'cleared' })
       .eq('student_id', profile.id)
@@ -1091,7 +1091,7 @@ async function sendChatMessage() {
   showTypingIndicator();
 
   try {
-    const { data, error } = await supabase.functions.invoke('faq-assistant', {
+    const { data, error } = await supabaseClient.functions.invoke('faq-assistant', {
       body: { message: text, history: chatState.history },
     });
 
@@ -1143,7 +1143,7 @@ if (mfaSetupBtn) {
       return;
     }
     try {
-      const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({
+      const { data: enrollData, error: enrollError } = await supabaseClient.auth.mfa.enroll({
         factorType: 'totp',
         issuer: 'MyIMCC Portal',
         friendlyName: profile.email || profile.student_no
@@ -1159,7 +1159,7 @@ if (mfaSetupBtn) {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('mfa-enroll', {
+      const { data, error } = await supabaseClient.functions.invoke('mfa-enroll', {
         body: { user_id: profile.id },
       });
       if (error) throw error;
@@ -1196,12 +1196,12 @@ if (mfaConfirmBtn) {
     }
     try {
       if (currentMfaFactorId) {
-        const { data: challengeData, error: challengeErr } = await supabase.auth.mfa.challenge({
+        const { data: challengeData, error: challengeErr } = await supabaseClient.auth.mfa.challenge({
           factorId: currentMfaFactorId
         });
         if (challengeErr) throw challengeErr;
 
-        const { error: verifyErr } = await supabase.auth.mfa.verify({
+        const { error: verifyErr } = await supabaseClient.auth.mfa.verify({
           factorId: currentMfaFactorId,
           challengeId: challengeData.id,
           code: code
@@ -1213,7 +1213,7 @@ if (mfaConfirmBtn) {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('mfa-verify', {
+      const { data, error } = await supabaseClient.functions.invoke('mfa-verify', {
         body: { user_id: profile.id, secret: currentMfaSecret, code },
       });
       if (error) throw error;
@@ -1230,7 +1230,7 @@ if (mfaConfirmBtn) {
 // ── Sign-out ──────────────────────────────────────────────────────────
 getEl('signOutBtn')?.addEventListener('click', async () => {
   try {
-    await supabase.auth.signOut();
+    await supabaseClient.auth.signOut();
   } catch (e) {
     console.warn('signOut error', e);
   }
@@ -1239,7 +1239,7 @@ getEl('signOutBtn')?.addEventListener('click', async () => {
 
 // ── SSO Links ─────────────────────────────────────────────────────────
 async function loadSSOLinks() {
-  const { data: links } = await supabase.from('sso_links').select('*').eq('is_active', true).order('sort_order');
+  const { data: links } = await supabaseClient.from('sso_links').select('*').eq('is_active', true).order('sort_order');
   const nav = getEl('ssoLinksNav');
   if (!nav) return;
   const role = state.studentProfile?.role || 'student';
@@ -1255,7 +1255,7 @@ async function loadSSOLinks() {
 async function loadAttendance() {
   const profile = state.studentProfile;
   if (!profile) return;
-  const { data: records } = await supabase
+  const { data: records } = await supabaseClient
     .from('attendance')
     .select('*, course_offerings(code, title)')
     .eq('student_id', profile.id)
@@ -1289,7 +1289,7 @@ async function loadFacultyEval() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  const { data: currentSem } = await supabase
+  const { data: currentSem } = await supabaseClient
     .from('student_semesters')
     .select('school_year, semester')
     .eq('student_id', profile.id)
@@ -1300,7 +1300,7 @@ async function loadFacultyEval() {
   const sem = currentSem?.semester || '2nd Semester';
   setText('evalTermPill', `${sem} ${sy}`);
 
-  const { data: enrollments } = await supabase
+  const { data: enrollments } = await supabaseClient
     .from('enrollments')
     .select('offering_id, course_offerings(id, code, title, instructor_name)')
     .eq('student_id', profile.id)
@@ -1330,7 +1330,7 @@ async function loadFacultyEval() {
     return;
   }
 
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseClient
     .from('faculty_evaluations')
     .select('instructor_name')
     .eq('student_id', profile.id)
@@ -1417,7 +1417,7 @@ async function loadFacultyEval() {
         btn.textContent = 'Submitting…';
 
         try {
-          const { error } = await supabase.from('faculty_evaluations').insert({
+          const { error } = await supabaseClient.from('faculty_evaluations').insert({
             student_id: profile.id,
             instructor_name: instructorName,
             school_year: sy,
@@ -1483,7 +1483,7 @@ getEl('saveProfileBtn')?.addEventListener('click', async () => {
   const avatar_url = getEl('editAvatar')?.value.trim() || null;
 
   try {
-    const { error } = await supabase.from('profiles').update({
+    const { error } = await supabaseClient.from('profiles').update({
       phone,
       address,
       avatar_url,
@@ -1506,9 +1506,9 @@ getEl('saveProfileBtn')?.addEventListener('click', async () => {
 
 getEl('changePassBtn')?.addEventListener('click', async () => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user?.email) throw new Error('User email not found');
-    const { error } = await supabase.auth.resetPasswordForEmail(user.email);
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(user.email);
     if (error) throw error;
     showToast('Password reset email sent to ' + user.email);
   } catch (err) {
@@ -1547,12 +1547,12 @@ async function init() {
 // Wait for shared supabase-config.js to finish initialization
 (function waitForSupabase() {
   if (window.__myimcc_supabase_client__) {
-    supabase = window.__myimcc_supabase_client__;
+    supabaseClient = window.__myimcc_supabase_client__;
     init();
   } else {
     window.addEventListener('supabase:ready', function onReady() {
       window.removeEventListener('supabase:ready', onReady);
-      supabase = window.__myimcc_supabase_client__;
+      supabaseClient = window.__myimcc_supabase_client__;
       init();
     });
   }
