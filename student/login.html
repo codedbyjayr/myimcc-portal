@@ -206,11 +206,21 @@
         return;
       }
 
-      const DESTINATION_URL = `${window.location.origin}/index.html`;
+      // Fix: Update DESTINATION_URL to point to student/dashboard.html
+      const DESTINATION_URL = `${window.location.origin}/student/dashboard.html`;
 
-      // 1. Google OAuth Form Submit Handler
+      // Helper function to redirect
+      const handleLoggedInSession = (session) => {
+        if (!session) return;
+        window.location.replace(DESTINATION_URL);
+      };
+
+      // 1. Google OAuth Form Submit Handler (Consider letting login.js handle this to avoid duplicate listeners)
       const ssoForm = document.getElementById('ssoForm');
       if (ssoForm) {
+        // We use an empty click listener here assuming login.js does the actual signInWithOAuth.
+        // If login.js doesn't handle it, uncomment the code below:
+        /*
         ssoForm.addEventListener('submit', async (e) => {
           e.preventDefault();
           const { error } = await client.auth.signInWithOAuth({
@@ -228,13 +238,14 @@
             }
           }
         });
+        */
       }
 
-      // 2. Active Session Detection & Redirect
+      // 2. Active Session Detection & Redirect (on page load/return from Google)
       try {
         const { data: { session }, error } = await client.auth.getSession();
         if (session) {
-          window.location.replace(DESTINATION_URL);
+          handleLoggedInSession(session);
         }
       } catch (err) {
         console.error("Auth session error:", err);
@@ -243,7 +254,7 @@
       // 3. Auth Event Listener
       client.auth.onAuthStateChange((event, session) => {
         if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
-          window.location.replace(DESTINATION_URL);
+          handleLoggedInSession(session);
         }
       });
     });
