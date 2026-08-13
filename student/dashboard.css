@@ -7,6 +7,7 @@
   --pink-100: #FBDEEC;
   --pink-200: #F6B6D5;
   --ink-900: #1B1424;
+  --ink-800: #2B2138;
   --ink-700: #3D3548;
   --ink-500: #6B6478;
   --ink-300: #A29CAE;
@@ -29,6 +30,7 @@
   --pink-50: #2D1427;
   --pink-100: #3E1730;
   --ink-900: #F3EEF7;
+  --ink-800: #E2DAEB;
   --ink-700: #D9D2E2;
   --ink-500: #A79FB5;
   --ink-300: #6E6680;
@@ -80,7 +82,7 @@ button {
   background: var(--pink-200);
 }
 
-/* ---------- Layout (Fixed Sticky & Scroll Context) ---------- */
+/* ---------- Layout ---------- */
 .app {
   display: grid;
   grid-template-columns: 264px 1fr;
@@ -394,6 +396,7 @@ button {
   border: none;
   background: none;
   color: var(--ink-700);
+  cursor: pointer;
 }
 
 .dropdown a:hover,
@@ -533,7 +536,7 @@ button {
 }
 
 .btn-outline:hover {
-  border-color: var(--pink-300, #F6B6D5);
+  border-color: var(--pink-300);
   color: var(--pink-600);
 }
 
@@ -544,6 +547,21 @@ button {
   font-weight: 700;
   font-size: 12.5px;
   padding: 6px 4px;
+}
+
+.field-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  font-size: 14px;
+  background: var(--bg);
+  color: var(--ink-900);
+}
+
+.field-input:focus {
+  outline: none;
+  border-color: var(--pink-500);
 }
 
 .grid-4 {
@@ -1665,7 +1683,28 @@ tr:last-child td {
   }
 }
 
-/* ---------- Prospectus Modal ---------- */
+/* ---------- Modals (MFA & Prospectus) ---------- */
+.modal-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: var(--shadow);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
 .prospectus-modal {
   position: fixed;
   top: 0;
@@ -1751,27 +1790,11 @@ tr:last-child td {
   margin-bottom: 24px;
 }
 
-.progress-bar {
-  height: 8px;
-  background: var(--line);
-  border-radius: 20px;
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--pink-500), var(--pink-700));
-  border-radius: 20px;
-}
-
 .progress-text {
   font-size: 12px;
   color: var(--ink-500);
   font-weight: 700;
 }
-
-.prospectus-courses {}
 
 .semester-block {
   margin-bottom: 20px;
@@ -1788,8 +1811,6 @@ tr:last-child td {
   align-items: center;
   gap: 6px;
 }
-
-.course-list {}
 
 .prospectus-course {
   display: flex;
