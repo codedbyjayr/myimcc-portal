@@ -58,7 +58,7 @@
           </form>
         </div>
 
-        <!-- STEP 2A: TOTP Enrollment (New Pairing Key) -->
+        <!-- STEP 2A: TOTP Enrollment -->
         <div id="stepEnroll" style="display:none;">
           <div class="form-head">
             <h1>Sync 2FA App</h1>
@@ -90,7 +90,7 @@
           </form>
         </div>
 
-        <!-- STEP 2B: TOTP Challenge (Existing Key) -->
+        <!-- STEP 2B: TOTP Challenge -->
         <div id="stepChallenge" style="display:none;">
           <div class="form-head">
             <h1>Two-Factor Verification</h1>
@@ -127,7 +127,7 @@
           <p style="color:#7f1d1d;font-size:13px;line-height:1.6;margin-bottom:20px;">
             Institutional Email Required.<br>
             Your email domain is not permitted to access the MyIMCC portal. Please sign in using your official school
-            email suffix (e.g. <b>@student.school.edu</b>, <b>@faculty.school.edu</b>, or <b>@admin.school.edu</b>).
+            email suffix.
           </p>
           <button type="button" class="btn-login" id="retrySsoBtn" style="background:#475569;">
             ← Return to Sign-In
@@ -189,27 +189,26 @@
 
   </div>
 
-  <!-- 1. Supabase CDN -->
+  <!-- Script Load Order -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-  <!-- 2. Environment Variables -->
   <script src="/env-config.js"></script>
-
-  <!-- 3. Supabase Client Configuration -->
   <script src="../shared/supabase-config.js"></script>
-
-  <!-- 4. Page Logic -->
   <script src="login.js"></script>
 
-  <!-- 5. Inline SSO Trigger & Session Handler -->
+  <!-- Auth Handler -->
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const client = window.supabaseClient || window.supabase;
-      if (!client || !client.auth) return;
+    document.addEventListener('DOMContentLoaded', async () => {
+      const getClient = () => window.supabaseClient || window.__myimcc_supabase_client__;
+      const client = getClient();
+
+      if (!client || !client.auth) {
+        console.error("Supabase client failed to load properly.");
+        return;
+      }
 
       const DESTINATION_URL = `${window.location.origin}/index.html`;
 
-      // A. Attach Google SSO trigger to the form submission
+      // 1. Google OAuth Form Submit Handler
       const ssoForm = document.getElementById('ssoForm');
       if (ssoForm) {
         ssoForm.addEventListener('submit', async (e) => {
@@ -217,7 +216,7 @@
           const { error } = await client.auth.signInWithOAuth({
             provider: 'google',
             options: {
-              redirectTo: `${window.location.origin}/login.html`
+              redirectTo: `${window.location.origin}/student/login.html`
             }
           });
 
@@ -231,17 +230,20 @@
         });
       }
 
-      // B. Catch OAuth completion & handle auto-redirection to dashboard
-      client.auth.onAuthStateChange((event, session) => {
-        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
-          window.location.href = DESTINATION_URL;
-        }
-      });
-
-      // C. Redirect if user opens login page while already logged in
-      client.auth.getSession().then(({ data: { session } }) => {
+      // 2. Active Session Detection & Redirect
+      try {
+        const { data: { session }, error } = await client.auth.getSession();
         if (session) {
-          window.location.href = DESTINATION_URL;
+          window.location.replace(DESTINATION_URL);
+        }
+      } catch (err) {
+        console.error("Auth session error:", err);
+      }
+
+      // 3. Auth Event Listener
+      client.auth.onAuthStateChange((event, session) => {
+        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
+          window.location.replace(DESTINATION_URL);
         }
       });
     });
