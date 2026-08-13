@@ -13,7 +13,6 @@
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="login.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 
 <body>
@@ -193,14 +192,60 @@
   <!-- 1. Supabase CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- 2. Environment Variables (Must load FIRST) -->
+  <!-- 2. Environment Variables -->
   <script src="/env-config.js"></script>
 
-  <!-- 3. Supabase Client Configuration (Must load SECOND) -->
+  <!-- 3. Supabase Client Configuration -->
   <script src="../shared/supabase-config.js"></script>
 
-  <!-- 4. Page Logic (Must load LAST) -->
+  <!-- 4. Page Logic -->
   <script src="login.js"></script>
+
+  <!-- 5. Inline SSO Trigger & Session Handler -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const client = window.supabaseClient || window.supabase;
+      if (!client || !client.auth) return;
+
+      const DESTINATION_URL = `${window.location.origin}/index.html`;
+
+      // A. Attach Google SSO trigger to the form submission
+      const ssoForm = document.getElementById('ssoForm');
+      if (ssoForm) {
+        ssoForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const { error } = await client.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+              redirectTo: `${window.location.origin}/login.html`
+            }
+          });
+
+          if (error) {
+            const errorEl = document.getElementById('ssoError');
+            if (errorEl) {
+              errorEl.textContent = error.message;
+              errorEl.hidden = false;
+            }
+          }
+        });
+      }
+
+      // B. Catch OAuth completion & handle auto-redirection to dashboard
+      client.auth.onAuthStateChange((event, session) => {
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+          window.location.href = DESTINATION_URL;
+        }
+      });
+
+      // C. Redirect if user opens login page while already logged in
+      client.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          window.location.href = DESTINATION_URL;
+        }
+      });
+    });
+  </script>
 </body>
 
 </html>
