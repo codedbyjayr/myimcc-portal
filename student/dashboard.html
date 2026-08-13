@@ -27,8 +27,8 @@
       <div class="user-chip">
         <div class="avatar" id="sidebarAvatar"></div>
         <div>
-          <div class="name" id="sidebarName"></div>
-          <div class="id" id="sidebarStudentNo"></div>
+          <div class="name" id="sidebarName">Loading...</div>
+          <div class="id" id="sidebarStudentNo">—</div>
         </div>
       </div>
 
@@ -106,8 +106,7 @@
       </button>
 
       <div class="sidebar-foot" id="sidebarFoot">
-        —<br>
-        —
+        —<br>—
       </div>
     </aside>
 
@@ -151,7 +150,7 @@
         <div class="user-menu-wrap">
           <button class="user-btn" id="userBtn">
             <div class="avatar" id="topAvatar" style="width:30px;height:30px;font-size:11px;"></div>
-            <span id="topName"></span>
+            <span id="topName">Student</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M6 9l6 6 6-6" />
             </svg>
@@ -161,7 +160,7 @@
             <button class="ddi" id="mfaSetupBtn"
               style="background:none;border:none;width:100%;text-align:left;cursor:pointer;">🔒 Setup Google
               MFA</button>
-            <a href="#" class="ddi">Help &amp; Support</a>
+            <a href="#" class="ddi" onclick="event.preventDefault(); toggleChat(true);">Help &amp; Support</a>
             <button class="ddi" id="signOutBtn"
               style="color:var(--red);border-top:1px solid var(--line);margin-top:4px;padding-top:10px;">Sign
               Out</button>
@@ -176,7 +175,7 @@
       <section class="page active" id="page-dashboard">
         <div class="hero">
           <div>
-            <h2 id="heroGreeting"></h2>
+            <h2 id="heroGreeting">Welcome! 👋</h2>
             <p id="heroSubtitle">Loading term info…</p>
             <div class="meta" id="sidebarMeta"></div>
           </div>
@@ -282,7 +281,7 @@
             <!-- STEP 1 -->
             <div class="card card-pad" id="enrollStep1">
               <div class="card-head">
-                <h3>Available Courses — 2nd Semester 2025–2026</h3>
+                <h3 id="enrollmentSectionTitle">Available Courses</h3>
               </div>
               <div id="courseList"></div>
             </div>
@@ -310,8 +309,7 @@
                 </div>
                 <h3 style="margin:0 0 8px;">Enrollment Confirmed!</h3>
                 <p style="color:var(--ink-500);font-size:13.5px;max-width:420px;margin:0 auto 22px;">You are officially
-                  enrolled for 2nd Semester, AY 2025–2026. A copy of your Certificate of Registration has been added to
-                  your records.</p>
+                  enrolled. A copy of your Certificate of Registration has been added to your records.</p>
                 <button class="btn btn-primary" data-goto="dashboard">Go to Dashboard</button>
               </div>
             </div>
@@ -360,21 +358,24 @@
         <div class="grid-2">
           <div class="card card-pad">
             <div class="card-head">
-              <h3>Transaction History</h3><button class="btn-ghost" id="exportBtn">⭳ Export</button>
+              <h3>Transaction History</h3>
+              <button class="btn-ghost" id="exportBtn">⭳ Export CSV</button>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>OR NUMBER</th>
-                  <th>DATE</th>
-                  <th>DESCRIPTION</th>
-                  <th>CHANNEL</th>
-                  <th>AMOUNT</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="txnBody"></tbody>
-            </table>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>OR NUMBER</th>
+                    <th>DATE</th>
+                    <th>DESCRIPTION</th>
+                    <th>CHANNEL</th>
+                    <th>AMOUNT</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="txnBody"></tbody>
+              </table>
+            </div>
           </div>
           <div>
             <div class="card card-pad" style="margin-bottom:18px;">
@@ -429,24 +430,26 @@
                 View Degree Prospectus</button>
             </div>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>SUBJECT CODE</th>
-                <th>COURSE TITLE</th>
-                <th>INSTRUCTOR</th>
-                <th>UNITS</th>
-                <th>MIDTERM</th>
-                <th>FINAL</th>
-                <th>EQUIVALENT</th>
-                <th>AI PREDICTION</th>
-                <th>REMARK</th>
-              </tr>
-            </thead>
-            <tbody id="gradesBody"></tbody>
-          </table>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>SUBJECT CODE</th>
+                  <th>COURSE TITLE</th>
+                  <th>INSTRUCTOR</th>
+                  <th>UNITS</th>
+                  <th>MIDTERM</th>
+                  <th>FINAL</th>
+                  <th>EQUIVALENT</th>
+                  <th>AI PREDICTION</th>
+                  <th>REMARK</th>
+                </tr>
+              </thead>
+              <tbody id="gradesBody"></tbody>
+            </table>
+          </div>
 
-          <div class="ai-box">
+          <div class="ai-box" style="margin-top:20px;">
             <div class="ai-avatar">
               <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
                 <rect x="4" y="8" width="16" height="12" rx="2" />
@@ -456,10 +459,11 @@
               </svg>
             </div>
             <div>
-              <h4>AI Grade Prediction Insights</h4>
-              <p id="aiInsightText">Loading AI prediction insights…</p>
-              <div class="note">⚠ AI predictions are based on historical grade patterns and midterm scores. Actual
-                results may vary.</div>
+              <h4 style="margin:0 0 4px;font-size:14px;font-weight:700;">AI Grade Prediction Insights</h4>
+              <p id="aiInsightText" style="margin:0;font-size:13px;color:var(--ink-700);">Loading AI prediction
+                insights…</p>
+              <div class="note" style="margin-top:8px;font-size:11px;color:var(--ink-500);">⚠ AI predictions are based
+                on historical grade patterns and midterm scores. Actual results may vary.</div>
             </div>
           </div>
         </div>
@@ -481,7 +485,7 @@
 
         <div class="dept-grid" id="deptGrid"></div>
 
-        <div class="legend">
+        <div class="legend" style="margin-top:20px;">
           <div class="legend-left">
             <div class="legend-item"><span class="sdot" style="background:var(--green);"></span>Cleared</div>
             <div class="legend-item"><span class="sdot" style="background:var(--amber);"></span>Pending</div>
@@ -519,21 +523,24 @@
           <div class="card-head">
             <h3>Attendance History</h3>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Course</th>
-                <th>Status</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody id="attBody">
-              <tr>
-                <td colspan="4" style="text-align:center;padding:20px;color:var(--ink-300);">Loading attendance...</td>
-              </tr>
-            </tbody>
-          </table>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Course</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="attBody">
+                <tr>
+                  <td colspan="4" style="text-align:center;padding:20px;color:var(--ink-300);">Loading attendance...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -546,9 +553,8 @@
           </div>
           <p style="font-size:13px;color:var(--ink-500);margin-top:-8px;margin-bottom:16px;">
             Your feedback is <strong>completely anonymous</strong>. Instructors cannot see who submitted which
-            evaluation.
-            Ratings are used to improve teaching quality. Please rate each instructor honestly based on your experience
-            this semester.
+            evaluation. Ratings are used to improve teaching quality. Please rate each instructor honestly based on your
+            experience this semester.
           </p>
           <div id="evalStatus" style="text-align:center;padding:20px;color:var(--ink-300);">Loading evaluation forms…
           </div>
@@ -587,18 +593,18 @@
             <div class="card-head">
               <h3>Edit Contact Info</h3>
             </div>
-            <div class="field">
-              <label>Phone Number</label>
+            <div class="field" style="margin-bottom:12px;">
+              <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Phone Number</label>
               <input type="text" class="field-input" id="editPhone" placeholder="0912 345 6789"
                 style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;">
             </div>
-            <div class="field">
-              <label>Address</label>
+            <div class="field" style="margin-bottom:12px;">
+              <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Address</label>
               <input type="text" class="field-input" id="editAddress" placeholder="Iligan City"
                 style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;">
             </div>
-            <div class="field">
-              <label>Avatar URL</label>
+            <div class="field" style="margin-bottom:12px;">
+              <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Avatar URL</label>
               <input type="text" class="field-input" id="editAvatar" placeholder="https://..."
                 style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;">
             </div>
@@ -618,6 +624,7 @@
     </div>
   </div>
 
+  <!-- TOAST -->
   <div class="toast" id="toast">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
       <path d="M20 6L9 17l-5-5" />
@@ -625,7 +632,7 @@
     <span id="toastMsg"></span>
   </div>
 
-  <!-- FAQ Chatbot -->
+  <!-- FAQ Chatbot FAB & Panel -->
   <button class="chat-fab" id="chatFab" aria-label="Open FAQ assistant">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
@@ -638,7 +645,7 @@
         <div class="chat-avatar">MI</div>
         <div>
           <div class="chat-title">MyIMCC FAQ Assistant</div>
-          <div class="chat-subtitle">Answers grounded in the official portal FAQ</div>
+          <div class="chat-subtitle">Answers grounded in official portal FAQ</div>
         </div>
       </div>
       <button class="chat-close" id="chatClose" aria-label="Close">
@@ -682,9 +689,10 @@
         Authenticator or Authy, then enter your 6-digit verification code.</p>
       <div style="text-align:center;margin-bottom:16px;">
         <img id="mfaQrImg" src="" alt="MFA QR Code"
-          style="width:160px;height:160px;border-radius:8px;border:1px solid var(--line, #cbd5e1);">
+          style="width:160px;height:160px;border-radius:8px;border:1px solid var(--line, #cbd5e1);background:#fff;">
         <div id="mfaSecretText"
-          style="font-family:monospace;font-weight:700;font-size:12px;margin-top:8px;color:var(--ink-700);"></div>
+          style="font-family:monospace;font-weight:700;font-size:12px;margin-top:8px;color:var(--ink-700);word-break:break-all;">
+        </div>
       </div>
       <div style="margin-bottom:16px;">
         <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px;color:var(--ink-700);">Enter

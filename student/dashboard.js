@@ -1,11 +1,11 @@
 /* =====================================================================
-   MyIMCC Portal — Supabase Integration Layer
+   MyIMCC Portal — Supabase Integration Layer & Application Logic
    ===================================================================== */
 
 // ── Supabase Client Instance ─────────────────────────────────────────
-let supabaseClient; // set by waitForSupabase() at bottom of file
+let supabaseClient; // Set by waitForSupabase() at runtime
 
-// ── State ─────────────────────────────────────────────────────────────
+// ── Application State ────────────────────────────────────────────────
 const state = {
   page: 'dashboard',
   enrollStep: 1,
@@ -24,9 +24,37 @@ const state = {
   studentProfile: null,
 };
 
-const peso = n => '₱' + Number(n || 0).toLocaleString('en-US');
+// ── Formatting Helpers ───────────────────────────────────────────────
+const peso = n => '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 const getEl = id => document.getElementById(id);
+
+function setText(id, value) {
+  const el = getEl(id);
+  if (el) el.textContent = value ?? '—';
+}
+
+function getTimeGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour === 12) return 'Good noon';
+  if (hour >= 13 && hour < 18) return 'Good afternoon';
+  if (hour >= 18 && hour < 22) return 'Good evening';
+  return 'Good night';
+}
+
+function getInitials(name) {
+  if (!name) return 'ST';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
 
 // ── Auth Guard & Session Management ──────────────────────────────────
 async function getCurrentStudent() {
@@ -74,6 +102,7 @@ function goto(page) {
   if (pageEl) pageEl.classList.add('active');
 
   document.querySelectorAll('.nav-item[data-page]').forEach(n => n.classList.toggle('active', n.dataset.page === page));
+
   const titles = {
     dashboard: 'Dashboard',
     enrollment: 'Enrollment',
@@ -86,38 +115,41 @@ function goto(page) {
   };
   const titleEl = getEl('pageTitle');
   if (titleEl) titleEl.textContent = titles[page] || 'Dashboard';
-  window.scrollTo(0, 0);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 window.goto = goto;
 
 document.querySelectorAll('[data-page]').forEach(el => el.addEventListener('click', () => goto(el.dataset.page)));
 document.querySelectorAll('[data-goto]').forEach(el => el.addEventListener('click', () => goto(el.dataset.goto)));
 
-// ── Toast ─────────────────────────────────────────────────────────────
+// ── Toast Notification ────────────────────────────────────────────────
 let toastTimer;
-function showToast(msg, isError) {
+function showToast(msg, isError = false) {
   const t = getEl('toast');
   const msgEl = getEl('toastMsg');
   if (!t || !msgEl) return;
   msgEl.textContent = msg;
-  t.style.background = isError ? 'var(--red)' : 'var(--ink-900)';
+  t.style.background = isError ? 'var(--red, #ef4444)' : 'var(--ink-900, #0f172a)';
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
 }
 
-// ── Dropdowns ─────────────────────────────────────────────────────────
+// ── Dropdowns Setup ───────────────────────────────────────────────────
 function setupDropdown(btnId, ddId) {
   const btn = getEl(btnId), dd = getEl(ddId);
   if (!btn || !dd) return;
-  btn.addEventListener('click', e => { e.stopPropagation(); dd.classList.toggle('open'); });
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    dd.classList.toggle('open');
+  });
   document.addEventListener('click', () => dd.classList.remove('open'));
   dd.addEventListener('click', e => e.stopPropagation());
 }
 setupDropdown('bellBtn', 'bellDropdown');
 setupDropdown('userBtn', 'userDropdown');
 
-// ── Theme ─────────────────────────────────────────────────────────────
+// ── Theme Switcher ───────────────────────────────────────────────────
 getEl('themeToggle')?.addEventListener('click', () => {
   state.darkMode = !state.darkMode;
   document.body.setAttribute('data-theme', state.darkMode ? 'dark' : 'light');
@@ -131,29 +163,7 @@ getEl('themeToggle')?.addEventListener('click', () => {
   }
 });
 
-// ── Helpers ───────────────────────────────────────────────────────────
-function getTimeGreeting() {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'Good morning';
-  if (hour === 12) return 'Good noon';
-  if (hour >= 13 && hour < 18) return 'Good afternoon';
-  if (hour >= 18 && hour < 22) return 'Good evening';
-  return 'Good night';
-}
-
-function getInitials(name) {
-  if (!name) return 'ST';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-function setText(id, value) {
-  const el = getEl(id);
-  if (el) el.textContent = value ?? '—';
-}
-
-// ── Dashboard Loader ──────────────────────────────────────────────────
+// ── Dashboard Loader & Renderer ───────────────────────────────────────
 async function loadDashboard() {
   const profile = state.studentProfile;
   if (!profile) return;
@@ -165,7 +175,7 @@ async function loadDashboard() {
     .eq('is_current', true)
     .maybeSingle();
 
-  if (semErr) console.error('semester fetch error:', semErr);
+  if (semErr) console.error('Semester fetch error:', semErr);
 
   const { data: clearances } = await supabaseClient
     .from('clearances')
@@ -218,6 +228,7 @@ async function loadDashboard() {
 function renderDashboard() {
   const d = state.dashboard;
   if (!d) return;
+
   const greeting = getTimeGreeting();
   const studentName = d.student.name || '—';
   const studentNo = d.student.studentNo || '—';
@@ -232,7 +243,7 @@ function renderDashboard() {
     heroSubtitle.textContent = `${d.student.semester}, ${d.student.schoolYear}${yr}`;
   }
 
-  const heroMeta = document.querySelector('.hero .meta');
+  const heroMeta = getEl('sidebarMeta');
   if (heroMeta) {
     const section = d.student.section ? ` · Section: ${d.student.section}` : '';
     heroMeta.textContent = `Student No. ${studentNo}${section}`;
@@ -252,7 +263,7 @@ function renderDashboard() {
   if (sidebarName) sidebarName.textContent = studentName;
   if (sidebarStudentNo) sidebarStudentNo.textContent = studentNo;
   if (topAvatar) topAvatar.innerHTML = avatarContent;
-  if (topName) topName.textContent = studentName.length > 12 ? `${firstName} ${studentName.split(' ')[1]?.[0] || ''}.` : studentName;
+  if (topName) topName.textContent = firstName;
 
   setText('stat-gwa', d.gwa);
   setText('stat-units', d.unitsEnrolled);
@@ -265,9 +276,9 @@ function renderDashboard() {
   if (actList) {
     actList.innerHTML = d.activity.length
       ? d.activity.map(a => `
-        <div class="activity-row">
-          <div class="adot" style="background:${a.color || '#E7338A'};"></div>
-          <div><div class="t">${a.description}</div><div class="d">${fmtDate(a.created_at)}</div></div>
+        <div class="activity-row" style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div class="adot" style="width:8px;height:8px;border-radius:50%;background:${a.color || '#E7338A'};"></div>
+          <div><div class="t" style="font-size:13px;font-weight:600;">${escapeHtml(a.description)}</div><div class="d" style="font-size:11px;color:var(--ink-500);">${fmtDate(a.created_at)}</div></div>
         </div>`).join('')
       : `<div style="color:var(--ink-300);font-size:13px;">No recent activity yet.</div>`;
   }
@@ -282,7 +293,7 @@ function renderDashboard() {
   }
 }
 
-// ── Announcements & Deadlines ─────────────────────────────────────────
+// ── Announcements, Deadlines & Notifications ──────────────────────────
 async function loadAnnouncements() {
   const { data: rows } = await supabaseClient
     .from('announcements')
@@ -295,13 +306,14 @@ async function loadAnnouncements() {
   if (rows && rows[0] && banner) {
     const a = rows[0];
     const deadline = a.deadline ? ` Deadline: <b>${fmtDate(a.deadline)}</b>.` : '';
-    banner.innerHTML = `🔔 ${a.content}${deadline}`;
+    banner.innerHTML = `🔔 ${escapeHtml(a.content)}${deadline}`;
   }
 }
 
 async function loadDeadlines() {
   const profile = state.studentProfile;
   if (!profile) return;
+
   const { data: rows } = await supabaseClient
     .from('deadlines')
     .select('*')
@@ -318,17 +330,21 @@ async function loadDeadlines() {
   const dateColor = (type) => type === 'urgent' ? 'color:var(--pink-600);font-weight:700;' : 'color:var(--ink-500);';
 
   container.innerHTML = `<div class="card-head"><h3>Upcoming Deadlines</h3></div>` +
-    (rows || []).map(d => `
-      <div class="deadline ${urgencyClass(d.type)}">
-        <div class="deadline-top"><span class="t">${d.title}</span><span class="pill ${pillClass(d.type)}">${pillText(d.type)}</span></div>
-        <div class="d" style="${dateColor(d.type)}">${fmtDate(d.due_date)}</div>
+    ((rows && rows.length) ? rows.map(d => `
+      <div class="deadline ${urgencyClass(d.type)}" style="padding:10px 0;border-bottom:1px solid var(--line);">
+        <div class="deadline-top" style="display:flex;justify-space-between;align-items:center;">
+          <span class="t" style="font-size:13px;font-weight:600;">${escapeHtml(d.title)}</span>
+          <span class="pill ${pillClass(d.type)}">${pillText(d.type)}</span>
+        </div>
+        <div class="d" style="${dateColor(d.type)}font-size:12px;margin-top:2px;">${fmtDate(d.due_date)}</div>
       </div>
-    `).join('');
+    `).join('') : `<div style="font-size:13px;color:var(--ink-500);padding:10px 0;">No upcoming deadlines.</div>`);
 }
 
 async function loadNotifications() {
   const profile = state.studentProfile;
   if (!profile) return;
+
   const { data: rows } = await supabaseClient
     .from('activities')
     .select('*')
@@ -338,13 +354,16 @@ async function loadNotifications() {
 
   const target = getEl('notifList');
   if (target) {
-    target.innerHTML = (rows || []).map(n => `
-      <div class="notif-item"><div class="t">${n.description}</div><div class="d">${fmtDate(n.created_at)}</div></div>
-    `).join('');
+    target.innerHTML = (rows && rows.length) ? rows.map(n => `
+      <div class="notif-item" style="padding:10px 14px;border-bottom:1px solid var(--line);">
+        <div class="t" style="font-size:12px;font-weight:600;">${escapeHtml(n.description)}</div>
+        <div class="d" style="font-size:10px;color:var(--ink-500);">${fmtDate(n.created_at)}</div>
+      </div>
+    `).join('') : `<div class="notif-item"><div class="t">No new notifications</div></div>`;
   }
 }
 
-// ── Enrollment ────────────────────────────────────────────────────────
+// ── Enrollment Module ────────────────────────────────────────────────
 async function loadEnrollment() {
   const profile = state.studentProfile;
   if (!profile) return;
@@ -358,6 +377,11 @@ async function loadEnrollment() {
 
   const activeSchoolYear = currentSem?.school_year || '2025–2026';
   const activeSemester = currentSem?.semester || '2nd Semester';
+
+  const sectionTitle = getEl('enrollmentSectionTitle');
+  if (sectionTitle) {
+    sectionTitle.textContent = `Available Courses — ${activeSemester} ${activeSchoolYear}`;
+  }
 
   const { data: offerings } = await supabaseClient
     .from('course_offerings')
@@ -407,11 +431,16 @@ function parseSchedule(scheduleStr) {
   const dayStr = match[1];
   let startH = parseInt(match[2], 10);
   const startM = parseInt(match[3], 10);
-  const startMeridiem = match[4];
+  let startMeridiem = match[4];
 
   let endH = parseInt(match[5], 10);
   const endM = parseInt(match[6], 10);
   const endMeridiem = match[7];
+
+  // Infer start meridiem if missing (e.g., 1:00 - 2:30 PM)
+  if (!startMeridiem && endMeridiem) {
+    startMeridiem = (startH < endH || startH === 12) ? endMeridiem : (endMeridiem === 'PM' ? 'AM' : 'PM');
+  }
 
   if (startMeridiem === 'PM' && startH < 12) startH += 12;
   if (startMeridiem === 'AM' && startH === 12) startH = 0;
@@ -465,9 +494,9 @@ function renderCourseList() {
     <div class="course-row ${checked ? 'checked' : ''}" data-id="${c.offering_id}">
       <div class="chk">${checked ? '✓' : ''}</div>
       <div>
-        <div class="code">${c.code}</div>
-        <div class="title">${c.title}</div>
-        <div class="meta">${c.instructor_name || 'TBA'} · ${c.schedule || 'Schedule TBA'}</div>
+        <div class="code">${escapeHtml(c.code)}</div>
+        <div class="title">${escapeHtml(c.title)}</div>
+        <div class="meta">${escapeHtml(c.instructor_name || 'TBA')} · ${escapeHtml(c.schedule || 'Schedule TBA')}</div>
       </div>
       <div class="fee">
         <div class="units">${c.units} units</div>
@@ -502,7 +531,7 @@ function renderMiscFees() {
   const el = getEl('miscFeeLines');
   if (!el) return;
   el.innerHTML = state.miscFees
-    .map(f => `<div class="fee-line"><span>${f.name}</span><b>${peso(f.amount)}</b></div>`)
+    .map(f => `<div class="fee-line"><span>${escapeHtml(f.name)}</span><b>${peso(f.amount)}</b></div>`)
     .join('');
 }
 
@@ -515,7 +544,7 @@ function renderBillingSummary() {
   const tLines = getEl('tuitionLines');
   if (tLines) {
     tLines.innerHTML = selected.length
-      ? selected.map(c => `<div class="fee-line"><span>${c.code}</span><b>${peso(c.fee)}</b></div>`).join('')
+      ? selected.map(c => `<div class="fee-line"><span>${escapeHtml(c.code)}</span><b>${peso(c.fee)}</b></div>`).join('')
       : `<div class="fee-line" style="color:var(--ink-300);">No subjects selected yet</div>`;
   }
 
@@ -540,11 +569,18 @@ function renderReviewList() {
   container.innerHTML = selected.map(c => `
     <div class="course-row checked" style="cursor:default;">
       <div class="chk">✓</div>
-      <div><div class="code">${c.code}</div><div class="title">${c.title}</div><div class="meta">${c.instructor_name || 'TBA'} · ${c.schedule || 'Schedule TBA'}</div></div>
-      <div class="fee"><div class="units">${c.units} units</div><div class="amt">${peso(c.fee)}</div></div>
+      <div>
+        <div class="code">${escapeHtml(c.code)}</div>
+        <div class="title">${escapeHtml(c.title)}</div>
+        <div class="meta">${escapeHtml(c.instructor_name || 'TBA')} · ${escapeHtml(c.schedule || 'Schedule TBA')}</div>
+      </div>
+      <div class="fee">
+        <div class="units">${c.units} units</div>
+        <div class="amt">${peso(c.fee)}</div>
+      </div>
     </div>`).join('') + `
-    <div style="display:flex;justify-content:space-between;padding:14px 16px;background:var(--pink-50);border-radius:12px;margin-top:8px;">
-      <b>Total Amount Due</b><b style="color:var(--pink-600);">${peso(tuitionSum + miscTotal())}</b>
+    <div style="display:flex;justify-content:space-between;padding:14px 16px;background:var(--pink-50, #fdf2f8);border-radius:12px;margin-top:12px;">
+      <b>Total Amount Due</b><b style="color:var(--pink-600, #db2777);">${peso(tuitionSum + miscTotal())}</b>
     </div>
     <button class="btn btn-primary" id="confirmEnrollBtn" style="width:100%;justify-content:center;margin-top:16px;">Confirm Enrollment →</button>`;
 
@@ -606,7 +642,7 @@ async function confirmEnrollment() {
   }
 }
 
-// ── Billing ───────────────────────────────────────────────────────────
+// ── Billing Module ───────────────────────────────────────────────────
 async function loadBilling() {
   const profile = state.studentProfile;
   if (!profile) return;
@@ -653,25 +689,25 @@ function renderBillingStats() {
 function renderTxns() {
   const target = getEl('txnBody');
   if (!target) return;
-  target.innerHTML = state.billing.transactions.map(t => `
+  target.innerHTML = (state.billing.transactions.length) ? state.billing.transactions.map(t => `
     <tr>
-      <td class="or-num">${t.or_number || '—'}</td>
+      <td class="or-num">${escapeHtml(t.or_number || '—')}</td>
       <td>${fmtDate(t.txn_date)}</td>
-      <td>${t.description}</td>
-      <td><span class="chan">${t.channel}</span></td>
+      <td>${escapeHtml(t.description)}</td>
+      <td><span class="chan">${escapeHtml(t.channel)}</span></td>
       <td class="amt-green">${peso(t.amount)}</td>
-      <td><button class="mini-btn">View</button></td>
-    </tr>`).join('');
+      <td><button class="mini-btn" onclick="showToast('OR #${t.or_number || ''} recorded.')">View</button></td>
+    </tr>`).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--ink-300);padding:20px;">No transaction records found.</td></tr>`;
 }
 
 function renderInstallments() {
   const target = getEl('instList');
   if (!target) return;
   target.innerHTML = state.billing.installments.map(i => `
-    <div class="inst-row">
-      <div><div class="n">${i.name}</div><div class="dt">${fmtDate(i.due_date)}</div></div>
+    <div class="inst-row" style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
+      <div><div class="n" style="font-size:13px;font-weight:600;">${escapeHtml(i.name)}</div><div class="dt" style="font-size:11px;color:var(--ink-500);">${fmtDate(i.due_date)}</div></div>
       <div style="text-align:right;">
-        <div class="${i.status === 'paid' ? 'amt-strike' : 'amt-pink'}">${peso(i.amount)}</div>
+        <div class="${i.status === 'paid' ? 'amt-strike' : 'amt-pink'}" style="font-weight:700;">${peso(i.amount)}</div>
         <div style="font-size:10.5px;font-weight:800;color:${i.status === 'paid' ? 'var(--green)' : 'var(--red)'};">${i.status === 'paid' ? '✓ PAID' : 'PENDING'}</div>
       </div>
     </div>`).join('');
@@ -682,13 +718,16 @@ function renderUpay() {
   if (!target) return;
   const pending = state.billing.installments.filter(i => i.status === 'pending');
   target.innerHTML = pending.length ? pending.map(i => `
-    <div class="upay due">
-      <div class="upay-top"><span class="t">${i.name}</span><span class="pill pill-urgent">DUE SOON</span></div>
-      <div class="amt" style="color:var(--pink-600);">${peso(i.amount)}</div>
-      <div class="due-date">Due: ${fmtDate(i.due_date)}</div>
+    <div class="upay due" style="padding:12px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;">
+      <div class="upay-top" style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="t" style="font-weight:600;font-size:13px;">${escapeHtml(i.name)}</span>
+        <span class="pill pill-urgent">DUE SOON</span>
+      </div>
+      <div class="amt" style="color:var(--pink-600);font-size:18px;font-weight:800;margin:6px 0;">${peso(i.amount)}</div>
+      <div class="due-date" style="font-size:12px;color:var(--ink-500);">Due: ${fmtDate(i.due_date)}</div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px;" onclick="payInstallment('${i.id}')">Pay Now</button>
     </div>`).join('') : `
-    <div class="upay" style="text-align:center;color:var(--green);font-weight:700;">✓ All balances settled</div>`;
+    <div class="upay" style="text-align:center;color:var(--green);font-weight:700;padding:15px;">✓ All balances settled</div>`;
 }
 
 async function payInstallment(id) {
@@ -710,16 +749,25 @@ async function payInstallment(id) {
 window.payInstallment = payInstallment;
 
 getEl('exportBtn')?.addEventListener('click', () => {
+  if (!state.billing.transactions.length) {
+    showToast('No transactions to export.', true);
+    return;
+  }
   const csv = [
     ['OR NUMBER', 'DATE', 'DESCRIPTION', 'CHANNEL', 'AMOUNT'],
-    ...state.billing.transactions.map(t => [t.or_number, t.txn_date, t.description, t.channel, t.amount])
+    ...state.billing.transactions.map(t => [t.or_number, t.txn_date, `"${t.description}"`, t.channel, t.amount])
   ].map(r => r.join(',')).join('\n');
+
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
-  window.open(url, '_blank');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `MyIMCC_Transactions_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 });
 
-// ── Grades ────────────────────────────────────────────────────────────
+// ── Grades Module ────────────────────────────────────────────────────
 async function loadGrades() {
   const profile = state.studentProfile;
   if (!profile) return;
@@ -772,15 +820,15 @@ function renderGrades() {
   if (!target) return;
   target.innerHTML = state.grades.map(g => `
     <tr>
-      <td class="or-num">${g.code}</td>
-      <td>${g.title}</td>
-      <td style="color:var(--ink-500);">${g.instructor_name || 'TBA'}</td>
-      <td>${g.units}</td>
+      <td class="or-num">${escapeHtml(g.code)}</td>
+      <td>${escapeHtml(g.title)}</td>
+      <td style="color:var(--ink-500);">${escapeHtml(g.instructor_name || 'TBA')}</td>
+      <td>${g.units || '—'}</td>
       <td style="color:var(--blue);font-weight:700;">${g.midterm ?? '—'}</td>
       <td style="${g.final ? 'color:var(--green);font-weight:700;' : 'font-style:italic;color:var(--ink-300);'}">${g.final ?? 'Pending'}</td>
       <td style="font-weight:800;">${g.equivalent ?? '–'}</td>
-      <td><span class="pred-chip">~ ${g.ai_predicted_grade ?? '–'} <small>(${g.ai_predicted_equivalent ?? '–'})</small></span></td>
-      <td><span class="badge ${g.remark === 'Passed' ? 'badge-green' : 'badge-blue'}">${g.remark}</span></td>
+      <td><span class="pred-chip" style="background:var(--pink-50, #fdf2f8);color:var(--pink-600, #db2777);padding:2px 8px;border-radius:12px;font-weight:600;font-size:12px;">~ ${g.ai_predicted_grade ?? '–'} <small>(${g.ai_predicted_equivalent ?? '–'})</small></span></td>
+      <td><span class="badge ${g.remark === 'Passed' ? 'badge-green' : 'badge-blue'}">${escapeHtml(g.remark)}</span></td>
     </tr>`).join('');
 }
 
@@ -789,7 +837,7 @@ function renderGradesHeader() {
   if (!d) return;
   const setTitle = getEl('gradesTitle');
   if (setTitle) {
-    setTitle.innerHTML = `Grades — ${d.student.semester}, ${d.student.schoolYear}<br><span style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">${d.student.program || '—'} ${d.student.yearLevel || ''}${d.student.section ? ' · Section ' + d.student.section : ''}</span>`;
+    setTitle.innerHTML = `Grades — ${d.student.semester}, ${d.student.schoolYear}<br><span style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">${escapeHtml(d.student.program || '—')} ${d.student.yearLevel || ''}${d.student.section ? ' · Section ' + escapeHtml(d.student.section) : ''}</span>`;
   }
   setText('gradesTermPill', `${d.student.semester} ${d.student.schoolYear}`);
 
@@ -811,7 +859,7 @@ function renderGradesHeader() {
   }
 }
 
-// ── Prospectus ────────────────────────────────────────────────────────
+// ── Degree Prospectus Modal ──────────────────────────────────────────
 function setupProspectusButton() {
   const prospectusBtn = getEl('prospectusBtn');
   if (prospectusBtn) {
@@ -828,6 +876,7 @@ function getOrdinalSuffix(n) {
 
 async function viewProspectus() {
   const profile = state.studentProfile;
+  if (!profile) return;
   try {
     const { data: courses } = await supabaseClient
       .from('course_offerings')
@@ -854,7 +903,7 @@ async function viewProspectus() {
         bySem[key] = {
           year: c.year,
           semester: c.semester,
-          semesterLabel: `${getOrdinalSuffix(c.year)} Year - ${getOrdinalSuffix(c.semester)} Sem`,
+          semesterLabel: `${getOrdinalSuffix(c.year || 1)} Year - ${getOrdinalSuffix(c.semester || 1)} Sem`,
           courses: []
         };
       }
@@ -885,52 +934,58 @@ async function viewProspectus() {
 window.viewProspectus = viewProspectus;
 
 function showProspectusModal(data) {
+  const existing = document.querySelector('.prospectus-modal');
+  if (existing) existing.remove();
+
   const modal = document.createElement('div');
   modal.className = 'prospectus-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px;';
+
   modal.innerHTML = `
-    <div class="prospectus-overlay" onclick="this.parentElement.remove()"></div>
-    <div class="prospectus-content">
-      <div class="prospectus-header">
-        <h2>Degree Prospectus</h2>
-        <p>${data.program || 'BSIT'} — Total ${data.totalUnits || 0} Units</p>
-        <button class="prospectus-close" onclick="this.closest('.prospectus-modal').remove()">×</button>
+    <div class="prospectus-content" style="background:var(--bg-card, #ffffff);border:1px solid var(--line, #cbd5e1);border-radius:12px;padding:24px;max-width:700px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+      <div class="prospectus-header" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+        <div>
+          <h2 style="margin:0;font-size:20px;color:var(--ink-900);">Degree Prospectus</h2>
+          <p style="margin:4px 0 0;font-size:13px;color:var(--ink-500);">${escapeHtml(data.program || 'BSIT')} — Total ${data.totalUnits || 0} Units</p>
+        </div>
+        <button class="prospectus-close" onclick="this.closest('.prospectus-modal').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--ink-500);">&times;</button>
       </div>
       <div class="prospectus-body">
-        <div class="prospectus-progress">
-          <div class="progress-bar"><div class="progress-fill" style="width: ${data.completionPercentage || 0}%"></div></div>
-          <div class="progress-text">Overall Curriculum Completion: ${data.completionPercentage || 0}% (${data.unitsCompleted || 0} / ${data.totalUnits || 0} units)</div>
+        <div class="prospectus-progress" style="margin-bottom:20px;">
+          <div class="progress-bar" style="height:10px;background:var(--line);border-radius:5px;overflow:hidden;"><div class="progress-fill" style="width:${data.completionPercentage || 0}%;height:100%;background:var(--pink-500, #ec4899);"></div></div>
+          <div class="progress-text" style="font-size:12px;color:var(--ink-600);margin-top:6px;font-weight:600;">Overall Curriculum Completion: ${data.completionPercentage || 0}% (${data.unitsCompleted || 0} / ${data.totalUnits || 0} units)</div>
         </div>
         <div class="prospectus-courses">
           ${(data.bySemester || []).length > 0 ? data.bySemester.map(sem => `
-            <div class="semester-block">
-              <div class="semester-title">${sem.semesterLabel}</div>
+            <div class="semester-block" style="margin-bottom:18px;">
+              <div class="semester-title" style="font-weight:700;font-size:14px;color:var(--ink-800);margin-bottom:8px;border-bottom:1px solid var(--line);padding-bottom:4px;">${sem.semesterLabel}</div>
               <div class="course-list">
                 ${(sem.courses || []).map(c => `
-                  <div class="prospectus-course ${c.isMajor ? 'is-major' : ''}" data-status="${c.completed ? 'completed' : 'pending'}">
-                    <div class="course-status">${c.completed ? '✓' : '○'}</div>
-                    <div class="course-info">
-                      <div class="code-line">
-                        <span class="code">${c.code}</span>
-                        ${c.isMajor ? '<span class="major-badge">⭐ MAJOR</span>' : ''}
+                  <div class="prospectus-course" style="display:flex;align-items:center;justify-content:space-between;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--bg, #f8fafc);">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                      <span class="course-status" style="font-weight:800;color:${c.completed ? 'var(--green, #10b981)' : 'var(--ink-300)'};">${c.completed ? '✓' : '○'}</span>
+                      <div>
+                        <div class="code-line">
+                          <span class="code" style="font-weight:700;font-size:13px;">${escapeHtml(c.code)}</span>
+                          ${c.isMajor ? '<span style="font-size:10px;background:var(--pink-50);color:var(--pink-600);padding:2px 6px;border-radius:4px;margin-left:6px;">⭐ MAJOR</span>' : ''}
+                        </div>
+                        <div class="title" style="font-size:12px;color:var(--ink-600);">${escapeHtml(c.title)}</div>
                       </div>
-                      <div class="title">${c.title}</div>
-                      <div class="meta">${c.units} units${c.completed && c.grade ? ` · Grade: <strong>${c.grade}</strong>` : ''}</div>
                     </div>
-                    <div class="units">${c.units} units</div>
+                    <div class="meta" style="font-size:12px;font-weight:600;color:var(--ink-700);">${c.units} units${c.completed && c.grade ? ` · Grade: <strong>${c.grade}</strong>` : ''}</div>
                   </div>
                 `).join('')}
               </div>
             </div>
-            `).join('') : '<div style="text-align:center;padding:40px;color:var(--ink-500);">No courses loaded yet</div>'}
+          `).join('') : '<div style="text-align:center;padding:30px;color:var(--ink-500);">No curriculum data available.</div>'}
         </div>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
-  modal.style.display = 'flex';
 }
 
-// ── Clearance ─────────────────────────────────────────────────────────
+// ── Clearance Module ─────────────────────────────────────────────────
 const statusMeta = {
   cleared: { label: 'Cleared', badge: 'badge-green', dotColor: 'var(--green)', card: 'st-cleared' },
   pending: { label: 'Pending', badge: 'badge-amber', dotColor: 'var(--amber)', card: 'st-pending' },
@@ -940,6 +995,7 @@ const statusMeta = {
 async function loadClearance() {
   const profile = state.studentProfile;
   if (!profile) return;
+
   const { data: rows } = await supabaseClient
     .from('clearances')
     .select('*')
@@ -978,16 +1034,22 @@ function renderClearance() {
       actionBtn += ` <button class="mini-btn" style="margin-top:8px;background:var(--pink-600);color:#fff;border-color:var(--pink-600);" onclick="adminClear('${d.department_code}')">Mark as Cleared (Admin)</button>`;
     }
     return `
-    <div class="dept-card ${m.card}">
-      <div class="dept-top">
+    <div class="dept-card ${m.card}" style="padding:16px;border:1px solid var(--line);border-radius:12px;margin-bottom:12px;">
+      <div class="dept-top" style="display:flex;justify-content:space-between;align-items:center;">
         <div style="display:flex;gap:10px;align-items:center;">
-          <div class="dept-icon">${d.icon || '📄'}</div>
-          <div><div class="dept-name">${d.department_name}</div><div class="dept-officer">${d.officer_name || ''}</div></div>
+          <div class="dept-icon" style="font-size:20px;">${d.icon || '📄'}</div>
+          <div>
+            <div class="dept-name" style="font-weight:700;font-size:14px;">${escapeHtml(d.department_name)}</div>
+            <div class="dept-officer" style="font-size:11px;color:var(--ink-500);">${escapeHtml(d.officer_name || '')}</div>
+          </div>
         </div>
         <span class="badge ${m.badge}">${m.label}</span>
       </div>
-      <div class="dept-note">${d.note || ''}</div>
-      <div class="dept-status"><span class="sdot" style="background:${m.dotColor};"></span>${d.status === 'cleared' ? 'Digitally Signed & Cleared' : (d.status === 'action_required' ? 'Student Action Required' : 'Awaiting Review')}</div>
+      <div class="dept-note" style="font-size:12px;color:var(--ink-600);margin:8px 0;">${escapeHtml(d.note || '')}</div>
+      <div class="dept-status" style="font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px;">
+        <span class="sdot" style="width:6px;height:6px;border-radius:50%;background:${m.dotColor};"></span>
+        ${d.status === 'cleared' ? 'Digitally Signed & Cleared' : (d.status === 'action_required' ? 'Student Action Required' : 'Awaiting Review')}
+      </div>
       ${actionBtn}
     </div>`;
   }).join('');
@@ -1018,7 +1080,7 @@ getEl('adminToggle')?.addEventListener('click', () => {
   showToast(state.adminView ? 'Admin view enabled — you can now simulate approvals' : 'Admin view disabled');
 });
 
-// ── FAQ Chatbot ───────────────────────────────────────────────────────
+// ── FAQ Chatbot Module ───────────────────────────────────────────────
 const chatState = { open: false, history: [], sending: false };
 
 const chatFab = getEl('chatFab');
@@ -1033,6 +1095,8 @@ function toggleChat(open) {
   if (chatPanel) chatPanel.classList.toggle('open', chatState.open);
   if (chatState.open && chatInput) chatInput.focus();
 }
+window.toggleChat = toggleChat;
+
 chatFab?.addEventListener('click', () => toggleChat());
 chatClose?.addEventListener('click', () => toggleChat(false));
 
@@ -1056,12 +1120,6 @@ function appendChatMessage(role, text, sources) {
   chatMessages.appendChild(row);
   chatMessages.scrollTop = chatMessages.scrollHeight;
   return row;
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 function showTypingIndicator() {
@@ -1123,7 +1181,7 @@ function getLocalFaqAnswer(q) {
 chatSend?.addEventListener('click', sendChatMessage);
 chatInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChatMessage(); });
 
-// ── MFA Configuration ────────────────────────────────────────────────
+// ── MFA Configuration Module ─────────────────────────────────────────
 let currentMfaFactorId = null;
 let currentMfaSecret = null;
 const mfaSetupBtn = getEl('mfaSetupBtn');
@@ -1227,7 +1285,7 @@ if (mfaConfirmBtn) {
   });
 }
 
-// ── Sign-out ──────────────────────────────────────────────────────────
+// ── Sign-out Module ──────────────────────────────────────────────────
 getEl('signOutBtn')?.addEventListener('click', async () => {
   try {
     await supabaseClient.auth.signOut();
@@ -1237,7 +1295,7 @@ getEl('signOutBtn')?.addEventListener('click', async () => {
   window.location.href = 'login.html';
 });
 
-// ── SSO Links ─────────────────────────────────────────────────────────
+// ── Quick Links (SSO) Module ─────────────────────────────────────────
 async function loadSSOLinks() {
   const { data: links } = await supabaseClient.from('sso_links').select('*').eq('is_active', true).order('sort_order');
   const nav = getEl('ssoLinksNav');
@@ -1247,14 +1305,15 @@ async function loadSSOLinks() {
   nav.innerHTML = visible.map(l => `
     <a href="${l.url}" target="_blank" class="nav-item" style="text-decoration:none;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-      ${l.label}
+      ${escapeHtml(l.label)}
     </a>`).join('') || '<div class="nav-item soon" style="opacity:.4;">No links configured</div>';
 }
 
-// ── Attendance ────────────────────────────────────────────────────────
+// ── Attendance Module ────────────────────────────────────────────────
 async function loadAttendance() {
   const profile = state.studentProfile;
   if (!profile) return;
+
   const { data: records } = await supabaseClient
     .from('attendance')
     .select('*, course_offerings(code, title)')
@@ -1273,18 +1332,18 @@ async function loadAttendance() {
   const badgeClass = { present: 'badge-green', absent: 'badge-red', late: 'badge-amber', excused: 'badge-blue' };
   const attBody = getEl('attBody');
   if (attBody) {
-    attBody.innerHTML = (records || []).length
+    attBody.innerHTML = (records && records.length)
       ? records.map(r => `<tr>
           <td>${fmtDate(r.date)}</td>
-          <td><strong>${r.course_offerings?.code || '—'}</strong> ${r.course_offerings?.title || ''}</td>
-          <td><span class="badge ${badgeClass[r.status] || 'badge-amber'}">${r.status.toUpperCase()}</span></td>
-          <td style="font-size:12px;color:var(--ink-500);">${r.notes || '—'}</td>
+          <td><strong>${escapeHtml(r.course_offerings?.code || '—')}</strong> ${escapeHtml(r.course_offerings?.title || '')}</td>
+          <td><span class="badge ${badgeClass[r.status] || 'badge-amber'}">${escapeHtml(String(r.status).toUpperCase())}</span></td>
+          <td style="font-size:12px;color:var(--ink-500);">${escapeHtml(r.notes || '—')}</td>
         </tr>`).join('')
       : '<tr><td colspan="4" style="text-align:center;color:var(--ink-300);padding:20px;">No attendance records found.</td></tr>';
   }
 }
 
-// ── Faculty Evaluation ────────────────────────────────────────────────
+// ── Faculty Evaluation Module ────────────────────────────────────────
 async function loadFacultyEval() {
   const profile = state.studentProfile;
   if (!profile) return;
@@ -1310,7 +1369,10 @@ async function loadFacultyEval() {
   const evalList = getEl('evalList');
 
   if (!enrollments || enrollments.length === 0) {
-    if (evalStatus) evalStatus.innerHTML = 'No enrolled courses found for this semester. Please enroll first before evaluating faculty.';
+    if (evalStatus) {
+      evalStatus.style.display = 'block';
+      evalStatus.innerHTML = 'No enrolled courses found for this semester. Please enroll first before evaluating faculty.';
+    }
     return;
   }
 
@@ -1326,7 +1388,10 @@ async function loadFacultyEval() {
 
   const instructors = Object.values(instructorMap);
   if (instructors.length === 0) {
-    if (evalStatus) evalStatus.innerHTML = 'No instructor information available for your enrolled courses.';
+    if (evalStatus) {
+      evalStatus.style.display = 'block';
+      evalStatus.innerHTML = 'No instructor information available for your enrolled courses.';
+    }
     return;
   }
 
@@ -1353,29 +1418,29 @@ async function loadFacultyEval() {
       const submitted = evaluatedNames.has(inst.name);
       const courseList = inst.courses.map(c => `${c.code} — ${c.title}`).join(', ');
       return `
-      <div class="card card-pad" style="margin-bottom:16px;border:1px solid var(--line);${submitted ? 'opacity:0.6;' : ''}">
+      <div class="card card-pad" style="margin-bottom:16px;border:1px solid var(--line);${submitted ? 'opacity:0.7;' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
           <div>
-            <div style="font-weight:800;font-size:15px;">${inst.name}</div>
-            <div style="font-size:12px;color:var(--ink-500);">${courseList}</div>
+            <div style="font-weight:800;font-size:15px;">${escapeHtml(inst.name)}</div>
+            <div style="font-size:12px;color:var(--ink-500);">${escapeHtml(courseList)}</div>
           </div>
           ${submitted ? '<span class="badge badge-green">✓ Submitted</span>' : '<span class="badge badge-amber">Pending</span>'}
         </div>
         ${submitted ? '' : `
-        <div class="eval-form" data-instructor="${inst.name.replace(/"/g, '&quot;')}">
+        <div class="eval-form" data-instructor="${escapeHtml(inst.name)}">
           ${evalQuestions.map((q) => `
-            <div class="eval-question">
-              <div class="eval-q-label">${q.label}</div>
-              <div class="eval-stars" data-key="${q.key}">
+            <div class="eval-question" style="margin-bottom:12px;">
+              <div class="eval-q-label" style="font-size:13px;font-weight:600;margin-bottom:4px;">${q.label}</div>
+              <div class="eval-stars" data-key="${q.key}" style="display:flex;gap:4px;">
                 ${[1, 2, 3, 4, 5].map(n => `<span class="eval-star" data-val="${n}" style="font-size:22px;cursor:pointer;color:var(--ink-300);transition:color 0.15s;">★</span>`).join('')}
               </div>
             </div>
           `).join('')}
           <div class="field" style="margin-top:12px;">
-            <label style="font-size:12px;font-weight:600;color:var(--ink-700);">Additional Comments (optional)</label>
+            <label style="font-size:12px;font-weight:600;color:var(--ink-700);display:block;margin-bottom:4px;">Additional Comments (optional)</label>
             <textarea class="eval-comment" style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;min-height:70px;resize:vertical;font-family:inherit;" placeholder="Share specific feedback..."></textarea>
           </div>
-          <button class="btn btn-primary eval-submit-btn" style="width:100%;justify-content:center;margin-top:12px;" data-instructor="${inst.name.replace(/"/g, '&quot;')}">Submit Anonymous Evaluation</button>
+          <button class="btn btn-primary eval-submit-btn" style="width:100%;justify-content:center;margin-top:12px;" data-instructor="${escapeHtml(inst.name)}">Submit Anonymous Evaluation</button>
         </div>
         `}
       </div>`;
@@ -1387,7 +1452,7 @@ async function loadFacultyEval() {
         star.addEventListener('click', () => {
           const val = parseInt(star.dataset.val, 10);
           stars.forEach((s, i) => {
-            s.style.color = i < val ? 'var(--pink-500)' : 'var(--ink-300)';
+            s.style.color = i < val ? 'var(--pink-500, #ec4899)' : 'var(--ink-300, #cbd5e1)';
           });
           starGroup.dataset.selected = val;
         });
@@ -1443,7 +1508,7 @@ async function loadFacultyEval() {
   }
 }
 
-// ── Profile Management ────────────────────────────────────────────────
+// ── Profile Module ───────────────────────────────────────────────────
 async function loadProfile() {
   const p = state.studentProfile;
   if (!p) return;
@@ -1516,7 +1581,7 @@ getEl('changePassBtn')?.addEventListener('click', async () => {
   }
 });
 
-// ── Initialization ───────────────────────────────────────────────────
+// ── Application Initialization ───────────────────────────────────────
 async function init() {
   const profile = await getCurrentStudent();
   if (!profile) return;
@@ -1540,11 +1605,11 @@ async function init() {
     ]);
   } catch (err) {
     showToast('Failed to load portal data: ' + err.message, true);
-    console.error(err);
+    console.error('Initialization error:', err);
   }
 }
 
-// Wait for shared supabase-config.js to finish initialization
+// Wait for shared supabase-config.js to initialize window.__myimcc_supabase_client__
 (function waitForSupabase() {
   if (window.__myimcc_supabase_client__) {
     supabaseClient = window.__myimcc_supabase_client__;
