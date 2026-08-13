@@ -1,29 +1,17 @@
-// shared/supabase-config.js
-const SUPABASE_URL = 'https://YOUR_SUPABASE_PROJECT_ID.supabase.co'; // Replace with your actual URL
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';                 // Replace with your actual Anon Key
+const SUPABASE_URL = window.__ENV__?.SUPABASE_URL;
+const SUPABASE_ANON_KEY = window.__ENV__?.SUPABASE_ANON_KEY;
 
-let _supabaseInstance = null;
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error("Supabase environment variables missing from window.__ENV__.");
+} else {
+  window.__myimcc_supabase_client__ = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  window.dispatchEvent(new Event('supabase:ready'));
+}
 
+// Backward-compatibility helper for scripts expecting getSupabaseClientAsync()
 async function getSupabaseClientAsync() {
-  if (_supabaseInstance) return _supabaseInstance;
-
-  try {
-    // Attempt dynamic API fetch if running on server backend
-    const res = await fetch('/api/config');
-    if (res.ok) {
-      const config = await res.json();
-      _supabaseInstance = window.supabase.createClient(config.supabaseUrl, config.supabaseKey);
-      return _supabaseInstance;
-    }
-  } catch (e) {
-    console.warn("Backend /api/config unavailable, falling back to static config.");
+  if (window.__myimcc_supabase_client__) {
+    return window.__myimcc_supabase_client__;
   }
-
-  // Fallback for static hosting (GitHub Pages)
-  if (window.supabase) {
-    _supabaseInstance = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    return _supabaseInstance;
-  } else {
-    throw new Error("Supabase CDN library not loaded.");
-  }
+  throw new Error("Supabase client is not initialized.");
 }
