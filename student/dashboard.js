@@ -1,16 +1,11 @@
 /* =====================================================================
    MyIMCC Portal — Supabase Integration Layer
-   ZERO UI CHANGES. Only data sources are replaced.
    ===================================================================== */
 
 // ── Supabase Client ───────────────────────────────────────────────────
-
-// DO NOT re-declare `const supabase = createClient(...)` here.
-// The client is created by shared/supabase-config.js and stored in
-// window.__myimcc_supabase_client__. We alias it locally for
-// backward compatibility with the rest of this file.
 let supabase;  // set by waitForSupabase() at bottom of file
-// ── State (preserved exactly) ─────────────────────────────────────────
+
+// ── State ─────────────────────────────────────────────────────────────
 const state = {
   page: 'dashboard',
   enrollStep: 1,
@@ -29,10 +24,11 @@ const state = {
   studentProfile: null,
 };
 
-const peso = n => '₱' + Number(n).toLocaleString('en-US');
+const peso = n => '₱' + Number(n || 0).toLocaleString('en-US');
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+const getEl = id => document.getElementById(id);
 
-// ── Auth Guard ────────────────────────────────────────────────────────
+// ── Auth Guard & Session Management ──────────────────────────────────
 async function getCurrentStudent() {
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) {
@@ -41,7 +37,6 @@ async function getCurrentStudent() {
   }
   state.currentUser = user;
 
-  // Fetch profile row matching auth uid
   const { data: profile, error: pErr } = await supabase
     .from('profiles')
     .select('*')
@@ -56,33 +51,65 @@ async function getCurrentStudent() {
   return profile;
 }
 
-// ── Navigation (preserved) ────────────────────────────────────────────
+function setupAuthListener() {
+  if (!supabase) return;
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_OUT' || !session) {
+      window.location.href = 'login.html';
+      return;
+    }
+    if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+      await getCurrentStudent();
+      renderDashboard();
+      loadProfile();
+    }
+  });
+}
+
+// ── Navigation ────────────────────────────────────────────────────────
 function goto(page) {
   state.page = page;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('page-' + page).classList.add('active');
+  const pageEl = getEl('page-' + page);
+  if (pageEl) pageEl.classList.add('active');
+
   document.querySelectorAll('.nav-item[data-page]').forEach(n => n.classList.toggle('active', n.dataset.page === page));
-  const titles = { dashboard: 'Dashboard', enrollment: 'Enrollment', billing: 'Billing & History', grades: 'Grades & Evaluation', clearance: 'Online Clearance', attendance: 'Attendance History', evaluation: 'Faculty Evaluation', profile: 'My Profile' };
-  document.getElementById('pageTitle').textContent = titles[page];
+  const titles = {
+    dashboard: 'Dashboard',
+    enrollment: 'Enrollment',
+    billing: 'Billing & History',
+    grades: 'Grades & Evaluation',
+    clearance: 'Online Clearance',
+    attendance: 'Attendance History',
+    evaluation: 'Faculty Evaluation',
+    profile: 'My Profile'
+  };
+  const titleEl = getEl('pageTitle');
+  if (titleEl) titleEl.textContent = titles[page] || 'Dashboard';
   window.scrollTo(0, 0);
 }
+window.goto = goto;
+
 document.querySelectorAll('[data-page]').forEach(el => el.addEventListener('click', () => goto(el.dataset.page)));
 document.querySelectorAll('[data-goto]').forEach(el => el.addEventListener('click', () => goto(el.dataset.goto)));
 
-// ── Toast (preserved) ─────────────────────────────────────────────────
+// ── Toast ─────────────────────────────────────────────────────────────
 let toastTimer;
 function showToast(msg, isError) {
-  const t = document.getElementById('toast');
-  document.getElementById('toastMsg').textContent = msg;
+  const t = getEl('toast');
+  const msgEl = getEl('toastMsg');
+  if (!t || !msgEl) return;
+  msgEl.textContent = msg;
   t.style.background = isError ? 'var(--red)' : 'var(--ink-900)';
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
 }
 
-// ── Dropdowns (preserved) ─────────────────────────────────────────────
+// ── Dropdowns ─────────────────────────────────────────────────────────
 function setupDropdown(btnId, ddId) {
-  const btn = document.getElementById(btnId), dd = document.getElementById(ddId);
+  const btn = getEl(btnId), dd = getEl(ddId);
+  if (!btn || !dd) return;
   btn.addEventListener('click', e => { e.stopPropagation(); dd.classList.toggle('open'); });
   document.addEventListener('click', () => dd.classList.remove('open'));
   dd.addEventListener('click', e => e.stopPropagation());
@@ -90,17 +117,21 @@ function setupDropdown(btnId, ddId) {
 setupDropdown('bellBtn', 'bellDropdown');
 setupDropdown('userBtn', 'userDropdown');
 
-// ── Theme (preserved) ─────────────────────────────────────────────────
-document.getElementById('themeToggle').addEventListener('click', () => {
+// ── Theme ─────────────────────────────────────────────────────────────
+getEl('themeToggle')?.addEventListener('click', () => {
   state.darkMode = !state.darkMode;
   document.body.setAttribute('data-theme', state.darkMode ? 'dark' : 'light');
-  document.getElementById('themeLabel').textContent = state.darkMode ? 'Light' : 'Dark';
-  document.getElementById('themeIcon').innerHTML = state.darkMode
-    ? '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>'
-    : '<path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/>';
+  const label = getEl('themeLabel');
+  const icon = getEl('themeIcon');
+  if (label) label.textContent = state.darkMode ? 'Light' : 'Dark';
+  if (icon) {
+    icon.innerHTML = state.darkMode
+      ? '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>'
+      : '<path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/>';
+  }
 });
 
-// ── Helpers (preserved) ───────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────
 function getTimeGreeting() {
   const hour = new Date().getHours();
   if (hour >= 5 && hour < 12) return 'Good morning';
@@ -117,22 +148,25 @@ function getInitials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+function setText(id, value) {
+  const el = getEl(id);
+  if (el) el.textContent = value ?? '—';
+}
+
 // ── Dashboard Loader ──────────────────────────────────────────────────
 async function loadDashboard() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  // 1. Current semester metrics
   const { data: sem, error: semErr } = await supabase
     .from('student_semesters')
     .select('*')
     .eq('student_id', profile.id)
     .eq('is_current', true)
-    .single();
+    .maybeSingle();
 
   if (semErr) console.error('semester fetch error:', semErr);
 
-  // 2. Clearance summary
   const { data: clearances } = await supabase
     .from('clearances')
     .select('status')
@@ -141,7 +175,6 @@ async function loadDashboard() {
   const clearedCount = (clearances || []).filter(c => c.status === 'cleared').length;
   const totalClear = (clearances || []).length || 1;
 
-  // 3. Next due installment
   const { data: nextDue } = await supabase
     .from('installments')
     .select('*')
@@ -149,9 +182,8 @@ async function loadDashboard() {
     .eq('status', 'pending')
     .order('due_date', { ascending: true })
     .limit(1)
-    .single();
+    .maybeSingle();
 
-  // 4. Recent activity
   const { data: activities } = await supabase
     .from('activities')
     .select('*')
@@ -167,6 +199,7 @@ async function loadDashboard() {
       program: profile.program,
       yearLevel: profile.year_level,
       email: profile.email,
+      avatarUrl: profile.avatar_url,
       schoolYear: sem?.school_year || 'AY 2025–2026',
       semester: sem?.semester || '2nd Semester',
     },
@@ -191,11 +224,9 @@ function renderDashboard() {
   const initials = getInitials(studentName);
   const firstName = studentName.split(' ')[0];
 
-  document.getElementById('heroGreeting').textContent = `${greeting}, ${firstName}! 👋`;
+  setText('heroGreeting', `${greeting}, ${firstName}! 👋`);
 
-  // Hero subtitle: term + program + year level (replaces hardcoded
-  // "2nd Semester, AY 2025–2026 — BSIT 2nd Year")
-  const heroSubtitle = document.getElementById('heroSubtitle');
+  const heroSubtitle = getEl('heroSubtitle');
   if (heroSubtitle) {
     const yr = d.student.yearLevel ? ` — ${d.student.program} ${d.student.yearLevel}` : '';
     heroSubtitle.textContent = `${d.student.semester}, ${d.student.schoolYear}${yr}`;
@@ -207,35 +238,41 @@ function renderDashboard() {
     heroMeta.textContent = `Student No. ${studentNo}${section}`;
   }
 
-  const sidebarAvatar = document.getElementById('sidebarAvatar');
-  const sidebarName = document.getElementById('sidebarName');
-  const sidebarStudentNo = document.getElementById('sidebarStudentNo');
-  const topAvatar = document.getElementById('topAvatar');
-  const topName = document.getElementById('topName');
+  const sidebarAvatar = getEl('sidebarAvatar');
+  const sidebarName = getEl('sidebarName');
+  const sidebarStudentNo = getEl('sidebarStudentNo');
+  const topAvatar = getEl('topAvatar');
+  const topName = getEl('topName');
 
-  if (sidebarAvatar) sidebarAvatar.textContent = initials;
+  const avatarContent = d.student.avatarUrl
+    ? `<img src="${d.student.avatarUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
+    : initials;
+
+  if (sidebarAvatar) sidebarAvatar.innerHTML = avatarContent;
   if (sidebarName) sidebarName.textContent = studentName;
   if (sidebarStudentNo) sidebarStudentNo.textContent = studentNo;
-  if (topAvatar) topAvatar.textContent = initials;
+  if (topAvatar) topAvatar.innerHTML = avatarContent;
   if (topName) topName.textContent = studentName.length > 12 ? `${firstName} ${studentName.split(' ')[1]?.[0] || ''}.` : studentName;
 
-  document.getElementById('stat-gwa').textContent = d.gwa;
-  document.getElementById('stat-units').textContent = d.unitsEnrolled;
-  document.getElementById('stat-subjects').textContent = `${d.subjectsEnrolled} subject${d.subjectsEnrolled === 1 ? '' : 's'}`;
-  document.getElementById('stat-balance').textContent = peso(d.balance);
-  document.getElementById('stat-due').textContent = d.balance > 0 && d.nextDue ? `Due ${fmtDate(d.nextDue.due_date)}` : 'All settled ✓';
-  document.getElementById('stat-clearance').textContent = `${d.clearance.cleared}/${d.clearance.total}`;
+  setText('stat-gwa', d.gwa);
+  setText('stat-units', d.unitsEnrolled);
+  setText('stat-subjects', `${d.subjectsEnrolled} subject${d.subjectsEnrolled === 1 ? '' : 's'}`);
+  setText('stat-balance', peso(d.balance));
+  setText('stat-due', d.balance > 0 && d.nextDue ? `Due ${fmtDate(d.nextDue.due_date)}` : 'All settled ✓');
+  setText('stat-clearance', `${d.clearance.cleared}/${d.clearance.total}`);
 
-  document.getElementById('activityList').innerHTML = d.activity.length
-    ? d.activity.map(a => `
-      <div class="activity-row">
-        <div class="adot" style="background:${a.color || '#E7338A'};"></div>
-        <div><div class="t">${a.description}</div><div class="d">${fmtDate(a.created_at)}</div></div>
-      </div>`).join('')
-    : `<div style="color:var(--ink-300);font-size:13px;">No recent activity yet.</div>`;
+  const actList = getEl('activityList');
+  if (actList) {
+    actList.innerHTML = d.activity.length
+      ? d.activity.map(a => `
+        <div class="activity-row">
+          <div class="adot" style="background:${a.color || '#E7338A'};"></div>
+          <div><div class="t">${a.description}</div><div class="d">${fmtDate(a.created_at)}</div></div>
+        </div>`).join('')
+      : `<div style="color:var(--ink-300);font-size:13px;">No recent activity yet.</div>`;
+  }
 
-  // Hydrate sidebar footer
-  const sf = document.getElementById('sidebarFoot');
+  const sf = getEl('sidebarFoot');
   if (sf) {
     const sy = d.student.schoolYear || 'AY 2025–2026';
     const sem = d.student.semester || 'Sem 2';
@@ -245,7 +282,7 @@ function renderDashboard() {
   }
 }
 
-// ── Announcements & Banner ────────────────────────────────────────────
+// ── Announcements & Deadlines ─────────────────────────────────────────
 async function loadAnnouncements() {
   const { data: rows } = await supabase
     .from('announcements')
@@ -254,7 +291,7 @@ async function loadAnnouncements() {
     .order('created_at', { ascending: false })
     .limit(1);
 
-  const banner = document.getElementById('topBanner');
+  const banner = getEl('topBanner');
   if (rows && rows[0] && banner) {
     const a = rows[0];
     const deadline = a.deadline ? ` Deadline: <b>${fmtDate(a.deadline)}</b>.` : '';
@@ -262,7 +299,6 @@ async function loadAnnouncements() {
   }
 }
 
-// ── Deadlines ─────────────────────────────────────────────────────────
 async function loadDeadlines() {
   const profile = state.studentProfile;
   if (!profile) return;
@@ -273,10 +309,9 @@ async function loadDeadlines() {
     .order('due_date', { ascending: true })
     .limit(4);
 
-  const container = document.getElementById('deadlinesCard');
+  const container = getEl('deadlinesCard');
   if (!container) return;
 
-  // Rebuild exactly the same DOM structure as original
   const urgencyClass = (type) => type === 'urgent' ? 'urgent' : '';
   const pillClass = (type) => type === 'urgent' ? 'pill-urgent' : 'pill-soft';
   const pillText = (type) => type === 'urgent' ? 'URGENT' : (type === 'schedule' ? 'SCHEDULE' : 'OPTIONAL');
@@ -291,7 +326,6 @@ async function loadDeadlines() {
     `).join('');
 }
 
-// ── Notifications ─────────────────────────────────────────────────────
 async function loadNotifications() {
   const profile = state.studentProfile;
   if (!profile) return;
@@ -302,11 +336,7 @@ async function loadNotifications() {
     .order('created_at', { ascending: false })
     .limit(3);
 
-  const list = document.getElementById('notifList') || document.getElementById('bellDropdown');
-  if (!list) return;
-
-  // If we wrapped items in #notifList, use that; otherwise inject into dropdown
-  const target = document.getElementById('notifList');
+  const target = getEl('notifList');
   if (target) {
     target.innerHTML = (rows || []).map(n => `
       <div class="notif-item"><div class="t">${n.description}</div><div class="d">${fmtDate(n.created_at)}</div></div>
@@ -319,34 +349,29 @@ async function loadEnrollment() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  // 1. Resolve the student's CURRENT term dynamically (no more hardcoded
-  //    '2nd Semester' / '2025–2026'). Falls back to active term from settings.
   const { data: currentSem } = await supabase
     .from('student_semesters')
     .select('school_year, semester')
     .eq('student_id', profile.id)
     .eq('is_current', true)
-    .single();
+    .maybeSingle();
 
   const activeSchoolYear = currentSem?.school_year || '2025–2026';
   const activeSemester = currentSem?.semester || '2nd Semester';
 
-  // 2. Fetch current-term offerings
   const { data: offerings } = await supabase
     .from('course_offerings')
     .select('*')
     .eq('semester', activeSemester)
     .eq('school_year', activeSchoolYear);
 
-  // 3. Fetch what this student is already enrolled in
   const { data: enrolled } = await supabase
     .from('enrollments')
     .select('offering_id')
     .eq('student_id', profile.id);
 
-  const enrolledIds = new Set((enrolled || []).map(e => e.offering_id));
+  const enrolledIds = new Set((enrolled || []).map(e => String(e.offering_id)));
 
-  // 4. Fetch misc fees for the active term
   const { data: misc } = await supabase
     .from('misc_fees')
     .select('*')
@@ -354,14 +379,14 @@ async function loadEnrollment() {
     .eq('school_year', activeSchoolYear);
 
   state.courses = (offerings || []).map(o => ({
-    offering_id: o.id,
+    offering_id: String(o.id),
     code: o.code,
     title: o.title,
     units: o.units,
     fee: o.fee,
     instructor_name: o.instructor_name,
     schedule: o.schedule,
-    selected: enrolledIds.has(o.id),
+    selected: enrolledIds.has(String(o.id)),
   }));
 
   state.miscFees = misc || [];
@@ -372,47 +397,46 @@ async function loadEnrollment() {
   renderBillingSummary();
 }
 
-// (renderCourseList, renderMiscFees, renderBillingSummary, renderReviewList,
-//  setEnrollStep, confirmEnrollment — ALL PRESERVED EXACTLY)
-
-// ── Schedule Conflict Detection ────────────────────────────────────
-// Parses schedule strings like "MWF 8:00-9:30" or "TTh 10:00-11:30"
-// Returns { days: ['M','W','F'], startMin: 480, endMin: 570 } or null
 function parseSchedule(scheduleStr) {
   if (!scheduleStr) return null;
   const s = scheduleStr.trim().toUpperCase();
-  // Match day pattern + time range
-  const match = s.match(/^([A-Z]{1,4})\s+(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})/);
+
+  // Format examples: "MWF 8:00 AM - 10:00 AM" or "TTH 13:00-14:30" or "M 09:00 - 12:00"
+  const match = s.match(/^([A-Z]{1,4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?\s*[-–]\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
   if (!match) return null;
+
   const dayStr = match[1];
-  const startH = parseInt(match[2], 10);
+  let startH = parseInt(match[2], 10);
   const startM = parseInt(match[3], 10);
-  const endH = parseInt(match[4], 10);
-  const endM = parseInt(match[5], 10);
-  // Expand day codes
+  const startMeridiem = match[4];
+
+  let endH = parseInt(match[5], 10);
+  const endM = parseInt(match[6], 10);
+  const endMeridiem = match[7];
+
+  if (startMeridiem === 'PM' && startH < 12) startH += 12;
+  if (startMeridiem === 'AM' && startH === 12) startH = 0;
+  if (endMeridiem === 'PM' && endH < 12) endH += 12;
+  if (endMeridiem === 'AM' && endH === 12) endH = 0;
+
   let days = [];
-  for (const ch of dayStr) {
-    if (ch === 'T' && dayStr.indexOf('T') !== dayStr.lastIndexOf('T')) {
-      // Handle TTh — skip second T, handled below
-      continue;
-    }
-    days.push(ch);
+  if (dayStr === 'TTH' || dayStr === 'TH') {
+    days = dayStr === 'TTH' ? ['T', 'TH'] : ['TH'];
+  } else if (dayStr === 'MWF') {
+    days = ['M', 'W', 'F'];
+  } else if (dayStr === 'MW') {
+    days = ['M', 'W'];
+  } else {
+    days = dayStr.split('');
   }
-  // Handle TTh pattern
-  if (dayStr.includes('TT') || dayStr === 'TTH') {
-    days = ['T', 'TH'];
-  }
-  const startMin = startH * 60 + startM;
-  const endMin = endH * 60 + endM;
-  return { days, startMin, endMin };
+
+  return { days, startMin: startH * 60 + startM, endMin: endH * 60 + endM };
 }
 
 function schedulesConflict(a, b) {
   if (!a || !b) return false;
-  // Check for overlapping days
   const sharedDays = a.days.some(d => b.days.includes(d));
   if (!sharedDays) return false;
-  // Check for time overlap
   return a.startMin < b.endMin && b.startMin < a.endMin;
 }
 
@@ -420,21 +444,23 @@ function checkScheduleConflict(courseId) {
   const newCourse = state.courses.find(c => c.offering_id === courseId);
   if (!newCourse) return null;
   const newSched = parseSchedule(newCourse.schedule);
-  if (!newSched) return null; // Can't parse, allow it
+  if (!newSched) return null;
+
   for (const id of state.selectedOfferingIds) {
     if (id === courseId) continue;
     const existing = state.courses.find(c => c.offering_id === id);
     if (!existing) continue;
     const existingSched = parseSchedule(existing.schedule);
-    if (schedulesConflict(newSched, existingSched)) {
-      return existing; // Return the conflicting course
-    }
+    if (schedulesConflict(newSched, existingSched)) return existing;
   }
   return null;
 }
 
 function renderCourseList() {
-  document.getElementById('courseList').innerHTML = state.courses.map(c => {
+  const container = getEl('courseList');
+  if (!container) return;
+
+  container.innerHTML = state.courses.map(c => {
     const checked = state.selectedOfferingIds.has(c.offering_id);
     return `
     <div class="course-row ${checked ? 'checked' : ''}" data-id="${c.offering_id}">
@@ -450,20 +476,20 @@ function renderCourseList() {
       </div>
     </div>`;
   }).join('');
-  document.querySelectorAll('.course-row').forEach(row => {
+
+  container.querySelectorAll('.course-row').forEach(row => {
     row.addEventListener('click', () => {
-      const id = Number(row.dataset.id);
+      const id = String(row.dataset.id);
       if (state.selectedOfferingIds.has(id)) {
         state.selectedOfferingIds.delete(id);
         renderCourseList();
         renderBillingSummary();
       } else {
-        // Gap 1: Schedule conflict detection
         const conflict = checkScheduleConflict(id);
         if (conflict) {
           const newCourse = state.courses.find(c => c.offering_id === id);
           showToast(`⚠ Schedule conflict: ${newCourse.code} overlaps with ${conflict.code} (${conflict.schedule})`, true);
-          return; // Block selection
+          return;
         }
         state.selectedOfferingIds.add(id);
         renderCourseList();
@@ -474,32 +500,45 @@ function renderCourseList() {
 }
 
 function renderMiscFees() {
-  document.getElementById('miscFeeLines').innerHTML = state.miscFees
+  const el = getEl('miscFeeLines');
+  if (!el) return;
+  el.innerHTML = state.miscFees
     .map(f => `<div class="fee-line"><span>${f.name}</span><b>${peso(f.amount)}</b></div>`)
     .join('');
 }
 
 function miscTotal() {
-  return state.miscFees.reduce((s, f) => s + Number(f.amount), 0);
+  return state.miscFees.reduce((s, f) => s + Number(f.amount || 0), 0);
 }
 
 function renderBillingSummary() {
   const selected = state.courses.filter(c => state.selectedOfferingIds.has(c.offering_id));
-  document.getElementById('tuitionLines').innerHTML = selected.length
-    ? selected.map(c => `<div class="fee-line"><span>${c.code}</span><b>${peso(c.fee)}</b></div>`).join('')
-    : `<div class="fee-line" style="color:var(--ink-300);">No subjects selected yet</div>`;
-  const tuitionSum = selected.reduce((s, c) => s + Number(c.fee), 0);
+  const tLines = getEl('tuitionLines');
+  if (tLines) {
+    tLines.innerHTML = selected.length
+      ? selected.map(c => `<div class="fee-line"><span>${c.code}</span><b>${peso(c.fee)}</b></div>`).join('')
+      : `<div class="fee-line" style="color:var(--ink-300);">No subjects selected yet</div>`;
+  }
+
+  const tuitionSum = selected.reduce((s, c) => s + Number(c.fee || 0), 0);
   const total = tuitionSum + miscTotal();
-  document.getElementById('feeTotal').textContent = peso(total);
-  const units = selected.reduce((s, c) => s + Number(c.units), 0);
-  document.getElementById('feeSub').textContent = `${units} units · ${selected.length} subject${selected.length === 1 ? '' : 's'}`;
-  document.getElementById('proceedBtn').disabled = selected.length === 0;
+
+  setText('feeTotal', peso(total));
+  const units = selected.reduce((s, c) => s + Number(c.units || 0), 0);
+  setText('feeSub', `${units} units · ${selected.length} subject${selected.length === 1 ? '' : 's'}`);
+
+  const proceedBtn = getEl('proceedBtn');
+  if (proceedBtn) proceedBtn.disabled = selected.length === 0;
 }
 
 function renderReviewList() {
+  const container = getEl('reviewCourseList');
+  if (!container) return;
+
   const selected = state.courses.filter(c => state.selectedOfferingIds.has(c.offering_id));
-  const tuitionSum = selected.reduce((s, c) => s + Number(c.fee), 0);
-  document.getElementById('reviewCourseList').innerHTML = selected.map(c => `
+  const tuitionSum = selected.reduce((s, c) => s + Number(c.fee || 0), 0);
+
+  container.innerHTML = selected.map(c => `
     <div class="course-row checked" style="cursor:default;">
       <div class="chk">✓</div>
       <div><div class="code">${c.code}</div><div class="title">${c.title}</div><div class="meta">${c.instructor_name || 'TBA'} · ${c.schedule || 'Schedule TBA'}</div></div>
@@ -509,29 +548,44 @@ function renderReviewList() {
       <b>Total Amount Due</b><b style="color:var(--pink-600);">${peso(tuitionSum + miscTotal())}</b>
     </div>
     <button class="btn btn-primary" id="confirmEnrollBtn" style="width:100%;justify-content:center;margin-top:16px;">Confirm Enrollment →</button>`;
-  document.getElementById('confirmEnrollBtn').addEventListener('click', confirmEnrollment);
+
+  const confirmBtn = getEl('confirmEnrollBtn');
+  if (confirmBtn) {
+    confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+    getEl('confirmEnrollBtn')?.addEventListener('click', confirmEnrollment);
+  }
 }
 
 function setEnrollStep(step) {
   state.enrollStep = step;
-  document.getElementById('enrollStep1').style.display = step === 1 ? 'block' : 'none';
-  document.getElementById('enrollStep2').style.display = step === 2 ? 'block' : 'none';
-  document.getElementById('enrollStep3').style.display = step === 3 ? 'block' : 'none';
+  const s1 = getEl('enrollStep1');
+  const s2 = getEl('enrollStep2');
+  const s3 = getEl('enrollStep3');
+  if (s1) s1.style.display = step === 1 ? 'block' : 'none';
+  if (s2) s2.style.display = step === 2 ? 'block' : 'none';
+  if (s3) s3.style.display = step === 3 ? 'block' : 'none';
+
   [1, 2, 3].forEach(n => {
-    const tab = document.getElementById('stepTab' + n);
-    tab.classList.toggle('active', n === step);
-    tab.classList.toggle('done', n < step);
+    const tab = getEl('stepTab' + n);
+    if (tab) {
+      tab.classList.toggle('active', n === step);
+      tab.classList.toggle('done', n < step);
+    }
   });
   if (step === 2) renderReviewList();
 }
-document.getElementById('proceedBtn').addEventListener('click', () => setEnrollStep(2));
-document.getElementById('backToStep1').addEventListener('click', () => setEnrollStep(1));
+window.setEnrollStep = setEnrollStep;
+
+getEl('proceedBtn')?.addEventListener('click', () => setEnrollStep(2));
+getEl('backToStep1')?.addEventListener('click', () => setEnrollStep(1));
 
 async function confirmEnrollment() {
   const profile = state.studentProfile;
-  const btn = document.getElementById('confirmEnrollBtn');
-  btn.disabled = true;
-  btn.textContent = 'Submitting…';
+  const btn = getEl('confirmEnrollBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+  }
   try {
     const inserts = [...state.selectedOfferingIds].map(oid => ({
       student_id: profile.id,
@@ -546,8 +600,10 @@ async function confirmEnrollment() {
     await Promise.all([loadDashboard(), loadEnrollment()]);
   } catch (err) {
     showToast('Could not confirm enrollment: ' + err.message, true);
-    btn.disabled = false;
-    btn.textContent = 'Confirm Enrollment →';
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Confirm Enrollment →';
+    }
   }
 }
 
@@ -560,7 +616,7 @@ async function loadBilling() {
     .from('billing_summary')
     .select('*')
     .eq('student_id', profile.id)
-    .single();
+    .maybeSingle();
 
   const { data: txns } = await supabase
     .from('transactions')
@@ -588,17 +644,19 @@ async function loadBilling() {
 
 function renderBillingStats() {
   const pending = state.billing.installments.filter(i => i.status === 'pending');
-  document.getElementById('bill-totalpaid').textContent = peso(state.billing.totalPaid);
-  document.getElementById('bill-balance').textContent = peso(pending.reduce((s, i) => s + Number(i.amount), 0));
+  setText('bill-totalpaid', peso(state.billing.totalPaid));
+  setText('bill-balance', peso(pending.reduce((s, i) => s + Number(i.amount || 0), 0)));
   const next = pending[0];
-  document.getElementById('bill-nextdate').textContent = next ? fmtDate(next.due_date).split(',')[0] : '—';
-  document.getElementById('bill-nextlabel').textContent = next ? next.name.toLowerCase() : 'nothing due';
+  setText('bill-nextdate', next ? fmtDate(next.due_date).split(',')[0] : '—');
+  setText('bill-nextlabel', next ? next.name.toLowerCase() : 'nothing due');
 }
 
 function renderTxns() {
-  document.getElementById('txnBody').innerHTML = state.billing.transactions.map(t => `
+  const target = getEl('txnBody');
+  if (!target) return;
+  target.innerHTML = state.billing.transactions.map(t => `
     <tr>
-      <td class="or-num">${t.or_number}</td>
+      <td class="or-num">${t.or_number || '—'}</td>
       <td>${fmtDate(t.txn_date)}</td>
       <td>${t.description}</td>
       <td><span class="chan">${t.channel}</span></td>
@@ -608,7 +666,9 @@ function renderTxns() {
 }
 
 function renderInstallments() {
-  document.getElementById('instList').innerHTML = state.billing.installments.map(i => `
+  const target = getEl('instList');
+  if (!target) return;
+  target.innerHTML = state.billing.installments.map(i => `
     <div class="inst-row">
       <div><div class="n">${i.name}</div><div class="dt">${fmtDate(i.due_date)}</div></div>
       <div style="text-align:right;">
@@ -619,13 +679,15 @@ function renderInstallments() {
 }
 
 function renderUpay() {
+  const target = getEl('upayList');
+  if (!target) return;
   const pending = state.billing.installments.filter(i => i.status === 'pending');
-  document.getElementById('upayList').innerHTML = pending.length ? pending.map(i => `
+  target.innerHTML = pending.length ? pending.map(i => `
     <div class="upay due">
       <div class="upay-top"><span class="t">${i.name}</span><span class="pill pill-urgent">DUE SOON</span></div>
       <div class="amt" style="color:var(--pink-600);">${peso(i.amount)}</div>
       <div class="due-date">Due: ${fmtDate(i.due_date)}</div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px;" onclick="payInstallment(${i.id})">Pay Now</button>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px;" onclick="payInstallment('${i.id}')">Pay Now</button>
     </div>`).join('') : `
     <div class="upay" style="text-align:center;color:var(--green);font-weight:700;">✓ All balances settled</div>`;
 }
@@ -640,15 +702,15 @@ async function payInstallment(id) {
       .single();
     if (error) throw error;
 
-    showToast(`Payment received — OR ${data.or_number || 'N/A'}`);
+    showToast(`Payment received — OR ${data.or_number || 'Processed'}`);
     await Promise.all([loadBilling(), loadDashboard(), loadClearance()]);
   } catch (err) {
     showToast('Payment failed: ' + err.message, true);
   }
 }
+window.payInstallment = payInstallment;
 
-document.getElementById('exportBtn').addEventListener('click', () => {
-  // Generate CSV client-side from state
+getEl('exportBtn')?.addEventListener('click', () => {
   const csv = [
     ['OR NUMBER', 'DATE', 'DESCRIPTION', 'CHANNEL', 'AMOUNT'],
     ...state.billing.transactions.map(t => [t.or_number, t.txn_date, t.description, t.channel, t.amount])
@@ -688,7 +750,6 @@ async function loadGrades() {
 }
 
 function renderGradeStats() {
-  // Compute from live grade data
   const withFinal = state.grades.filter(g => g.final !== null && g.final !== undefined);
   const avg = withFinal.length ? (withFinal.reduce((s, g) => s + Number(g.equivalent || 0), 0) / withFinal.length).toFixed(2) : '—';
   const highest = withFinal.length ? Math.max(...withFinal.map(g => Number(g.final))) : '—';
@@ -696,23 +757,21 @@ function renderGradeStats() {
   const completed = withFinal.length;
   const total = state.grades.length;
 
-  const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
-
   setText('grade-gwa', avg);
   setText('grade-gwa-sub', `${completed} subject${completed === 1 ? '' : 's'} with final grades`);
   setText('grade-highest', highest);
   setText('grade-highest-course', highestCourse ? `${highestCourse.code} — Final` : '—');
 
-  // AI Predicted GWA: average of ai_predicted_equivalent across graded courses.
   const withAi = state.grades.filter(g => g.ai_predicted_equivalent !== null && g.ai_predicted_equivalent !== undefined);
   const aiAvg = withAi.length ? (withAi.reduce((s, g) => s + Number(g.ai_predicted_equivalent), 0) / withAi.length).toFixed(2) : '—';
   setText('grade-ai', aiAvg);
-
   setText('grade-completed', `${completed}/${total}`);
 }
 
 function renderGrades() {
-  document.getElementById('gradesBody').innerHTML = state.grades.map(g => `
+  const target = getEl('gradesBody');
+  if (!target) return;
+  target.innerHTML = state.grades.map(g => `
     <tr>
       <td class="or-num">${g.code}</td>
       <td>${g.title}</td>
@@ -726,24 +785,17 @@ function renderGrades() {
     </tr>`).join('');
 }
 
-// Hydrate the Grades card header (term / program / section) and the AI insight
-// paragraph — replaces the hardcoded "2nd Semester, AY 2025–2026 — BSIT 2nd Year ·
-// Section 2-A" and the static AI insight text.
 function renderGradesHeader() {
   const d = state.dashboard;
   if (!d) return;
-  const setTitle = document.getElementById('gradesTitle');
+  const setTitle = getEl('gradesTitle');
   if (setTitle) {
     setTitle.innerHTML = `Grades — ${d.student.semester}, ${d.student.schoolYear}<br><span
       style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">${d.student.program || '—'} ${d.student.yearLevel || ''}${d.student.section ? ' · Section ' + d.student.section : ''}</span>`;
   }
-  const termPill = document.getElementById('gradesTermPill');
-  if (termPill) {
-    termPill.textContent = `${d.student.semester} ${d.student.schoolYear}`;
-  }
+  setText('gradesTermPill', `${d.student.semester} ${d.student.schoolYear}`);
 
-  // AI insight: dynamic copy based on predicted GWA vs current GWA.
-  const aiEl = document.getElementById('aiInsightText');
+  const aiEl = getEl('aiInsightText');
   if (aiEl) {
     const withFinal = state.grades.filter(g => g.final !== null && g.final !== undefined);
     const curAvg = withFinal.length ? (withFinal.reduce((s, g) => s + Number(g.equivalent || 0), 0) / withFinal.length) : null;
@@ -761,13 +813,19 @@ function renderGradesHeader() {
   }
 }
 
-// ── Prospectus (preserved) ────────────────────────────────────────────
+// ── Prospectus ────────────────────────────────────────────────────────
 function setupProspectusButton() {
-  const prospectusBtn = document.getElementById('prospectusBtn');
+  const prospectusBtn = getEl('prospectusBtn');
   if (prospectusBtn) {
     prospectusBtn.removeEventListener('click', viewProspectus);
     prospectusBtn.addEventListener('click', viewProspectus);
   }
+}
+
+function getOrdinalSuffix(n) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
 async function viewProspectus() {
@@ -787,22 +845,30 @@ async function viewProspectus() {
       .eq('status', 'enrolled');
 
     const completedIds = new Set((completed || []).map(e => e.offering_id));
-    const totalUnits = (courses || []).reduce((s, c) => s + Number(c.units), 0);
-    const unitsCompleted = (courses || []).filter(c => completedIds.has(c.id)).reduce((s, c) => s + Number(c.units), 0);
+    const totalUnits = (courses || []).reduce((s, c) => s + Number(c.units || 0), 0);
+    const unitsCompleted = (courses || []).filter(c => completedIds.has(c.id)).reduce((s, c) => s + Number(c.units || 0), 0);
     const pct = totalUnits ? Math.round((unitsCompleted / totalUnits) * 100) : 0;
 
-    // Group by semester
     const bySem = {};
     (courses || []).forEach(c => {
       const key = `${c.year}-${c.semester}`;
-      if (!bySem[key]) bySem[key] = { year: c.year, semester: c.semester, semesterLabel: `${c.year}nd Year - ${c.semester} Sem`, courses: [] };
+      if (!bySem[key]) {
+        bySem[key] = {
+          year: c.year,
+          semester: c.semester,
+          semesterLabel: `${getOrdinalSuffix(c.year)} Year - ${getOrdinalSuffix(c.semester)} Sem`,
+          courses: []
+        };
+      }
+
+      const gradeVal = Array.isArray(completed) ? completed.find(e => e.offering_id === c.id)?.grades?.final : null;
       bySem[key].courses.push({
         code: c.code,
         title: c.title,
         units: c.units,
         isMajor: c.is_major,
         completed: completedIds.has(c.id),
-        grade: completed?.find(e => e.offering_id === c.id)?.grades?.final,
+        grade: gradeVal,
       });
     });
 
@@ -818,6 +884,7 @@ async function viewProspectus() {
     console.error(err);
   }
 }
+window.viewProspectus = viewProspectus;
 
 function showProspectusModal(data) {
   const modal = document.createElement('div');
@@ -827,22 +894,18 @@ function showProspectusModal(data) {
     <div class="prospectus-content">
       <div class="prospectus-header">
         <h2>Degree Prospectus</h2>
-        <p>${data.program || 'BSIT'} — Total ${data.totalUnits || 162} Units</p>
+        <p>${data.program || 'BSIT'} — Total ${data.totalUnits || 0} Units</p>
         <button class="prospectus-close" onclick="this.closest('.prospectus-modal').remove()">×</button>
       </div>
       <div class="prospectus-body">
         <div class="prospectus-progress">
           <div class="progress-bar"><div class="progress-fill" style="width: ${data.completionPercentage || 0}%"></div></div>
-          <div class="progress-text">Overall Curriculum Completion: ${data.completionPercentage || 0}% (${data.unitsCompleted || 0} / ${data.totalUnits || 162} units)</div>
+          <div class="progress-text">Overall Curriculum Completion: ${data.completionPercentage || 0}% (${data.unitsCompleted || 0} / ${data.totalUnits || 0} units)</div>
         </div>
         <div class="prospectus-courses">
-          ${(data.bySemester || []).length > 0 ? data.bySemester.map(sem => {
-    const yOrd = sem.year === 1 ? '1st' : sem.year === 2 ? '2nd' : sem.year === 3 ? '3rd' : `${sem.year}th`;
-    const sOrd = sem.semester === 1 ? '1st' : sem.semester === 2 ? '2nd' : `${sem.semester}th`;
-    const label = sem.semesterLabel || `${yOrd} Year - ${sOrd} Sem`;
-    return `
+          ${(data.bySemester || []).length > 0 ? data.bySemester.map(sem => `
             <div class="semester-block">
-              <div class="semester-title">${label}</div>
+              <div class="semester-title">${sem.semesterLabel}</div>
               <div class="course-list">
                 ${(sem.courses || []).map(c => `
                   <div class="prospectus-course ${c.isMajor ? 'is-major' : ''}" data-status="${c.completed ? 'completed' : 'pending'}">
@@ -853,15 +916,14 @@ function showProspectusModal(data) {
                         ${c.isMajor ? '<span class="major-badge">⭐ MAJOR</span>' : ''}
                       </div>
                       <div class="title">${c.title}</div>
-                      <div class="meta">${c.units} units${c.completed ? ` · Grade: <strong>${c.grade}</strong>` : ''}</div>
+                      <div class="meta">${c.units} units${c.completed && c.grade ? ` · Grade: <strong>${c.grade}</strong>` : ''}</div>
                     </div>
                     <div class="units">${c.units} units</div>
                   </div>
                 `).join('')}
               </div>
             </div>
-            `;
-  }).join('') : '<div style="text-align:center;padding:40px;color:var(--ink-500);">No courses loaded yet</div>'}
+            `).join('') : '<div style="text-align:center;padding:40px;color:var(--ink-500);">No courses loaded yet</div>'}
         </div>
       </div>
     </div>
@@ -890,19 +952,25 @@ async function loadClearance() {
 }
 
 function renderClearance() {
+  const grid = getEl('deptGrid');
+  if (!grid) return;
+
   if (!state.departments || state.departments.length === 0) {
-    document.getElementById('deptGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--ink-300);padding:20px;">No clearance records found.</div>';
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--ink-300);padding:20px;">No clearance records found.</div>';
     return;
   }
 
   const cleared = state.departments.filter(d => d.status === 'cleared').length;
   const totalDepts = state.departments.length || 1;
-  document.getElementById('clearFrac').textContent = `${cleared}/${totalDepts} Cleared`;
-  document.getElementById('clearFill').style.width = (cleared / totalDepts * 100) + '%';
-  const remaining = totalDepts - cleared;
-  document.getElementById('clearRemaining').textContent = remaining === 0 ? 'All departments cleared. You are good to go!' : `${remaining} department(s) remaining.`;
+  setText('clearFrac', `${cleared}/${totalDepts} Cleared`);
 
-  document.getElementById('deptGrid').innerHTML = state.departments.map(d => {
+  const fill = getEl('clearFill');
+  if (fill) fill.style.width = (cleared / totalDepts * 100) + '%';
+
+  const remaining = totalDepts - cleared;
+  setText('clearRemaining', remaining === 0 ? 'All departments cleared. You are good to go!' : `${remaining} department(s) remaining.`);
+
+  grid.innerHTML = state.departments.map(d => {
     const m = statusMeta[d.status] || statusMeta.pending;
     let actionBtn = '';
     if (d.department_code === 'cashier' && d.status === 'action_required') {
@@ -944,30 +1012,31 @@ async function adminClear(code) {
     showToast('Could not update clearance: ' + err.message, true);
   }
 }
+window.adminClear = adminClear;
 
-document.getElementById('adminToggle').addEventListener('click', () => {
+getEl('adminToggle')?.addEventListener('click', () => {
   state.adminView = !state.adminView;
   renderClearance();
   showToast(state.adminView ? 'Admin view enabled — you can now simulate approvals' : 'Admin view disabled');
 });
 
-// ── FAQ Chatbot (Supabase-powered) ────────────────────────────────────
+// ── FAQ Chatbot ───────────────────────────────────────────────────────
 const chatState = { open: false, history: [], sending: false };
 
-const chatFab = document.getElementById('chatFab');
-const chatPanel = document.getElementById('chatPanel');
-const chatClose = document.getElementById('chatClose');
-const chatMessages = document.getElementById('chatMessages');
-const chatInput = document.getElementById('chatInput');
-const chatSend = document.getElementById('chatSend');
+const chatFab = getEl('chatFab');
+const chatPanel = getEl('chatPanel');
+const chatClose = getEl('chatClose');
+const chatMessages = getEl('chatMessages');
+const chatInput = getEl('chatInput');
+const chatSend = getEl('chatSend');
 
 function toggleChat(open) {
   chatState.open = open ?? !chatState.open;
-  chatPanel.classList.toggle('open', chatState.open);
-  if (chatState.open) chatInput.focus();
+  if (chatPanel) chatPanel.classList.toggle('open', chatState.open);
+  if (chatState.open && chatInput) chatInput.focus();
 }
-chatFab.addEventListener('click', () => toggleChat());
-chatClose.addEventListener('click', () => toggleChat(false));
+chatFab?.addEventListener('click', () => toggleChat());
+chatClose?.addEventListener('click', () => toggleChat(false));
 
 function formatMessageText(str) {
   if (!str) return '';
@@ -978,6 +1047,7 @@ function formatMessageText(str) {
 }
 
 function appendChatMessage(role, text, sources) {
+  if (!chatMessages) return;
   const row = document.createElement('div');
   row.className = `chat-msg ${role}`;
   const sourcesHtml = sources && sources.length
@@ -997,6 +1067,7 @@ function escapeHtml(str) {
 }
 
 function showTypingIndicator() {
+  if (!chatMessages) return;
   const row = document.createElement('div');
   row.className = 'chat-msg bot';
   row.id = 'chatTyping';
@@ -1006,22 +1077,22 @@ function showTypingIndicator() {
 }
 
 function removeTypingIndicator() {
-  const el = document.getElementById('chatTyping');
+  const el = getEl('chatTyping');
   if (el) el.remove();
 }
 
 async function sendChatMessage() {
+  if (!chatInput) return;
   const text = chatInput.value.trim();
   if (!text || chatState.sending) return;
 
   appendChatMessage('user', text);
   chatInput.value = '';
   chatState.sending = true;
-  chatSend.disabled = true;
+  if (chatSend) chatSend.disabled = true;
   showTypingIndicator();
 
   try {
-    // Option A: Call a Supabase Edge Function
     const { data, error } = await supabase.functions.invoke('faq-assistant', {
       body: { message: text, history: chatState.history },
     });
@@ -1033,17 +1104,15 @@ async function sendChatMessage() {
     chatState.history.push({ role: 'user', content: text }, { role: 'assistant', content: data.answer });
     chatState.history = chatState.history.slice(-6);
   } catch (err) {
-    // Option B: Fallback to simple keyword match if edge function unavailable
     removeTypingIndicator();
     const fallback = getLocalFaqAnswer(text);
     appendChatMessage('bot', fallback.text, fallback.sources);
   } finally {
     chatState.sending = false;
-    chatSend.disabled = false;
+    if (chatSend) chatSend.disabled = false;
   }
 }
 
-// Local FAQ fallback (zero external dependency)
 function getLocalFaqAnswer(q) {
   const lower = q.toLowerCase();
   if (lower.includes('enroll')) return { text: 'Enrollment is open until the deadline shown in your dashboard. Settle balances first, then select courses under the Enrollment tab.', sources: [{ category: 'Enrollment' }] };
@@ -1053,18 +1122,19 @@ function getLocalFaqAnswer(q) {
   return { text: 'I can help with enrollment, billing, grades, and clearance. For specific concerns, email registrar@imcc.edu.ph.', sources: [] };
 }
 
-chatSend.addEventListener('click', sendChatMessage);
-chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChatMessage(); });
+chatSend?.addEventListener('click', sendChatMessage);
+chatInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChatMessage(); });
 
-// ── MFA (Supabase Auth + TOTP) ────────────────────────────────────────
+// ── MFA Configuration ────────────────────────────────────────────────
+let currentMfaFactorId = null;
 let currentMfaSecret = null;
-const mfaSetupBtn = document.getElementById('mfaSetupBtn');
-const mfaModal = document.getElementById('mfaModal');
-const mfaCloseBtn = document.getElementById('mfaCloseBtn');
-const mfaConfirmBtn = document.getElementById('mfaConfirmBtn');
-const mfaQrImg = document.getElementById('mfaQrImg');
-const mfaSecretText = document.getElementById('mfaSecretText');
-const mfaCodeInput = document.getElementById('mfaCodeInput');
+const mfaSetupBtn = getEl('mfaSetupBtn');
+const mfaModal = getEl('mfaModal');
+const mfaCloseBtn = getEl('mfaCloseBtn');
+const mfaConfirmBtn = getEl('mfaConfirmBtn');
+const mfaQrImg = getEl('mfaQrImg');
+const mfaSecretText = getEl('mfaSecretText');
+const mfaCodeInput = getEl('mfaCodeInput');
 
 if (mfaSetupBtn) {
   mfaSetupBtn.addEventListener('click', async (e) => {
@@ -1075,17 +1145,32 @@ if (mfaSetupBtn) {
       return;
     }
     try {
-      // Invoke edge function for TOTP enrollment
+      const { data: enrollData, error: enrollError } = await supabase.auth.mfa.enroll({
+        factorType: 'totp',
+        issuer: 'MyIMCC Portal',
+        friendlyName: profile.email || profile.student_no
+      });
+
+      if (!enrollError && enrollData) {
+        currentMfaFactorId = enrollData.id;
+        currentMfaSecret = enrollData.totp.secret;
+        if (mfaQrImg) mfaQrImg.src = enrollData.totp.qr_code;
+        if (mfaSecretText) mfaSecretText.textContent = `Secret: ${enrollData.totp.secret}`;
+        if (mfaCodeInput) mfaCodeInput.value = '';
+        if (mfaModal) mfaModal.style.display = 'flex';
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('mfa-enroll', {
         body: { user_id: profile.id },
       });
       if (error) throw error;
-      if (data.success && data.needsEnrollment) {
+      if (data && data.success && data.needsEnrollment) {
         currentMfaSecret = data.secret;
-        mfaQrImg.src = data.qrUrl;
-        mfaSecretText.textContent = `Secret: ${data.secret}`;
-        mfaCodeInput.value = '';
-        mfaModal.style.display = 'flex';
+        if (mfaQrImg) mfaQrImg.src = data.qrUrl;
+        if (mfaSecretText) mfaSecretText.textContent = `Secret: ${data.secret}`;
+        if (mfaCodeInput) mfaCodeInput.value = '';
+        if (mfaModal) mfaModal.style.display = 'flex';
       }
     } catch (err) {
       showToast('MFA setup error: ' + err.message, true);
@@ -1101,7 +1186,7 @@ if (mfaCloseBtn) {
 
 if (mfaConfirmBtn) {
   mfaConfirmBtn.addEventListener('click', async () => {
-    const code = mfaCodeInput.value.trim();
+    const code = mfaCodeInput ? mfaCodeInput.value.trim() : '';
     if (!code || code.length !== 6) {
       showToast('Please enter a valid 6-digit TOTP verification code.', true);
       return;
@@ -1112,11 +1197,29 @@ if (mfaConfirmBtn) {
       return;
     }
     try {
+      if (currentMfaFactorId) {
+        const { data: challengeData, error: challengeErr } = await supabase.auth.mfa.challenge({
+          factorId: currentMfaFactorId
+        });
+        if (challengeErr) throw challengeErr;
+
+        const { error: verifyErr } = await supabase.auth.mfa.verify({
+          factorId: currentMfaFactorId,
+          challengeId: challengeData.id,
+          code: code
+        });
+        if (verifyErr) throw verifyErr;
+
+        showToast('MFA Google Authenticator enabled successfully!');
+        if (mfaModal) mfaModal.style.display = 'none';
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('mfa-verify', {
         body: { user_id: profile.id, secret: currentMfaSecret, code },
       });
       if (error) throw error;
-      if (data.success) {
+      if (data && data.success) {
         showToast('MFA Google Authenticator enabled successfully!');
         if (mfaModal) mfaModal.style.display = 'none';
       }
@@ -1126,8 +1229,8 @@ if (mfaConfirmBtn) {
   });
 }
 
-// ── Sign-out (Supabase Auth) ─────────────────────────────────────────
-document.getElementById('signOutBtn').addEventListener('click', async () => {
+// ── Sign-out ──────────────────────────────────────────────────────────
+getEl('signOutBtn')?.addEventListener('click', async () => {
   try {
     await supabase.auth.signOut();
   } catch (e) {
@@ -1136,13 +1239,13 @@ document.getElementById('signOutBtn').addEventListener('click', async () => {
   window.location.href = 'login.html';
 });
 
-// ── SSO Navigation Links ─────────────────────────────────────────────
+// ── SSO Links ─────────────────────────────────────────────────────────
 async function loadSSOLinks() {
   const { data: links } = await supabase.from('sso_links').select('*').eq('is_active', true).order('sort_order');
-  const nav = document.getElementById('ssoLinksNav');
+  const nav = getEl('ssoLinksNav');
   if (!nav) return;
   const role = state.studentProfile?.role || 'student';
-  const visible = (links || []).filter(l => l.roles.split(',').map(r => r.trim()).includes(role));
+  const visible = (links || []).filter(l => (l.roles || '').split(',').map(r => r.trim()).includes(role));
   nav.innerHTML = visible.map(l => `
     <a href="${l.url}" target="_blank" class="nav-item" style="text-decoration:none;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
@@ -1164,54 +1267,55 @@ async function loadAttendance() {
   (records || []).forEach(r => { if (stats[r.status] !== undefined) stats[r.status]++; });
   const total = (records || []).length;
 
-  const val = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  val('att-total', total);
-  val('att-present', stats.present);
-  val('att-late', stats.late);
-  val('att-absent', stats.absent);
+  setText('att-total', total);
+  setText('att-present', stats.present);
+  setText('att-late', stats.late);
+  setText('att-absent', stats.absent);
 
   const badgeClass = { present: 'badge-green', absent: 'badge-red', late: 'badge-amber', excused: 'badge-blue' };
-  document.getElementById('attBody').innerHTML = (records || []).length
-    ? records.map(r => `<tr>
-        <td>${fmtDate(r.date)}</td>
-        <td><strong>${r.course_offerings?.code || '—'}</strong> ${r.course_offerings?.title || ''}</td>
-        <td><span class="badge ${badgeClass[r.status] || 'badge-amber'}">${r.status.toUpperCase()}</span></td>
-        <td style="font-size:12px;color:var(--ink-500);">${r.notes || '—'}</td>
-      </tr>`).join('')
-    : '<tr><td colspan="4" style="text-align:center;color:var(--ink-300);padding:20px;">No attendance records found.</td></tr>';
+  const attBody = getEl('attBody');
+  if (attBody) {
+    attBody.innerHTML = (records || []).length
+      ? records.map(r => `<tr>
+          <td>${fmtDate(r.date)}</td>
+          <td><strong>${r.course_offerings?.code || '—'}</strong> ${r.course_offerings?.title || ''}</td>
+          <td><span class="badge ${badgeClass[r.status] || 'badge-amber'}">${r.status.toUpperCase()}</span></td>
+          <td style="font-size:12px;color:var(--ink-500);">${r.notes || '—'}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:var(--ink-300);padding:20px;">No attendance records found.</td></tr>';
+  }
 }
 
-// ── Faculty Evaluation (Anonymous) ──────────────────────────────────
+// ── Faculty Evaluation ────────────────────────────────────────────────
 async function loadFacultyEval() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  // Get current term
   const { data: currentSem } = await supabase
     .from('student_semesters')
     .select('school_year, semester')
     .eq('student_id', profile.id)
     .eq('is_current', true)
-    .single();
+    .maybeSingle();
 
   const sy = currentSem?.school_year || '2025–2026';
   const sem = currentSem?.semester || '2nd Semester';
-  const termPill = document.getElementById('evalTermPill');
-  if (termPill) termPill.textContent = `${sem} ${sy}`;
+  setText('evalTermPill', `${sem} ${sy}`);
 
-  // Get courses the student is enrolled in this term with instructor info
   const { data: enrollments } = await supabase
     .from('enrollments')
     .select('offering_id, course_offerings(id, code, title, instructor_name)')
     .eq('student_id', profile.id)
     .eq('status', 'enrolled');
 
+  const evalStatus = getEl('evalStatus');
+  const evalList = getEl('evalList');
+
   if (!enrollments || enrollments.length === 0) {
-    document.getElementById('evalStatus').innerHTML = 'No enrolled courses found for this semester. Please enroll first before evaluating faculty.';
+    if (evalStatus) evalStatus.innerHTML = 'No enrolled courses found for this semester. Please enroll first before evaluating faculty.';
     return;
   }
 
-  // Group by instructor (some instructors may teach multiple courses)
   const instructorMap = {};
   enrollments.forEach(e => {
     const off = e.course_offerings;
@@ -1224,11 +1328,10 @@ async function loadFacultyEval() {
 
   const instructors = Object.values(instructorMap);
   if (instructors.length === 0) {
-    document.getElementById('evalStatus').innerHTML = 'No instructor information available for your enrolled courses.';
+    if (evalStatus) evalStatus.innerHTML = 'No instructor information available for your enrolled courses.';
     return;
   }
 
-  // Check which instructors the student has already evaluated this term
   const { data: existing } = await supabase
     .from('faculty_evaluations')
     .select('instructor_name')
@@ -1237,7 +1340,7 @@ async function loadFacultyEval() {
     .eq('semester', sem);
 
   const evaluatedNames = new Set((existing || []).map(e => e.instructor_name));
-  document.getElementById('evalStatus').style.display = 'none';
+  if (evalStatus) evalStatus.style.display = 'none';
 
   const evalQuestions = [
     { key: 'teaching_clarity', label: 'The instructor explains concepts clearly and understandably.' },
@@ -1247,148 +1350,166 @@ async function loadFacultyEval() {
     { key: 'punctuality', label: 'The instructor starts and ends classes on time.' },
   ];
 
-  document.getElementById('evalList').innerHTML = instructors.map(inst => {
-    const submitted = evaluatedNames.has(inst.name);
-    const courseList = inst.courses.map(c => `${c.code} — ${c.title}`).join(', ');
-    return `
-    <div class="card card-pad" style="margin-bottom:16px;border:1px solid var(--line);${submitted ? 'opacity:0.6;' : ''}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
-        <div>
-          <div style="font-weight:800;font-size:15px;">${inst.name}</div>
-          <div style="font-size:12px;color:var(--ink-500);">${courseList}</div>
-        </div>
-        ${submitted ? '<span class="badge badge-green">✓ Submitted</span>' : '<span class="badge badge-amber">Pending</span>'}
-      </div>
-      ${submitted ? '' : `
-      <div class="eval-form" data-instructor="${inst.name.replace(/"/g, '&quot;')}">
-        ${evalQuestions.map((q, i) => `
-          <div class="eval-question">
-            <div class="eval-q-label">${q.label}</div>
-            <div class="eval-stars" data-key="${q.key}">
-              ${[1, 2, 3, 4, 5].map(n => `<span class="eval-star" data-val="${n}" style="font-size:22px;cursor:pointer;color:var(--ink-300);transition:color 0.15s;">★</span>`).join('')}
-            </div>
+  if (evalList) {
+    evalList.innerHTML = instructors.map(inst => {
+      const submitted = evaluatedNames.has(inst.name);
+      const courseList = inst.courses.map(c => `${c.code} — ${c.title}`).join(', ');
+      return `
+      <div class="card card-pad" style="margin-bottom:16px;border:1px solid var(--line);${submitted ? 'opacity:0.6;' : ''}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+          <div>
+            <div style="font-weight:800;font-size:15px;">${inst.name}</div>
+            <div style="font-size:12px;color:var(--ink-500);">${courseList}</div>
           </div>
-        `).join('')}
-        <div class="field" style="margin-top:12px;">
-          <label style="font-size:12px;font-weight:600;color:var(--ink-700);">Additional Comments (optional)</label>
-          <textarea class="eval-comment" style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;min-height:70px;resize:vertical;font-family:inherit;" placeholder="Share specific feedback..."></textarea>
+          ${submitted ? '<span class="badge badge-green">✓ Submitted</span>' : '<span class="badge badge-amber">Pending</span>'}
         </div>
-        <button class="btn btn-primary eval-submit-btn" style="width:100%;justify-content:center;margin-top:12px;" data-instructor="${inst.name.replace(/"/g, '&quot;')}">Submit Anonymous Evaluation</button>
-      </div>
-      `}
-    </div>`;
-  }).join('');
+        ${submitted ? '' : `
+        <div class="eval-form" data-instructor="${inst.name.replace(/"/g, '&quot;')}">
+          ${evalQuestions.map((q) => `
+            <div class="eval-question">
+              <div class="eval-q-label">${q.label}</div>
+              <div class="eval-stars" data-key="${q.key}">
+                ${[1, 2, 3, 4, 5].map(n => `<span class="eval-star" data-val="${n}" style="font-size:22px;cursor:pointer;color:var(--ink-300);transition:color 0.15s;">★</span>`).join('')}
+              </div>
+            </div>
+          `).join('')}
+          <div class="field" style="margin-top:12px;">
+            <label style="font-size:12px;font-weight:600;color:var(--ink-700);">Additional Comments (optional)</label>
+            <textarea class="eval-comment" style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;min-height:70px;resize:vertical;font-family:inherit;" placeholder="Share specific feedback..."></textarea>
+          </div>
+          <button class="btn btn-primary eval-submit-btn" style="width:100%;justify-content:center;margin-top:12px;" data-instructor="${inst.name.replace(/"/g, '&quot;')}">Submit Anonymous Evaluation</button>
+        </div>
+        `}
+      </div>`;
+    }).join('');
 
-  // Attach star rating + submit handlers
-  document.querySelectorAll('.eval-stars').forEach(starGroup => {
-    const stars = starGroup.querySelectorAll('.eval-star');
-    stars.forEach(star => {
-      star.addEventListener('click', () => {
-        const val = parseInt(star.dataset.val, 10);
-        stars.forEach((s, i) => {
-          s.style.color = i < val ? 'var(--pink-500)' : 'var(--ink-300)';
+    evalList.querySelectorAll('.eval-stars').forEach(starGroup => {
+      const stars = starGroup.querySelectorAll('.eval-star');
+      stars.forEach(star => {
+        star.addEventListener('click', () => {
+          const val = parseInt(star.dataset.val, 10);
+          stars.forEach((s, i) => {
+            s.style.color = i < val ? 'var(--pink-500)' : 'var(--ink-300)';
+          });
+          starGroup.dataset.selected = val;
         });
-        starGroup.dataset.selected = val;
       });
     });
-  });
 
-  document.querySelectorAll('.eval-submit-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const instructorName = btn.dataset.instructor;
-      const form = btn.closest('.eval-form');
-      const ratings = {};
-      let allRated = true;
-      form.querySelectorAll('.eval-stars').forEach(sg => {
-        const val = sg.dataset.selected;
-        if (!val) { allRated = false; }
-        ratings[sg.dataset.key] = val ? parseInt(val, 10) : null;
-      });
+    evalList.querySelectorAll('.eval-submit-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const instructorName = btn.dataset.instructor;
+        const form = btn.closest('.eval-form');
+        const ratings = {};
+        let allRated = true;
 
-      if (!allRated) {
-        showToast('Please rate all 5 questions before submitting.', true);
-        return;
-      }
-
-      const comment = form.querySelector('.eval-comment').value.trim();
-      btn.disabled = true;
-      btn.textContent = 'Submitting…';
-
-      try {
-        const { error } = await supabase.from('faculty_evaluations').insert({
-          student_id: profile.id,
-          instructor_name: instructorName,
-          school_year: sy,
-          semester: sem,
-          teaching_clarity: ratings.teaching_clarity,
-          knowledge: ratings.knowledge,
-          availability: ratings.availability,
-          fairness: ratings.fairness,
-          punctuality: ratings.punctuality,
-          comment: comment || null,
+        form.querySelectorAll('.eval-stars').forEach(sg => {
+          const val = sg.dataset.selected;
+          if (!val) { allRated = false; }
+          ratings[sg.dataset.key] = val ? parseInt(val, 10) : null;
         });
-        if (error) throw error;
 
-        showToast('Evaluation submitted anonymously. Thank you!');
-        await loadFacultyEval(); // Refresh to show ✓ Submitted state
-      } catch (err) {
-        showToast('Error submitting evaluation: ' + err.message, true);
-        btn.disabled = false;
-        btn.textContent = 'Submit Anonymous Evaluation';
-      }
+        if (!allRated) {
+          showToast('Please rate all 5 questions before submitting.', true);
+          return;
+        }
+
+        const comment = form.querySelector('.eval-comment')?.value.trim() || null;
+        btn.disabled = true;
+        btn.textContent = 'Submitting…';
+
+        try {
+          const { error } = await supabase.from('faculty_evaluations').insert({
+            student_id: profile.id,
+            instructor_name: instructorName,
+            school_year: sy,
+            semester: sem,
+            teaching_clarity: ratings.teaching_clarity,
+            knowledge: ratings.knowledge,
+            availability: ratings.availability,
+            fairness: ratings.fairness,
+            punctuality: ratings.punctuality,
+            comment,
+          });
+          if (error) throw error;
+
+          showToast('Evaluation submitted anonymously. Thank you!');
+          await loadFacultyEval();
+        } catch (err) {
+          showToast('Error submitting evaluation: ' + err.message, true);
+          btn.disabled = false;
+          btn.textContent = 'Submit Anonymous Evaluation';
+        }
+      });
     });
-  });
+  }
 }
 
-// ── Profile Management ───────────────────────────────────────────────
+// ── Profile Management ────────────────────────────────────────────────
 async function loadProfile() {
   const p = state.studentProfile;
   if (!p) return;
-  const val = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v || '—'; };
-  val('profileName', p.full_name);
-  val('profileEmail', p.email);
-  val('profileStudentNo', p.student_no);
-  val('profileProgram', p.program);
-  val('profileYear', p.year_level);
-  val('profileSection', p.section);
-  val('profilePhone', p.phone);
-  val('profileAddress', p.address);
-  const avatar = document.getElementById('profileAvatar');
+
+  setText('profileName', p.full_name);
+  setText('profileEmail', p.email);
+  setText('profileStudentNo', p.student_no);
+  setText('profileProgram', p.program);
+  setText('profileYear', p.year_level);
+  setText('profileSection', p.section);
+  setText('profilePhone', p.phone);
+  setText('profileAddress', p.address);
+
+  const avatar = getEl('profileAvatar');
   if (avatar) {
-    if (p.avatar_url) { avatar.innerHTML = `<img src="${p.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`; }
-    else { avatar.textContent = getInitials(p.full_name); }
+    if (p.avatar_url) {
+      avatar.innerHTML = `<img src="${p.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+    } else {
+      avatar.textContent = getInitials(p.full_name);
+    }
   }
-  const editPhone = document.getElementById('editPhone');
-  const editAddress = document.getElementById('editAddress');
-  const editAvatar = document.getElementById('editAvatar');
+
+  const editPhone = getEl('editPhone');
+  const editAddress = getEl('editAddress');
+  const editAvatar = getEl('editAvatar');
   if (editPhone) editPhone.value = p.phone || '';
   if (editAddress) editAddress.value = p.address || '';
   if (editAvatar) editAvatar.value = p.avatar_url || '';
 }
 
-document.getElementById('saveProfileBtn')?.addEventListener('click', async () => {
+getEl('saveProfileBtn')?.addEventListener('click', async () => {
   const profile = state.studentProfile;
   if (!profile) return;
+
+  const phone = getEl('editPhone')?.value.trim() || null;
+  const address = getEl('editAddress')?.value.trim() || null;
+  const avatar_url = getEl('editAvatar')?.value.trim() || null;
+
   try {
     const { error } = await supabase.from('profiles').update({
-      phone: document.getElementById('editPhone').value.trim() || null,
-      address: document.getElementById('editAddress').value.trim() || null,
-      avatar_url: document.getElementById('editAvatar').value.trim() || null,
+      phone,
+      address,
+      avatar_url,
     }).eq('id', profile.id);
+
     if (error) throw error;
-    state.studentProfile.phone = document.getElementById('editPhone').value.trim() || null;
-    state.studentProfile.address = document.getElementById('editAddress').value.trim() || null;
-    state.studentProfile.avatar_url = document.getElementById('editAvatar').value.trim() || null;
+
+    state.studentProfile.phone = phone;
+    state.studentProfile.address = address;
+    state.studentProfile.avatar_url = avatar_url;
+    if (state.dashboard) state.dashboard.student.avatarUrl = avatar_url;
+
     showToast('Profile updated successfully');
     loadProfile();
+    renderDashboard();
   } catch (err) {
     showToast('Error updating profile: ' + err.message, true);
   }
 });
 
-document.getElementById('changePassBtn')?.addEventListener('click', async () => {
+getEl('changePassBtn')?.addEventListener('click', async () => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.email) throw new Error('User email not found');
     const { error } = await supabase.auth.resetPasswordForEmail(user.email);
     if (error) throw error;
     showToast('Password reset email sent to ' + user.email);
@@ -1397,11 +1518,12 @@ document.getElementById('changePassBtn')?.addEventListener('click', async () => 
   }
 });
 
-// ── Init ──────────────────────────────────────────────────────────────
+// ── Initialization ───────────────────────────────────────────────────
 async function init() {
   const profile = await getCurrentStudent();
   if (!profile) return;
 
+  setupAuthListener();
   state.apiOnline = true;
   try {
     await Promise.all([
@@ -1423,7 +1545,8 @@ async function init() {
     console.error(err);
   }
 }
-// Wait for shared supabase-config.js to finish, then init
+
+// Wait for shared supabase-config.js to finish initialization
 (function waitForSupabase() {
   if (window.__myimcc_supabase_client__) {
     supabase = window.__myimcc_supabase_client__;
