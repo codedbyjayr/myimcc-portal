@@ -210,8 +210,8 @@ async function loadDashboard() {
       yearLevel: profile.year_level,
       email: profile.email,
       avatarUrl: profile.avatar_url,
-      schoolYear: sem?.school_year || 'AY 2025–2026',
-      semester: sem?.semester || '2nd Semester',
+      schoolYear: sem?.school_year ? sem.school_year.replace(/[\u2013\u2014]/g, '-') : '2026-2027',
+      semester: sem?.semester || '1st Semester',
     },
     gwa: sem?.gwa ?? '—',
     unitsEnrolled: sem?.units_enrolled ?? 0,
@@ -285,8 +285,8 @@ function renderDashboard() {
 
   const sf = getEl('sidebarFoot');
   if (sf) {
-    const sy = d.student.schoolYear || 'AY 2025–2026';
-    const sem = d.student.semester || 'Sem 2';
+    const sy = d.student.schoolYear || '2026-2027';
+    const sem = d.student.semester || '1st Semester';
     const prog = d.student.program || '—';
     const yr = d.student.yearLevel || '—';
     sf.innerHTML = `${sy} · ${sem}<br>${prog} — ${yr}`;
@@ -375,8 +375,8 @@ async function loadEnrollment() {
     .eq('is_current', true)
     .maybeSingle();
 
-  const activeSchoolYear = currentSem?.school_year || '2025–2026';
-  const activeSemester = currentSem?.semester || '2nd Semester';
+  const activeSchoolYear = currentSem?.school_year ? currentSem.school_year.replace(/[\u2013\u2014]/g, '-') : '2026-2027';
+  const activeSemester = currentSem?.semester || '1st Semester';
 
   const sectionTitle = getEl('enrollmentSectionTitle');
   if (sectionTitle) {
@@ -437,7 +437,6 @@ function parseSchedule(scheduleStr) {
   const endM = parseInt(match[6], 10);
   const endMeridiem = match[7];
 
-  // Infer start meridiem if missing (e.g., 1:00 - 2:30 PM)
   if (!startMeridiem && endMeridiem) {
     startMeridiem = (startH < endH || startH === 12) ? endMeridiem : (endMeridiem === 'PM' ? 'AM' : 'PM');
   }
@@ -1355,8 +1354,8 @@ async function loadFacultyEval() {
     .eq('is_current', true)
     .maybeSingle();
 
-  const sy = currentSem?.school_year || '2025–2026';
-  const sem = currentSem?.semester || '2nd Semester';
+  const sy = currentSem?.school_year ? currentSem.school_year.replace(/[\u2013\u2014]/g, '-') : '2026-2027';
+  const sem = currentSem?.semester || '1st Semester';
   setText('evalTermPill', `${sem} ${sy}`);
 
   const { data: enrollments } = await supabaseClient
