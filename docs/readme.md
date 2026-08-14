@@ -168,20 +168,6 @@ Has TOTP factor? ──No──→ Show QR code → Verify 6-digit code → AAL2
 6. Test COR print (Ctrl+P on cor.html)
 7. Test on mobile viewport (Chrome DevTools → Toggle device toolbar)
 
-## What Was Fixed (Summary)
 
-| Issue | Before | After |
-|-------|--------|-------|
-| Staff/Teacher dashboards | `localStorage` + `fetch('localhost:4000')` | Supabase session + RLS queries |
-| Admin dashboard | `localStorage` auth, no role check | `requireAuth(['admin'])` + Supabase |
-| Staff login | Non-functional stub (eye-toggle only) | Routes through same SSO + TOTP as students |
-| Database | No schema — JS referenced non-existent tables | 15 tables, 22 RLS policies, trigger, seed data |
-| AI chatbot | `dashboard.js` called non-existent Edge Function | Groq-powered Edge Function with FAQ grounding |
-| Credentials | Duplicated across 4 files | Single `shared/supabase-config.js` |
 
-## Remaining Risks
 
-1. **Ngrok free tier** — URL changes on restart. Use a reserved domain ($8/mo) or document the URL change procedure.
-2. **Google OAuth consent screen** — shows "unverified app" warning until Google approves. Use test mode with panelists' emails whitelisted.
-3. **Groq rate limits** — free tier has limits. Fallback to keyword-based FAQ is already implemented.
-4. **Raspberry Pi SD card** — can fail. Supabase is cloud-hosted (DB is safe), but keep a Git backup of static files.

@@ -1,4 +1,4 @@
-// student/login.js
+// auth/login.js
 document.addEventListener('DOMContentLoaded', async () => {
   // 1. Wait for the dynamic Supabase client to load
   let supabaseClient;
@@ -9,19 +9,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // Domain & Role Helpers
+  // Domain Helper
   function isAllowedDomain(email) {
     const allowed = ['@student.imcc.edu.ph', '@faculty.imcc.edu.ph', '@admin.imcc.edu.ph', '@imcc.edu.ph'];
     return allowed.some(domain => email.toLowerCase().endsWith(domain));
-  }
-
-  function roleFromEmail(email) {
-    if (!email) return 'student';
-    const lower = email.toLowerCase();
-    if (lower.endsWith('@faculty.imcc.edu.ph')) return 'faculty';
-    if (lower.endsWith('@admin.imcc.edu.ph')) return 'admin';
-    if (lower.includes('staff')) return 'staff';
-    return 'student';
   }
 
   const stepSso = document.getElementById('stepSso');
@@ -73,19 +64,57 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // 2. Fixed routing: Works both on GitHub Pages (/myimcc-portal/...) and Localhost
-  function redirectUser(role) {
-    const basePath = window.location.pathname.includes('/myimcc-portal') ? '/myimcc-portal' : '';
-    const lower = role.toLowerCase();
+  // 🔑 Database-driven Router: Fetch status & role from 'profiles' table
+  async function routeUserByProfile(user) {
+    const { data: profile, error } = await supabaseClient
+      .from('profiles')
+      .select('role, status')
+      .eq('id', user.id)
+      .single();
 
-    if (lower === 'faculty') {
-      window.location.href = `${basePath}/faculty/teacher-dashboard.html`;
-    } else if (lower === 'admin') {
-      window.location.href = `${basePath}/admin/admin-dashboard.html`;
-    } else if (lower === 'staff') {
-      window.location.href = `${basePath}/staff/staff-dashboard.html`;
-    } else {
-      window.location.href = `${basePath}/student/dashboard.html`;
+    if (error || !profile) {
+      console.error("Profile fetch error:", error);
+      // Default fallback if profile isn't generated yet
+      window.location.href = '../student/dashboard.html';
+      return;
+    }
+
+    // 1. Check account status & route to onboarding folder
+    if (profile.status === 'onboarding') {
+      window.location.href = '../onboarding/select-role.html';
+      return;
+    }
+
+    if (profile.status === 'pending') {
+      window.location.href = '../onboarding/awaiting-approval.html';
+      return;
+    }
+
+    if (profile.status === 'rejected') {
+      alert('Your account request was rejected by the administrator.');
+      await supabaseClient.auth.signOut();
+      showStep(stepSso);
+      return;
+    }
+
+    // 2. Route approved users to their respective portal folders
+    const lowerRole = (profile.role || '').toLowerCase();
+
+    switch (lowerRole) {
+      case 'teacher':
+      case 'faculty':
+        window.location.href = '../faculty/teacher-dashboard.html';
+        break;
+      case 'admin':
+        window.location.href = '../admin/admin-dashboard.html';
+        break;
+      case 'staff':
+        window.location.href = '../staff/staff-dashboard.html';
+        break;
+      case 'student':
+      default:
+        window.location.href = '../student/dashboard.html';
+        break;
     }
   }
 
@@ -100,7 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { data: aalData } = await supabaseClient.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aalData?.currentLevel === 'aal2') {
       const { data: { user } } = await supabaseClient.auth.getUser();
-      redirectUser(roleFromEmail(user?.email || activeEmail));
+      await routeUserByProfile(user);
       return;
     }
 
@@ -197,7 +226,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (vErr) throw vErr;
 
         const { data: { user } } = await supabaseClient.auth.getUser();
-        redirectUser(roleFromEmail(user?.email || activeEmail));
+        await routeUserByProfile(user);
       } catch (err) {
         showError(enrollError, err.message || 'Verification failed. Check your app timer.');
       }
@@ -239,7 +268,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (error) throw error;
 
         const { data: { user } } = await supabaseClient.auth.getUser();
-        redirectUser(roleFromEmail(user?.email || activeEmail));
+        await routeUserByProfile(user);
       } catch (err) {
         showError(challengeError, err.message || 'Invalid TOTP code. Try again.');
       }
@@ -268,6 +297,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     retrySsoBtn.addEventListener('click', () => {
       showStep(stepSso);
       if (emailInput) emailInput.focus();
+    });
+  }
+
+  // Handle Show Key Button mapping 
+  const toggleSecretBtn = document.getElementById('toggleSecretBtn');
+  if (toggleSecretBtn && enrollSecret) {
+    toggleSecretBtn.addEventListener('click', () => {
+      if (enrollSecret.textContent === '••••••••••••••••••••') {
+        enrollSecret.textContent = activeSecret;
+        toggleSecretBtn.textContent = 'Hide Key';
+      } else {
+        enrollSecret.textContent = '••••••••••••••••••••';
+        toggleSecretBtn.textContent = 'Show Key';
+      }
     });
   }
 
