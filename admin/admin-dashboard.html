@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Dashboard — User Approvals</title>
+  <title>Admin Dashboard — User Management</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
@@ -148,13 +148,31 @@
       margin-right: 8px;
     }
 
-    .btn-reject {
+    .btn-reject,
+    .btn-revoke {
       background: var(--danger);
       color: #fff;
     }
 
     .btn-action:hover {
       opacity: 0.85;
+    }
+
+    /* Interactive Role Dropdown Styling */
+    .role-select {
+      background: #0f172a;
+      border: 1px solid var(--surface-border);
+      color: var(--text-main);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .role-select:focus {
+      border-color: var(--primary);
     }
 
     .empty-state {
@@ -175,7 +193,7 @@
     </div>
   </div>
 
-  <!-- PENDING APPROVALS SECTION -->
+  <!-- PENDING ACCESS REQUESTS -->
   <div class="dashboard-card">
     <div class="card-title">
       <span>Pending Access Requests</span>
@@ -187,40 +205,36 @@
         <thead>
           <tr>
             <th>Full Name</th>
-            <th>Email Suffix</th>
+            <th>Email</th>
             <th>ID Number</th>
             <th>Requested Role</th>
             <th>Actions</th>
           </tr>
         </thead>
-        <tbody id="pendingTableBody">
-          <!-- Dynamically Populated -->
-        </tbody>
+        <tbody id="pendingTableBody"></tbody>
       </table>
       <div id="noPendingMsg" class="empty-state" style="display: none;">No pending registration requests found.</div>
     </div>
   </div>
 
-  <!-- APPROVED USERS LIST SECTION -->
+  <!-- APPROVED USERS (WITH EDITABLE ROLES) -->
   <div class="dashboard-card">
-    <div class="card-title">Approved Portal Users</div>
+    <div class="card-title">Approved Portal Users & Role Management</div>
     <table>
       <thead>
         <tr>
           <th>Full Name</th>
           <th>Email</th>
           <th>ID Number</th>
-          <th>Role</th>
+          <th>Assigned Role</th>
           <th>Status</th>
+          <th>Actions</th>
         </tr>
       </thead>
-      <tbody id="approvedTableBody">
-        <!-- Dynamically Populated -->
-      </tbody>
+      <tbody id="approvedTableBody"></tbody>
     </table>
   </div>
 
-  <!-- Script Load Order -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/env-config.js"></script>
   <script src="../shared/supabase-config.js"></script>

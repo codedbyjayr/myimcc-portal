@@ -15,6 +15,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const noPendingMsg = document.getElementById('noPendingMsg');
     const logoutBtn = document.getElementById('logoutBtn');
 
+    let currentAdminId = null;
+
     // 1. Verify User is an Approved Admin
     async function checkAdminAuth() {
         const { data: { user }, error } = await supabaseClient.auth.getUser();
@@ -23,6 +25,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.location.href = '../auth/login.html';
             return;
         }
+
+        currentAdminId = user.id;
 
         const { data: profile } = await supabaseClient
             .from('profiles')
@@ -40,7 +44,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (adminEmailEl) adminEmailEl.textContent = user.email;
     }
 
-    // 2. Fetch and Render Pending Requests
+    // 2. Fetch Pending Requests
     async function loadPendingUsers() {
         const { data: users, error } = await supabaseClient
             .from('profiles')
@@ -48,10 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .eq('status', 'pending')
             .order('created_at', { ascending: true });
 
-        if (error) {
-            console.error('Error fetching pending users:', error);
-            return;
-        }
+        if (error) return;
 
         pendingTableBody.innerHTML = '';
         pendingCountEl.textContent = `${users.length} Pending`;
@@ -78,35 +79,51 @@ document.addEventListener('DOMContentLoaded', async () => {
             pendingTableBody.appendChild(tr);
         });
 
-        attachActionListeners();
+        attachPendingListeners();
     }
 
-    // 3. Fetch and Render Approved Users
+    // 3. Fetch Approved Users & Render Interactive Select Dropdowns
     async function loadApprovedUsers() {
         const { data: users, error } = await supabaseClient
             .from('profiles')
             .select('*')
             .eq('status', 'approved')
-            .order('updated_at', { ascending: false });
+            .order('full_name', { ascending: true });
 
         if (error) return;
 
         approvedTableBody.innerHTML = '';
+
         users.forEach(user => {
+            const isSelf = user.id === currentAdminId;
+            const currentRole = user.role || 'student';
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
-        <td>${escapeHtml(user.full_name || 'N/A')}</td>
+        <td><b>${escapeHtml(user.full_name || 'N/A')}</b> ${isSelf ? '<small style="color:var(--primary);">(You)</small>' : ''}</td>
         <td>${escapeHtml(user.email)}</td>
         <td><code>${escapeHtml(user.id_number || 'N/A')}</code></td>
-        <td><b style="text-transform: capitalize;">${escapeHtml(user.role || 'student')}</b></td>
+        <td>
+          <select class="role-select" data-id="${user.id}" ${isSelf ? 'disabled' : ''}>
+            <option value="student" ${currentRole === 'student' ? 'selected' : ''}>Student</option>
+            <option value="teacher" ${currentRole === 'teacher' || currentRole === 'faculty' ? 'selected' : ''}>Faculty</option>
+            <option value="staff" ${currentRole === 'staff' ? 'selected' : ''}>Staff</option>
+            <option value="admin" ${currentRole === 'admin' ? 'selected' : ''}>Admin</option>
+          </select>
+        </td>
         <td><span class="badge badge-approved">Approved</span></td>
+        <td>
+          ${!isSelf ? `<button class="btn-action btn-revoke" data-id="${user.id}">Revoke Access</button>` : '<span style="color:var(--text-muted); font-size:12px;">Active Session</span>'}
+        </td>
       `;
             approvedTableBody.appendChild(tr);
         });
+
+        attachApprovedListeners();
     }
 
-    // 4. Handle Approve/Reject Buttons
-    function attachActionListeners() {
+    // 4. Attach Listeners for Pending Approvals / Rejections
+    function attachPendingListeners() {
         document.querySelectorAll('.btn-approve').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const userId = e.target.getAttribute('data-id');
@@ -114,10 +131,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 const { error } = await supabaseClient
                     .from('profiles')
-                    .update({
-                        status: 'approved',
-                        role: targetRole
-                    })
+                    .update({ status: 'approved', role: targetRole })
                     .eq('id', userId);
 
                 if (error) {
@@ -131,7 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.querySelectorAll('.btn-reject').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                if (!confirm('Are you sure you want to reject this request?')) return;
+                if (!confirm('Reject this registration request?')) return;
                 const userId = e.target.getAttribute('data-id');
 
                 const { error } = await supabaseClient
@@ -148,12 +162,55 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Helper function to prevent XSS
+    // 5. Attach Listeners for Dynamic Role Updates and Access Revocation
+    function attachApprovedListeners() {
+        // Live Role Changing Dropdown Listener
+        document.querySelectorAll('.role-select').forEach(select => {
+            select.addEventListener('change', async (e) => {
+                const userId = e.target.getAttribute('data-id');
+                const newRole = e.target.value;
+
+                const { error } = await supabaseClient
+                    .from('profiles')
+                    .update({ role: newRole })
+                    .eq('id', userId);
+
+                if (error) {
+                    alert('Failed to update role: ' + error.message);
+                    loadApprovedUsers(); // Revert back on error
+                } else {
+                    // Subtle highlight to confirm save
+                    e.target.style.borderColor = 'var(--success)';
+                    setTimeout(() => { e.target.style.borderColor = 'var(--surface-border)'; }, 1500);
+                }
+            });
+        });
+
+        // Revoke Access Listener
+        document.querySelectorAll('.btn-revoke').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (!confirm('Revoke access for this user? They will be locked out of the portal until approved again.')) return;
+                const userId = e.target.getAttribute('data-id');
+
+                const { error } = await supabaseClient
+                    .from('profiles')
+                    .update({ status: 'onboarding', role: null })
+                    .eq('id', userId);
+
+                if (error) {
+                    alert('Failed to revoke access: ' + error.message);
+                } else {
+                    loadApprovedUsers();
+                    loadPendingUsers();
+                }
+            });
+        });
+    }
+
     function escapeHtml(str) {
         return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // 5. Logout Listener
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {
             await supabaseClient.auth.signOut();
@@ -161,7 +218,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Run Bootstrap
     await checkAdminAuth();
     await loadPendingUsers();
     await loadApprovedUsers();
