@@ -13,9 +13,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     const approvedTableBody = document.getElementById('approvedTableBody');
     const pendingCountEl = document.getElementById('pendingCount');
     const noPendingMsg = document.getElementById('noPendingMsg');
+    const noApprovedMsg = document.getElementById('noApprovedMsg');
     const logoutBtn = document.getElementById('logoutBtn');
+    const searchInput = document.getElementById('searchInput');
+    const courseFilter = document.getElementById('courseFilter');
+    const clearFiltersBtn = document.getElementById('clearFiltersBtn');
 
     let currentAdminId = null;
+
+    // Full unfiltered datasets — filters are applied client-side against these.
+    let allPendingUsers = [];
+    let allApprovedUsers = [];
+
+    // Role labels/synonyms so searching "faculty" also matches role "teacher", etc.
+    const roleLabels = {
+        student: 'Student',
+        teacher: 'Faculty',
+        faculty: 'Faculty',
+        staff: 'Staff',
+        admin: 'Admin',
+    };
 
     // 1. Verify User is an Approved Admin
     async function checkAdminAuth() {
@@ -54,32 +71,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (error) return;
 
-        pendingTableBody.innerHTML = '';
-        pendingCountEl.textContent = `${users.length} Pending`;
+        allPendingUsers = users || [];
+        pendingCountEl.textContent = `${allPendingUsers.length} Pending`;
 
-        if (users.length === 0) {
-            noPendingMsg.style.display = 'block';
-            return;
-        } else {
-            noPendingMsg.style.display = 'none';
-        }
-
-        users.forEach(user => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-        <td><b>${escapeHtml(user.full_name || 'N/A')}</b></td>
-        <td>${escapeHtml(user.email)}</td>
-        <td><code>${escapeHtml(user.id_number || 'N/A')}</code></td>
-        <td><span class="badge badge-pending">${escapeHtml(user.requested_role || 'student')}</span></td>
-        <td>
-          <button class="btn-action btn-approve" data-id="${user.id}" data-role="${user.requested_role || 'student'}">Approve</button>
-          <button class="btn-action btn-reject" data-id="${user.id}">Reject</button>
-        </td>
-      `;
-            pendingTableBody.appendChild(tr);
-        });
-
-        attachPendingListeners();
+        populateCourseFilter();
+        renderPendingTable(filterUsers(allPendingUsers, { roleField: 'requested_role' }));
     }
 
     // 3. Fetch Approved Users & Render Interactive Select Dropdowns
@@ -92,7 +88,59 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (error) return;
 
+        allApprovedUsers = users || [];
+
+        populateCourseFilter();
+        renderApprovedTable(filterUsers(allApprovedUsers, { roleField: 'role' }));
+    }
+
+    // ── Render: Pending table (from a given, already-filtered, array) ──────
+    function renderPendingTable(users) {
+        pendingTableBody.innerHTML = '';
+
+        if (users.length === 0) {
+            noPendingMsg.style.display = 'block';
+            noPendingMsg.textContent = allPendingUsers.length === 0
+                ? 'No pending registration requests found.'
+                : 'No pending requests match your search or filter.';
+            attachPendingListeners();
+            return;
+        }
+        noPendingMsg.style.display = 'none';
+
+        const term = (searchInput?.value || '').trim();
+
+        users.forEach(user => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+        <td><b>${highlight(user.full_name || 'N/A', term)}</b></td>
+        <td>${highlight(user.email, term)}</td>
+        <td><code>${highlight(user.id_number || 'N/A', term)}</code></td>
+        <td>${highlight(user.program || '—', term)}</td>
+        <td><span class="badge badge-pending">${highlight(roleLabels[user.requested_role] || user.requested_role || 'student', term)}</span></td>
+        <td>
+          <button class="btn-action btn-approve" data-id="${user.id}" data-role="${user.requested_role || 'student'}">Approve</button>
+          <button class="btn-action btn-reject" data-id="${user.id}">Reject</button>
+        </td>
+      `;
+            pendingTableBody.appendChild(tr);
+        });
+
+        attachPendingListeners();
+    }
+
+    // ── Render: Approved table (from a given, already-filtered, array) ─────
+    function renderApprovedTable(users) {
         approvedTableBody.innerHTML = '';
+
+        if (users.length === 0) {
+            if (noApprovedMsg) noApprovedMsg.style.display = 'block';
+            attachApprovedListeners();
+            return;
+        }
+        if (noApprovedMsg) noApprovedMsg.style.display = 'none';
+
+        const term = (searchInput?.value || '').trim();
 
         users.forEach(user => {
             const isSelf = user.id === currentAdminId;
@@ -100,9 +148,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-        <td><b>${escapeHtml(user.full_name || 'N/A')}</b> ${isSelf ? '<small style="color:var(--primary);">(You)</small>' : ''}</td>
-        <td>${escapeHtml(user.email)}</td>
-        <td><code>${escapeHtml(user.id_number || 'N/A')}</code></td>
+        <td><b>${highlight(user.full_name || 'N/A', term)}</b> ${isSelf ? '<small style="color:var(--primary);">(You)</small>' : ''}</td>
+        <td>${highlight(user.email, term)}</td>
+        <td><code>${highlight(user.id_number || 'N/A', term)}</code></td>
+        <td>${highlight(user.program || '—', term)}</td>
         <td>
           <select class="role-select" data-id="${user.id}" ${isSelf ? 'disabled' : ''}>
             <option value="student" ${currentRole === 'student' ? 'selected' : ''}>Student</option>
@@ -120,6 +169,70 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         attachApprovedListeners();
+    }
+
+    // ── Filtering ────────────────────────────────────────────────────────
+    // Dynamic search across name / email / ID number / role (with synonyms),
+    // combined with the selected course filter. Runs entirely client-side
+    // against the already-loaded dataset, so results update as you type.
+    function filterUsers(users, { roleField }) {
+        const term = (searchInput?.value || '').trim().toLowerCase();
+        const course = courseFilter?.value || '';
+
+        return users.filter(user => {
+            if (course && (user.program || '') !== course) return false;
+            if (!term) return true;
+
+            const roleRaw = (user[roleField] || 'student').toLowerCase();
+            const roleLabel = (roleLabels[roleRaw] || roleRaw).toLowerCase();
+
+            const haystack = [
+                user.full_name,
+                user.email,
+                user.id_number,
+                user.program,
+                roleRaw,
+                roleLabel,
+            ].filter(Boolean).join(' ').toLowerCase();
+
+            return haystack.includes(term);
+        });
+    }
+
+    function applyFilters() {
+        const active = !!(searchInput?.value.trim() || courseFilter?.value);
+        if (clearFiltersBtn) clearFiltersBtn.style.display = active ? 'inline-block' : 'none';
+
+        renderPendingTable(filterUsers(allPendingUsers, { roleField: 'requested_role' }));
+        renderApprovedTable(filterUsers(allApprovedUsers, { roleField: 'role' }));
+    }
+
+    // Populate "Filter by Course" with distinct programs found across both lists.
+    function populateCourseFilter() {
+        if (!courseFilter) return;
+        const previous = courseFilter.value;
+
+        const courses = new Set();
+        [...allPendingUsers, ...allApprovedUsers].forEach(u => {
+            if (u.program) courses.add(u.program);
+        });
+
+        const sorted = [...courses].sort((a, b) => a.localeCompare(b));
+        courseFilter.innerHTML = '<option value="">All Courses</option>' +
+            sorted.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+
+        if (sorted.includes(previous)) courseFilter.value = previous;
+    }
+
+    function highlight(text, term) {
+        const safe = escapeHtml(String(text ?? ''));
+        if (!term) return safe;
+        const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        try {
+            return safe.replace(new RegExp(`(${escapedTerm})`, 'ig'), '<span class="highlight">$1</span>');
+        } catch {
+            return safe;
+        }
     }
 
     // 4. Attach Listeners for Pending Approvals / Rejections
@@ -165,7 +278,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 5. Attach Listeners for Dynamic Role Updates and Access Revocation
     function attachApprovedListeners() {
         // Live Role Changing Dropdown Listener
-        document.querySelectorAll('.role-select').forEach(select => {
+        document.querySelectorAll('.role-select[data-id]').forEach(select => {
             select.addEventListener('change', async (e) => {
                 const userId = e.target.getAttribute('data-id');
                 const newRole = e.target.value;
@@ -182,6 +295,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // Subtle highlight to confirm save
                     e.target.style.borderColor = 'var(--success)';
                     setTimeout(() => { e.target.style.borderColor = 'var(--surface-border)'; }, 1500);
+                    const cached = allApprovedUsers.find(u => u.id === userId);
+                    if (cached) cached.role = newRole;
                 }
             });
         });
@@ -215,6 +330,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         logoutBtn.addEventListener('click', async () => {
             await supabaseClient.auth.signOut();
             window.location.href = '../auth/login.html';
+        });
+    }
+
+    if (searchInput) searchInput.addEventListener('input', applyFilters);
+    if (courseFilter) courseFilter.addEventListener('change', applyFilters);
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', () => {
+            if (searchInput) searchInput.value = '';
+            if (courseFilter) courseFilter.value = '';
+            applyFilters();
         });
     }
 

@@ -180,6 +180,74 @@
       color: var(--text-muted);
       padding: 32px;
     }
+
+    /* Filter / Search Toolbar */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .filter-search {
+      position: relative;
+      flex: 1 1 280px;
+      min-width: 220px;
+      display: flex;
+      align-items: center;
+    }
+
+    .filter-search svg {
+      position: absolute;
+      left: 12px;
+      width: 16px;
+      height: 16px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .filter-search input {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid var(--surface-border);
+      color: var(--text-main);
+      padding: 10px 12px 10px 36px;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .filter-search input:focus {
+      border-color: var(--primary);
+    }
+
+    .filter-search input::placeholder {
+      color: var(--text-muted);
+    }
+
+    #courseFilter {
+      flex: 0 0 auto;
+      min-width: 170px;
+      padding: 10px 12px;
+    }
+
+    #clearFiltersBtn {
+      flex: 0 0 auto;
+      padding: 10px 16px;
+    }
+
+    .highlight {
+      background: rgba(231, 51, 138, 0.35);
+      color: #fff;
+      border-radius: 3px;
+      padding: 0 1px;
+    }
   </style>
 </head>
 
@@ -191,6 +259,21 @@
       <span id="adminEmail" style="color: var(--text-muted); font-size: 14px;">Loading...</span>
       <button id="logoutBtn" class="btn-logout">Sign Out</button>
     </div>
+  </div>
+
+  <!-- FILTER & SEARCH TOOLBAR -->
+  <div class="filter-bar">
+    <div class="filter-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="7" />
+        <path d="M21 21l-4-4" />
+      </svg>
+      <input type="text" id="searchInput" placeholder="Search by name, email, ID number, or role…" autocomplete="off">
+    </div>
+    <select id="courseFilter" class="role-select">
+      <option value="">All Courses</option>
+    </select>
+    <button type="button" id="clearFiltersBtn" class="btn-logout" style="display:none;">Clear Filters</button>
   </div>
 
   <!-- PENDING ACCESS REQUESTS -->
@@ -207,6 +290,7 @@
             <th>Full Name</th>
             <th>Email</th>
             <th>ID Number</th>
+            <th>Course</th>
             <th>Requested Role</th>
             <th>Actions</th>
           </tr>
@@ -226,6 +310,7 @@
           <th>Full Name</th>
           <th>Email</th>
           <th>ID Number</th>
+          <th>Course</th>
           <th>Assigned Role</th>
           <th>Status</th>
           <th>Actions</th>
@@ -233,6 +318,7 @@
       </thead>
       <tbody id="approvedTableBody"></tbody>
     </table>
+    <div id="noApprovedMsg" class="empty-state" style="display: none;">No users match your search or filter.</div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
