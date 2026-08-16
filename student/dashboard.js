@@ -109,6 +109,7 @@ function goto(page) {
     billing: 'Billing & History',
     grades: 'Grades & Evaluation',
     clearance: 'Online Clearance',
+    cor: 'Certificate of Registration',
     attendance: 'Attendance History',
     evaluation: 'Faculty Evaluation',
     profile: 'My Profile'
@@ -984,6 +985,188 @@ function showProspectusModal(data) {
   document.body.appendChild(modal);
 }
 
+// ── Certificate of Registration (COR) Page ───────────────────────────
+async function loadCor() {
+  const container = getEl('corDocContainer');
+  const printBtn = getEl('corPrintBtn');
+  if (printBtn) {
+    printBtn.removeEventListener('click', printCorPage);
+    printBtn.addEventListener('click', printCorPage);
+  }
+
+  try {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) return;
+
+    const profile = state.studentProfile;
+    if (!profile) throw new Error('Profile not found');
+
+    const { data: sem } = await supabaseClient
+      .from('student_semesters')
+      .select('*')
+      .eq('student_id', profile.id)
+      .eq('is_current', true)
+      .single();
+
+    const activeSchoolYear = sem?.school_year || '2025–2026';
+    const activeSemester = sem?.semester || '2nd Semester';
+
+    const { data: enrollments } = await supabaseClient
+      .from('enrollments')
+      .select('offering_id, course_offerings(*)')
+      .eq('student_id', profile.id)
+      .eq('status', 'enrolled');
+
+    const courses = (enrollments || [])
+      .map(e => e.course_offerings)
+      .filter(c => c && c.school_year === activeSchoolYear && c.semester === activeSemester);
+
+    const { data: miscFees } = await supabaseClient
+      .from('misc_fees')
+      .select('*')
+      .eq('school_year', activeSchoolYear)
+      .eq('semester', activeSemester);
+
+    const { data: billing } = await supabaseClient
+      .from('billing_summary')
+      .select('*')
+      .eq('student_id', profile.id)
+      .single();
+
+    const { data: sigs } = await supabaseClient
+      .from('cor_signatories')
+      .select('*')
+      .limit(1)
+      .single();
+
+    renderCorPage({ profile, user, activeSchoolYear, activeSemester, courses, miscFees, billing, sigs });
+  } catch (err) {
+    if (container) container.innerHTML = `<div class="cor-loading">Could not load your COR: ${escapeHtml(err.message)}</div>`;
+    console.error(err);
+  }
+}
+
+function renderCorPage(d) {
+  const { profile, user, activeSchoolYear, activeSemester, courses, miscFees, billing, sigs } = d;
+  const container = getEl('corDocContainer');
+  if (!container) return;
+
+  const totalUnits = courses.reduce((s, c) => s + Number(c.units || 0), 0);
+  const tuition = courses.reduce((s, c) => s + Number(c.fee || 0), 0);
+  const misc = (miscFees || []).reduce((s, f) => s + Number(f.amount || 0), 0);
+  const totalAssessment = tuition + misc;
+  const totalPaid = billing?.total_paid || 0;
+  const balance = billing?.balance ?? (totalAssessment - totalPaid);
+
+  let statusLabel = 'OFFICIALLY ENROLLED';
+  let statusColor = 'var(--green)';
+  if (courses.length === 0) { statusLabel = 'NOT ENROLLED'; statusColor = 'var(--red)'; }
+  else if (balance > 0) { statusLabel = 'PARTIAL PAYMENT'; statusColor = 'var(--amber)'; }
+
+  const rowsHtml = courses.length ? courses.map(c => `
+        <tr>
+          <td class="cor-font-mono">${escapeHtml(c.code || '—')}</td>
+          <td>${escapeHtml(c.title || '—')}</td>
+          <td class="cor-text-right">${Number(c.units || 0).toFixed(1)}</td>
+          <td>${escapeHtml(c.schedule || 'TBA')}</td>
+          <td>${escapeHtml(c.instructor_name || 'TBA')}</td>
+        </tr>`).join('') : `
+        <tr>
+          <td class="cor-font-mono">—</td>
+          <td>No enrolled subjects found for this term.</td>
+          <td class="cor-text-right">—</td>
+          <td>—</td>
+          <td>—</td>
+        </tr>`;
+
+  container.innerHTML = `
+    <div class="cor-doc">
+      <div class="cor-doc-head">
+        <div class="cor-brand">
+          <img src="logo.png" alt="Iligan Medical Center College Official Logo" class="cor-logo-img" onerror="this.style.display='none';">
+          <div class="cor-school-info">
+            <h1>Iligan Medical Center College</h1>
+            <p>San Miguel, Iligan City, Lanao del Norte, Philippines</p>
+            <div class="cor-registrar-label">Office of the College Registrar</div>
+          </div>
+        </div>
+        <div class="cor-doc-title">
+          <h2>Certificate of<br>Registration</h2>
+          <span>AY ${escapeHtml(activeSchoolYear)} · ${escapeHtml(activeSemester)}</span>
+        </div>
+      </div>
+
+      <div class="cor-info-grid">
+        <div class="cor-info-item"><span>Student No:</span> <strong>${escapeHtml(profile.student_no || '—')}</strong></div>
+        <div class="cor-info-item"><span>Program:</span> <strong>${escapeHtml(profile.program || '—')}</strong></div>
+        <div class="cor-info-item"><span>Student Name:</span> <strong>${escapeHtml(profile.full_name || '—')}</strong></div>
+        <div class="cor-info-item"><span>Year / Section:</span> <strong>${escapeHtml(`${profile.year_level || '—'}${profile.section ? ' — Section ' + profile.section : ''}`)}</strong></div>
+        <div class="cor-info-item"><span>Email:</span> <strong>${escapeHtml(profile.email || user.email || '—')}</strong></div>
+        <div class="cor-info-item"><span>Date Issued:</span> <strong>${escapeHtml(fmtDate(new Date().toISOString()))}</strong></div>
+      </div>
+
+      <div class="cor-section-heading">Enrolled Subjects &amp; Schedule</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Course Code</th>
+            <th>Course Title</th>
+            <th class="cor-text-right">Units</th>
+            <th>Schedule</th>
+            <th>Instructor</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+
+      <div class="cor-section-heading">Assessment &amp; Payment Summary</div>
+      <div class="cor-financial-grid">
+        <div class="cor-summary-card">
+          <div class="cor-summary-card-header">Tuition &amp; Fees Breakdown</div>
+          <div class="cor-summary-row"><span>Total Enrolled Units:</span> <strong>${totalUnits.toFixed(1)} Units</strong></div>
+          <div class="cor-summary-row"><span>Tuition Assessment:</span> <span>${peso(tuition)}</span></div>
+          <div class="cor-summary-row"><span>Miscellaneous Fees:</span> <span>${peso(misc)}</span></div>
+          <div class="cor-summary-row cor-total"><span>Total Assessment:</span> <span>${peso(totalAssessment)}</span></div>
+        </div>
+        <div class="cor-summary-card">
+          <div class="cor-summary-card-header">Account Standing</div>
+          <div class="cor-summary-row"><span>Total Amount Paid:</span> <span style="color:var(--green);font-weight:700;">${peso(totalPaid)}</span></div>
+          <div class="cor-summary-row"><span>Balance Remaining:</span> <span style="color:var(--red);font-weight:700;">${peso(balance)}</span></div>
+          <div class="cor-summary-row"><span>Status:</span> <span class="cor-watermark-stamp" style="border-color:${statusColor};color:${statusColor};">${statusLabel}</span></div>
+        </div>
+      </div>
+
+      <div class="cor-signatures">
+        <div class="cor-sig-block">
+          <div class="cor-sig-line">${escapeHtml(profile.full_name || '—')}</div>
+          <div class="cor-sig-title">Student Signature</div>
+        </div>
+        <div class="cor-sig-block">
+          <div class="cor-sig-line">${escapeHtml(sigs?.cashier_name || '—')}</div>
+          <div class="cor-sig-title">Cashier / Accounting Officer</div>
+        </div>
+        <div class="cor-sig-block">
+          <div class="cor-sig-line">${escapeHtml(sigs?.registrar_name || '—')}</div>
+          <div class="cor-sig-title">College Registrar</div>
+        </div>
+      </div>
+
+      <div class="cor-doc-footer">
+        <strong>Iligan Medical Center College</strong> · San Miguel, Iligan City, Lanao del Norte 9200<br>
+        Tel: (063) 221-4050 · Email: registrar@imcc.edu.ph · This document is electronically generated.
+      </div>
+    </div>`;
+}
+
+function printCorPage() {
+  document.body.classList.add('is-printing-cor');
+  window.print();
+}
+
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('is-printing-cor');
+});
+
 // ── Clearance Module ─────────────────────────────────────────────────
 const statusMeta = {
   cleared: { label: 'Cleared', badge: 'badge-green', dotColor: 'var(--green)', card: 'st-cleared' },
@@ -1594,6 +1777,7 @@ async function init() {
       loadBilling(),
       loadGrades(),
       loadClearance(),
+      loadCor(),
       loadAnnouncements(),
       loadDeadlines(),
       loadNotifications(),

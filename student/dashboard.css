@@ -1960,3 +1960,334 @@ tr:last-child td {
 .eval-form .field {
   margin-top: 8px;
 }
+
+/* ── COR Page ─────────────────────────────────────────────────────── */
+.cor-actionbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.cor-loading {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--ink-500);
+  font-size: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+@media (max-width: 640px) {
+  .cor-actionbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ── COR Document ─────────────────────────────────────────────────── */
+.cor-doc {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 28px;
+  border: 2px solid var(--pink-700);
+}
+
+.cor-doc .cor-doc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 3px solid var(--pink-700);
+  padding-bottom: 18px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cor-doc .cor-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.cor-doc .cor-logo-img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.cor-doc .cor-school-info h1 {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--pink-700);
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.cor-doc .cor-school-info p {
+  font-size: 12px;
+  color: var(--ink-500);
+  margin: 2px 0 0;
+}
+
+.cor-doc .cor-registrar-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--pink-500);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-top: 3px;
+}
+
+.cor-doc .cor-doc-title {
+  text-align: right;
+}
+
+.cor-doc .cor-doc-title h2 {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--pink-700);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.cor-doc .cor-doc-title span {
+  font-size: 12px;
+  color: var(--ink-500);
+  display: block;
+  margin-top: 2px;
+}
+
+.cor-doc .cor-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 22px;
+}
+
+.cor-doc .cor-info-item {
+  font-size: 13px;
+}
+
+.cor-doc .cor-info-item span {
+  font-weight: 500;
+  color: var(--ink-500);
+  display: inline-block;
+  width: 110px;
+}
+
+.cor-doc .cor-info-item strong {
+  color: var(--ink-900);
+  font-weight: 700;
+}
+
+.cor-doc .cor-section-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pink-700);
+  margin: 22px 0 12px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+
+.cor-doc table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 18px;
+  font-size: 13px;
+}
+
+.cor-doc th {
+  background: var(--pink-700);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 2px solid var(--maroon-800);
+}
+
+.cor-doc td {
+  padding: 11px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-900);
+  vertical-align: middle;
+}
+
+.cor-doc tr:nth-child(even) td {
+  background: var(--bg);
+}
+
+.cor-doc .cor-text-right {
+  text-align: right;
+}
+
+.cor-doc .cor-font-mono {
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+}
+
+.cor-doc .cor-financial-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.cor-doc .cor-summary-card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.cor-doc .cor-summary-card-header {
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--pink-700);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.cor-doc .cor-summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 6px 0;
+}
+
+.cor-doc .cor-summary-row.cor-total {
+  border-top: 2px solid var(--pink-700);
+  margin-top: 6px;
+  padding-top: 10px;
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--maroon-800);
+}
+
+.cor-doc .cor-signatures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-top: 44px;
+  padding-top: 18px;
+  text-align: center;
+}
+
+.cor-doc .cor-sig-block {
+  font-size: 12px;
+}
+
+.cor-doc .cor-sig-line {
+  border-top: 1px solid var(--ink-900);
+  margin-top: 38px;
+  padding-top: 6px;
+  font-weight: 700;
+  color: var(--ink-900);
+}
+
+.cor-doc .cor-sig-title {
+  color: var(--ink-500);
+  font-size: 11px;
+}
+
+.cor-doc .cor-watermark-stamp {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 12px;
+  border: 2px solid var(--green);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+.cor-doc .cor-doc-footer {
+  text-align: center;
+  margin-top: 28px;
+  padding-top: 14px;
+  border-top: 2px solid var(--pink-700);
+  font-size: 11px;
+  color: var(--ink-500);
+  line-height: 1.6;
+}
+
+.cor-doc .cor-doc-footer strong {
+  color: var(--pink-700);
+}
+
+@media (max-width: 640px) {
+  .cor-doc {
+    padding: 18px;
+  }
+
+  .cor-doc .cor-doc-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cor-doc .cor-doc-title {
+    text-align: left;
+  }
+
+  .cor-doc .cor-info-grid,
+  .cor-doc .cor-financial-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cor-doc .cor-signatures {
+    grid-template-columns: 1fr;
+    gap: 26px;
+  }
+}
+
+/* Print only the COR document */
+@media print {
+
+  body.is-printing-cor .sidebar,
+  body.is-printing-cor .banner,
+  body.is-printing-cor .topbar,
+  body.is-printing-cor .no-print {
+    display: none !important;
+  }
+
+  body.is-printing-cor .main,
+  body.is-printing-cor .content {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  body.is-printing-cor .content>*:not(#page-cor) {
+    display: none !important;
+  }
+
+  body.is-printing-cor .cor-doc {
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+}

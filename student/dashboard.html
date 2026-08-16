@@ -70,7 +70,7 @@
         </svg>
         Online Clearance
       </button>
-      <a href="cor.html" class="nav-item" style="text-decoration:none;">
+      <button class="nav-item" data-page="cor" id="corNavBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <path d="M14 2v6h6" />
@@ -78,7 +78,7 @@
           <path d="M16 17H8" />
         </svg>
         Certificate (COR)
-      </a>
+      </button>
 
       <div class="nav-label">Quick Links</div>
       <div id="ssoLinksNav"></div>
@@ -157,7 +157,7 @@
               </svg>
             </button>
             <div class="dropdown" id="userDropdown">
-              <a href="cor.html" class="ddi">📄 View &amp; Print COR</a>
+              <button class="ddi" type="button" data-goto="cor">📄 View &amp; Print COR</button>
               <button class="ddi" id="mfaSetupBtn">🔒 Setup Google MFA</button>
               <a href="#" class="ddi" onclick="event.preventDefault(); toggleChat(true);">Help &amp; Support</a>
               <button class="ddi" id="signOutBtn"
@@ -495,6 +495,21 @@
               <div class="legend-item"><span class="sdot" style="background:var(--red);"></span>Action Required</div>
             </div>
             <button class="btn-ghost" id="adminToggle">Toggle Admin View to simulate faculty approval</button>
+          </div>
+        </section>
+
+        <!-- ================= CERTIFICATE OF REGISTRATION ================= -->
+        <section class="page" id="page-cor">
+          <div class="cor-actionbar no-print">
+            <div class="cor-actionbar-text">
+              <div style="font-weight:700;font-size:14px;">Official Certificate of Registration</div>
+              <div style="font-size:12px;color:var(--ink-500);margin-top:2px;">Auto-generated from your current
+                enrollment and billing records</div>
+            </div>
+            <button type="button" class="btn btn-primary" id="corPrintBtn">🖨️ Print Certificate</button>
+          </div>
+          <div id="corDocContainer">
+            <div class="cor-loading">Loading your Certificate of Registration…</div>
           </div>
         </section>
 
