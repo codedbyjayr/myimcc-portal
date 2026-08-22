@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyIMCC — Registrar Portal</title>
+
+    <!-- Supabase client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../shared/supabase-config.js"></script>
+    <script src="registrar-dashboard.js"></script>
+
+    <link rel="stylesheet" href="registrar-dashboard.css">
+</head>
+
+<body>
+
+    <div class="app">
+
+        <!-- ============ SIDEBAR ============ -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo">MI</div>
+                <div>
+                    <div class="name">MyIMCC</div>
+                    <div class="tag">REGISTRAR PORTAL</div>
+                </div>
+            </div>
+
+            <div class="who">
+                <div class="avatar"></div>
+                <div class="meta">
+                    <div id="userName">Registrar</div>
+                    <div>Registrar's Office</div>
+                </div>
+            </div>
+
+            <div class="nav-label">Main Menu</div>
+            <button class="nav-item active" data-view="dashboard"><span class="ic">▦</span> Dashboard</button>
+            <button class="nav-item" data-view="prospectus"><span class="ic">📘</span> Prospectus</button>
+            <button class="nav-item" data-view="offers"><span class="ic">🎓</span> Student Offers</button>
+
+            <div class="nav-label">Account</div>
+            <button class="nav-item"><span class="ic">👤</span> My Profile</button>
+
+            <div style="margin-top:auto;font-size:11px;color:var(--ink-400);padding:14px 6px 0;">
+                MyIMCC Portal<br>Registrar Access
+            </div>
+        </aside>
+
+        <!-- ============ MAIN ============ -->
+        <main class="main">
+
+            <div class="topbar">
+                <h1 id="pageTitle">Dashboard</h1>
+                <div class="search">🔍 <span>Search portal…</span></div>
+            </div>
+
+            <!-- -------- DASHBOARD VIEW -------- -->
+            <section id="view-dashboard">
+                <div class="hero">
+                    <div>
+                        <h2>Welcome, Registrar 👋</h2>
+                        <p>Manage the prospectus, subject offerings, and student loads.</p>
+                    </div>
+                    <button onclick="goTo('offers')">Manage Offers</button>
+                </div>
+
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="head">Total Students <span class="ic-pill">👤</span></div>
+                        <div class="num" id="statStudents">–</div>
+                        <div class="sub">Across all majors</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="head">Subjects in Prospectus <span class="ic-pill">📘</span></div>
+                        <div class="num" id="statSubjects">–</div>
+                        <div class="sub">IT major + GE</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="head">Pending Offers <span class="ic-pill">⏱</span></div>
+                        <div class="num" id="statPending">–</div>
+                        <div class="sub">Awaiting confirmation</div>
+                    </div>
+                </div>
+
+                <div class="quick">
+                    <div class="quick-card" onclick="goTo('prospectus')">
+                        <div class="ic-pill">📘</div>
+                        <b>View Prospectus</b>
+                        <span>Browse all subjects</span>
+                    </div>
+                    <div class="quick-card" onclick="goTo('prospectus');setCategoryFilter('IT')">
+                        <div class="ic-pill">💻</div>
+                        <b>IT Major Subjects</b>
+                        <span>Filter IT curriculum</span>
+                    </div>
+                    <div class="quick-card" onclick="goTo('prospectus');setCategoryFilter('GE')">
+                        <div class="ic-pill">📗</div>
+                        <b>GE Subjects</b>
+                        <span>Filter Gen Ed subjects</span>
+                    </div>
+                    <div class="quick-card" onclick="goTo('offers')">
+                        <div class="ic-pill">➕</div>
+                        <b>Offer a Subject</b>
+                        <span>Assign to a student</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- -------- PROSPECTUS VIEW -------- -->
+            <section id="view-prospectus" class="hidden">
+                <div class="panel">
+                    <div class="panel-head">
+                        <h3>Prospectus</h3>
+                        <div class="filters" id="prospectusFilters">
+                            <button class="chip active" data-cat="ALL">All</button>
+                            <button class="chip" data-cat="IT">IT Major</button>
+                            <button class="chip" data-cat="GE">GE</button>
+                        </div>
+                        <input type="text" id="prospectusSearch" placeholder="Search code or title…">
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Title</th>
+                                <th>Units</th>
+                                <th>Category</th>
+                                <th>Year / Sem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="prospectusBody"></tbody>
+                    </table>
+                    <div id="prospectusEmpty" class="empty hidden">No subjects match this filter.</div>
+                </div>
+            </section>
+
+            <!-- -------- STUDENT OFFERS VIEW -------- -->
+            <section id="view-offers" class="hidden">
+                <div class="panel" style="margin-bottom:18px;">
+                    <div class="panel-head">
+                        <h3>Students</h3>
+                        <input type="text" id="studentSearch" placeholder="Search student name or ID…">
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Student No.</th>
+                                <th>Name</th>
+                                <th>Major</th>
+                                <th>Year</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="panel" id="studentDetailPanel" style="display:none;">
+                    <div class="panel-head">
+                        <h3 id="studentDetailName">Student</h3>
+                        <button class="btn btn-primary" id="btnAddOffer">+ Offer Subject</button>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Title</th>
+                                <th>Units</th>
+                                <th>Category</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="offersBody"></tbody>
+                    </table>
+                    <div id="offersEmpty" class="empty hidden">No subjects offered yet.</div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- ============ ADD OFFER MODAL ============ -->
+    <div class="overlay hidden" id="offerModal">
+        <div class="modal">
+            <h3>Offer a Subject</h3>
+            <p class="sub" id="offerModalSub">Assign a prospectus subject to this student.</p>
+
+            <div class="field">
+                <label>Category</label>
+                <select id="offerCategory">
+                    <option value="ALL">All</option>
+                    <option value="IT">IT Major</option>
+                    <option value="GE">GE</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Subject</label>
+                <select id="offerSubject"></select>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-ghost" onclick="closeOfferModal()">Cancel</button>
+                <button class="btn btn-primary" id="btnConfirmOffer">Confirm Offer</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* =========================================================================
+           CONFIG — point these at your real Supabase project + table/column names.
+           Everything else in this file reads from these constants, so if your
+           schema differs, this is the only section you should need to edit.
+           ========================================================================= */
+        const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co";
+        const SUPABASE_ANON_KEY = "YOUR-ANON-KEY";
+
+        const TABLES = {
+            students: "students",     // id, student_no, full_name, major, year_level
+            subjects: "subjects",     // id, code, title, units, category ('IT' | 'GE'), year_level, semester
+            offerings: "offerings"     // id, student_id (fk), subject_id (fk), status ('offered'|'enrolled'|'removed')
+        };
+
+        const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        /* =========================================================================
+           STATE
+           ========================================================================= */
+        let allSubjects = [];
+        let allStudents = [];
+        let allOfferings = [];
+        let prospectusCategory = "ALL";
+        let selectedStudent = null;
+
+        /* =========================================================================
+           NAVIGATION
+           ========================================================================= */
+        function goTo(view) {
+            document.querySelectorAll("section[id^='view-']").forEach(s => s.classList.add("hidden"));
+            document.getElementById("view-" + view).classList.remove("hidden");
+            document.querySelectorAll(".nav-item[data-view]").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+            document.getElementById("pageTitle").textContent =
+                view === "dashboard" ? "Dashboard" : view === "prospectus" ? "Prospectus" : "Student Offers";
+        }
+        document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
+            btn.addEventListener("click", () => goTo(btn.dataset.view));
+        });
+
+        function setCategoryFilter(cat) {
+            prospectusCategory = cat;
+            document.querySelectorAll("#prospectusFilters .chip").forEach(c => {
+                c.classList.toggle("active", c.dataset.cat === cat);
+            });
+            renderProspectus();
+        }
+        document.querySelectorAll("#prospectusFilters .chip").forEach(c => {
+            c.addEventListener("click", () => setCategoryFilter(c.dataset.cat));
+        });
+        document.getElementById("prospectusSearch").addEventListener("input", renderProspectus);
+        document.getElementById("studentSearch").addEventListener("input", renderStudents);
+
+        /* =========================================================================
+           TOAST
+           ========================================================================= */
+        function toast(msg, isErr = false) {
+            const t = document.createElement("div");
+            t.className = "toast" + (isErr ? " err" : "");
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 2800);
+        }
+
+        /* =========================================================================
+           DATA LOADING
+           ========================================================================= */
+        async function loadAll() {
+            await Promise.all([loadStudents(), loadSubjects(), loadOfferings()]);
+            renderDashboardStats();
+            renderProspectus();
+            renderStudents();
+        }
+
+        async function loadStudents() {
+            const { data, error } = await sb.from(TABLES.students).select("*").order("full_name");
+            if (error) { toast("Failed to load students: " + error.message, true); return; }
+            allStudents = data || [];
+        }
+
+        async function loadSubjects() {
+            const { data, error } = await sb.from(TABLES.subjects).select("*").order("code");
+            if (error) { toast("Failed to load prospectus: " + error.message, true); return; }
+            allSubjects = data || [];
+        }
+
+        async function loadOfferings() {
+            const { data, error } = await sb.from(TABLES.offerings).select("*");
+            if (error) { toast("Failed to load offerings: " + error.message, true); return; }
+            allOfferings = data || [];
+        }
+
+        /* =========================================================================
+           DASHBOARD
+           ========================================================================= */
+        function renderDashboardStats() {
+            document.getElementById("statStudents").textContent = allStudents.length;
+            document.getElementById("statSubjects").textContent = allSubjects.length;
+            document.getElementById("statPending").textContent =
+                allOfferings.filter(o => o.status === "offered").length;
+        }
+
+        /* =========================================================================
+           PROSPECTUS
+           ========================================================================= */
+        function categoryBadge(cat) {
+            const c = (cat || "").toUpperCase();
+            const cls = c === "IT" ? "it" : c === "GE" ? "ge" : "other";
+            return `<span class="badge ${cls}">${cat || "—"}</span>`;
+        }
+
+        function renderProspectus() {
+            const q = document.getElementById("prospectusSearch").value.trim().toLowerCase();
+            let rows = allSubjects.filter(s => {
+                const matchCat = prospectusCategory === "ALL" || (s.category || "").toUpperCase() === prospectusCategory;
+                const matchQ = !q || (s.code || "").toLowerCase().includes(q) || (s.title || "").toLowerCase().includes(q);
+                return matchCat && matchQ;
+            });
+
+            const body = document.getElementById("prospectusBody");
+            body.innerHTML = rows.map(s => `
+    <tr>
+      <td><b>${s.code || ""}</b></td>
+      <td>${s.title || ""}</td>
+      <td>${s.units ?? ""}</td>
+      <td>${categoryBadge(s.category)}</td>
+      <td>${s.year_level ? "Yr " + s.year_level : ""}${s.semester ? " · Sem " + s.semester : ""}</td>
+    </tr>
+  `).join("");
+
+            document.getElementById("prospectusEmpty").classList.toggle("hidden", rows.length > 0);
+        }
+
+        /* =========================================================================
+           STUDENTS LIST
+           ========================================================================= */
+        function renderStudents() {
+            const q = document.getElementById("studentSearch").value.trim().toLowerCase();
+            let rows = allStudents.filter(s => {
+                if (!q) return true;
+                return (s.full_name || "").toLowerCase().includes(q) || (String(s.student_no) || "").toLowerCase().includes(q);
+            });
+
+            document.getElementById("studentBody").innerHTML = rows.map(s => `
+    <tr class="student-row" onclick="selectStudent('${s.id}')">
+      <td>${s.student_no || ""}</td>
+      <td><b>${s.full_name || ""}</b></td>
+      <td>${s.major || ""}</td>
+      <td>${s.year_level || ""}</td>
+    </tr>
+  `).join("");
+        }
+
+        function selectStudent(id) {
+            selectedStudent = allStudents.find(s => String(s.id) === String(id));
+            if (!selectedStudent) return;
+            document.getElementById("studentDetailPanel").style.display = "block";
+            document.getElementById("studentDetailName").textContent =
+                selectedStudent.full_name + " — " + (selectedStudent.major || "");
+            renderStudentOffers();
+        }
+
+        function renderStudentOffers() {
+            if (!selectedStudent) return;
+            const rows = allOfferings
+                .filter(o => String(o.student_id) === String(selectedStudent.id) && o.status !== "removed")
+                .map(o => ({ ...o, subject: allSubjects.find(s => String(s.id) === String(o.subject_id)) }))
+                .filter(o => o.subject);
+
+            const body = document.getElementById("offersBody");
+            body.innerHTML = rows.map(o => `
+    <tr>
+      <td><b>${o.subject.code}</b></td>
+      <td>${o.subject.title}</td>
+      <td>${o.subject.units ?? ""}</td>
+      <td>${categoryBadge(o.subject.category)}</td>
+      <td><span class="badge ${o.status === 'enrolled' ? 'enrolled' : 'offered'}">${o.status}</span></td>
+      <td><button class="btn btn-danger" onclick="removeOffer('${o.id}')">Remove</button></td>
+    </tr>
+  `).join("");
+
+            document.getElementById("offersEmpty").classList.toggle("hidden", rows.length > 0);
+        }
+
+        /* =========================================================================
+           ADD OFFER
+           ========================================================================= */
+        document.getElementById("btnAddOffer").addEventListener("click", openOfferModal);
+        document.getElementById("offerCategory").addEventListener("change", populateOfferSubjects);
+
+        function openOfferModal() {
+            if (!selectedStudent) return;
+            document.getElementById("offerModalSub").textContent =
+                "Assign a prospectus subject to " + selectedStudent.full_name + ".";
+            document.getElementById("offerCategory").value = "ALL";
+            populateOfferSubjects();
+            document.getElementById("offerModal").classList.remove("hidden");
+        }
+        function closeOfferModal() {
+            document.getElementById("offerModal").classList.add("hidden");
+        }
+
+        function populateOfferSubjects() {
+            const cat = document.getElementById("offerCategory").value;
+            const already = new Set(
+                allOfferings.filter(o => String(o.student_id) === String(selectedStudent.id) && o.status !== "removed")
+                    .map(o => String(o.subject_id))
+            );
+            const options = allSubjects
+                .filter(s => (cat === "ALL" || (s.category || "").toUpperCase() === cat) && !already.has(String(s.id)))
+                .map(s => `<option value="${s.id}">${s.code} — ${s.title}</option>`)
+                .join("");
+            document.getElementById("offerSubject").innerHTML = options || `<option value="">No subjects available</option>`;
+        }
+
+        document.getElementById("btnConfirmOffer").addEventListener("click", async () => {
+            const subjectId = document.getElementById("offerSubject").value;
+            if (!subjectId || !selectedStudent) return;
+
+            const { error } = await sb.from(TABLES.offerings).insert({
+                student_id: selectedStudent.id,
+                subject_id: subjectId,
+                status: "offered"
+            });
+
+            if (error) { toast("Could not offer subject: " + error.message, true); return; }
+
+            toast("Subject offered.");
+            closeOfferModal();
+            await loadOfferings();
+            renderStudentOffers();
+            renderDashboardStats();
+        });
+
+        /* =========================================================================
+           REMOVE OFFER — soft-remove (status = 'removed') so history is kept.
+           Swap for a hard delete if you'd rather not keep removed rows:
+             await sb.from(TABLES.offerings).delete().eq("id", offeringId);
+           ========================================================================= */
+        async function removeOffer(offeringId) {
+            if (!confirm("Remove this subject from the student's load?")) return;
+
+            const { error } = await sb.from(TABLES.offerings)
+                .update({ status: "removed" })
+                .eq("id", offeringId);
+
+            if (error) { toast("Could not remove subject: " + error.message, true); return; }
+
+            toast("Subject removed.");
+            await loadOfferings();
+            renderStudentOffers();
+            renderDashboardStats();
+        }
+
+        /* =========================================================================
+           INIT
+           ========================================================================= */
+        loadAll();
+    </script>
+</body>
+
+</html>

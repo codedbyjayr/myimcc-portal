@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyIMCC — Dean Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="sharedstyle.css">
+</head>
+
+<body data-theme="light">
+  <div class="app">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">MI</div>
+        <div>
+          <div class="brand-name">MyIMCC</div>
+          <div class="brand-sub">DEAN PORTAL</div>
+        </div>
+      </div>
+      <div class="user-chip">
+        <div class="avatar" id="sidebarAvatar"></div>
+        <div>
+          <div class="name" id="sidebarName">Loading...</div>
+          <div class="id" id="sidebarDept">—</div>
+        </div>
+      </div>
+
+      <div class="nav-label">Main Menu</div>
+      <button class="nav-item active" data-page="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="9" rx="1.5" />
+          <rect x="14" y="3" width="7" height="5" rx="1.5" />
+          <rect x="14" y="12" width="7" height="9" rx="1.5" />
+          <rect x="3" y="16" width="7" height="5" rx="1.5" />
+        </svg>
+        Dashboard
+      </button>
+      <button class="nav-item" data-page="classes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z" />
+          <path d="M6 12v5c0 1.5 3 3 6 3s6-1.5 6-3v-5" />
+        </svg>
+        My Classes
+      </button>
+      <button class="nav-item" data-page="faculty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="9" cy="8" r="3.2" />
+          <path d="M3 20a6 6 0 0112 0" />
+          <circle cx="18" cy="8" r="2.6" />
+          <path d="M15.5 13.2A5 5 0 0121 20" />
+        </svg>
+        Faculty &amp; Schedule
+      </button>
+      <button class="nav-item" data-page="financial">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2v20M17 6.5c0-1.9-2-3.5-5-3.5s-5 1.6-5 3.5 2 3 5 3 5 1.1 5 3.5-2 3.5-5 3.5-5-1.6-5-3.5" />
+        </svg>
+        Financial Oversight
+      </button>
+      <button class="nav-item" data-page="compliance">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z" />
+          <path d="M9 12l2 2 4-4" />
+        </svg>
+        Student Compliance
+      </button>
+
+      <div class="nav-label">Quick Links</div>
+      <div id="ssoLinksNav"></div>
+
+      <div class="nav-label">Account</div>
+      <button class="nav-item" data-page="profile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="8" r="5" />
+          <path d="M20 21a8 8 0 00-16 0" />
+        </svg>
+        My Profile
+      </button>
+
+      <div class="sidebar-foot">
+        MyIMCC Portal<br>Dean Access
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div class="main">
+      <div class="topbar">
+        <div class="page-title" id="pageTitle">Dashboard</div>
+        <div class="topbar-right">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4-4" />
+            </svg>
+            Search portal...
+          </div>
+          <button class="theme-toggle" id="themeToggle">
+            <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z" />
+            </svg>
+            <span id="themeLabel">Dark</span>
+          </button>
+          <div class="user-menu-wrap">
+            <button class="user-btn" id="userBtn">
+              <div class="avatar" id="topAvatar" style="width:30px;height:30px;font-size:11px;"></div>
+              <span id="topName">Dean</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+            <div class="dropdown" id="userDropdown">
+              <button class="ddi" type="button" data-goto="profile">👤 My Profile</button>
+              <button class="ddi" id="signOutBtn"
+                style="color:var(--red);border-top:1px solid var(--line);margin-top:4px;padding-top:10px;">Sign
+                Out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+
+        <!-- ================= DASHBOARD (Strategic Analytics) ================= -->
+        <section class="page active" id="page-dashboard">
+          <div class="hero">
+            <div>
+              <h2>Welcome! 👋</h2>
+              <p>Enrollment, academic performance, and department health at a glance.</p>
+            </div>
+            <div class="hero-actions">
+              <button class="btn btn-solid-w" data-goto="faculty">Assign Faculty</button>
+            </div>
+          </div>
+
+          <div class="grid-4" id="enrollmentStats"></div>
+
+          <div class="grid-2">
+            <div class="card card-pad">
+              <div class="card-head">
+                <div>
+                  <h3>Enrollment by Program</h3>
+                  <div class="sub">Approved students per program</div>
+                </div>
+              </div>
+              <div id="programBars"></div>
+            </div>
+            <div class="card card-pad">
+              <div class="card-head">
+                <div>
+                  <h3>Semester Enrollment Trend</h3>
+                  <div class="sub">Distinct enrolled students per term</div>
+                </div>
+              </div>
+              <div id="semesterTrendBars"></div>
+            </div>
+          </div>
+
+          <div class="grid-2" style="margin-top:20px;">
+            <div class="card card-pad">
+              <div class="card-head">
+                <div>
+                  <h3>Academic Performance</h3>
+                  <div class="sub">Passing vs. failing, all recorded finals</div>
+                </div>
+              </div>
+              <div id="performanceStats"></div>
+              <div id="passFailBars" style="margin-top:14px;"></div>
+            </div>
+            <div class="card card-pad">
+              <div class="card-head">
+                <div>
+                  <h3>Courses Flagged for High Failure Rate</h3>
+                  <div class="sub">≥ 30% of recorded finals marked Failed</div>
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Course</th>
+                    <th>Program</th>
+                    <th>Finals</th>
+                    <th>Rate</th>
+                  </tr>
+                </thead>
+                <tbody id="flaggedCoursesBody"></tbody>
+              </table>
+              <div id="noFlaggedMsg" class="empty-state" style="display:none;">No courses currently exceed the
+                failure-rate threshold.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= MY CLASSES (grade entry for courses the dean personally handles) ================= -->
+        <section class="page" id="page-classes">
+          <div class="notice" id="myClassesNotice" style="display:none;">You aren't currently assigned as the instructor
+            for any course offering, so there's nothing to grade here yet. Assign yourself a course under Faculty &amp;
+            Schedule to use this page.</div>
+          <div class="grid-2">
+            <div class="card card-pad">
+              <div class="card-head">
+                <h3>My Classes</h3>
+              </div>
+              <div id="myCourseList"></div>
+              <div id="noMyCoursesMsg" class="empty-state" style="display:none;">No course offerings are assigned to you
+                yet.</div>
+            </div>
+            <div class="card card-pad">
+              <div class="card-head">
+                <div>
+                  <h3 id="selectedMyCourseTitle">Select a class</h3>
+                  <div class="sub" id="selectedMyCourseSub"></div>
+                </div>
+                <button class="btn btn-primary" id="saveMyGradesBtn" disabled>Save Grades</button>
+              </div>
+              <div class="notice">Enter midterm and final scores on a 0–100 scale. The equivalent grade and remark are
+                computed automatically when you save.</div>
+              <div style="overflow-x:auto;">
+                <table id="myRosterTable" style="display:none;">
+                  <thead>
+                    <tr>
+                      <th>Student</th>
+                      <th>Student No.</th>
+                      <th>Midterm</th>
+                      <th>Final</th>
+                      <th>Equivalent</th>
+                      <th>Remark</th>
+                    </tr>
+                  </thead>
+                  <tbody id="myRosterBody"></tbody>
+                </table>
+              </div>
+              <div id="noMyRosterMsg" class="empty-state">Pick a class from the left to view its roster.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= FACULTY & SCHEDULE ================= -->
+        <section class="page" id="page-faculty">
+          <div class="card card-pad">
+            <div class="card-head">
+              <div>
+                <h3>Teaching Workloads</h3>
+                <div class="sub">Total credit units and sections per faculty member, selected term</div>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Faculty</th>
+                  <th>Sections</th>
+                  <th>Total Units</th>
+                  <th>Load</th>
+                </tr>
+              </thead>
+              <tbody id="workloadBody"></tbody>
+            </table>
+            <div id="noWorkloadMsg" class="empty-state" style="display:none;">No course offerings found for the current
+              term.</div>
+          </div>
+
+          <div class="card card-pad" style="margin-top:20px;">
+            <div class="card-head">
+              <div>
+                <h3>Assign Faculty to Courses</h3>
+                <div class="sub">Reassign the instructor for any course offering — saves instantly</div>
+              </div>
+              <select id="assignSemesterFilter" class="field-input" style="width:auto;"></select>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Course Title</th>
+                  <th>Program</th>
+                  <th>Schedule</th>
+                  <th>Assigned Faculty</th>
+                </tr>
+              </thead>
+              <tbody id="assignBody"></tbody>
+            </table>
+            <div id="noOfferingsMsg" class="empty-state" style="display:none;">No course offerings found for this term.
+            </div>
+          </div>
+
+          <div class="card card-pad" style="margin-top:20px;">
+            <div class="card-head">
+              <div>
+                <h3>Timetable Conflict Checker</h3>
+                <div class="sub">Same faculty or room with overlapping schedules, selected term</div>
+              </div>
+            </div>
+            <div id="conflictsList"></div>
+            <div id="noConflictsMsg" class="empty-state" style="display:none;">No scheduling conflicts detected for this
+              term.</div>
+          </div>
+
+          <div class="card card-pad" style="margin-top:20px;">
+            <div class="card-head">
+              <div>
+                <h3>Faculty Performance Log</h3>
+                <div class="sub">Evaluations, publications, and tenure-track notes</div>
+              </div>
+              <button class="btn btn-primary" data-modal="facultyNote">+ Add Note</button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Faculty</th>
+                  <th>Type</th>
+                  <th>Note</th>
+                  <th>Logged</th>
+                </tr>
+              </thead>
+              <tbody id="notesBody"></tbody>
+            </table>
+            <div id="noNotesMsg" class="empty-state" style="display:none;">No performance notes logged yet.</div>
+          </div>
+        </section>
+
+        <!-- ================= FINANCIAL OVERSIGHT ================= -->
+        <section class="page" id="page-financial">
+          <div class="card card-pad">
+            <div class="card-head">
+              <div>
+                <h3>Department Budgets</h3>
+                <div class="sub">Utilization tracker, dean-maintained</div>
+              </div>
+              <button class="btn btn-primary" data-modal="budget">+ Add Budget Entry</button>
+            </div>
+            <div class="notice" id="budgetNotice" style="display:none;"></div>
+            <div id="budgetBars"></div>
+            <div id="noBudgetMsg" class="empty-state" style="display:none;">No budget entries yet. Add one to start
+              tracking utilization.</div>
+          </div>
+
+          <div class="card card-pad" style="margin-top:20px;">
+            <div class="card-head">
+              <div>
+                <h3>Grant Funding Status</h3>
+                <div class="sub">Equipment acquisition &amp; research grants</div>
+              </div>
+              <button class="btn btn-primary" data-modal="grant">+ Add Grant</button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Grant</th>
+                  <th>Department</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Source</th>
+                </tr>
+              </thead>
+              <tbody id="grantsBody"></tbody>
+            </table>
+            <div id="noGrantsMsg" class="empty-state" style="display:none;">No grants logged yet.</div>
+          </div>
+        </section>
+
+        <!-- ================= STUDENT COMPLIANCE ================= -->
+        <section class="page" id="page-compliance">
+          <div class="card card-pad">
+            <div class="card-head">
+              <div>
+                <h3>Graduation Readiness</h3>
+                <div class="sub">Final-year students below the expected earned-units threshold</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label style="font-size:12px;color:var(--ink-500);">Required units:</label>
+                <input type="number" id="requiredUnitsInput" class="field-input" value="144" style="width:80px;">
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Program</th>
+                  <th>Units Earned</th>
+                  <th>Progress</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="gradReadinessBody"></tbody>
+            </table>
+            <div id="noSeniorsMsg" class="empty-state" style="display:none;">No final-year students found.</div>
+          </div>
+
+          <div class="card card-pad" style="margin-top:20px;">
+            <div class="card-head">
+              <div>
+                <h3>Accreditation Compliance Checklist</h3>
+                <div class="sub">Instructional hours, syllabus compliance, learning outcomes</div>
+              </div>
+              <button class="btn btn-primary" data-modal="accreditation">+ Add Requirement</button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Requirement</th>
+                  <th>Department</th>
+                  <th>Status</th>
+                  <th>Evidence</th>
+                </tr>
+              </thead>
+              <tbody id="accreditationBody"></tbody>
+            </table>
+            <div id="noAccreditationMsg" class="empty-state" style="display:none;">No accreditation items tracked yet.
+            </div>
+          </div>
+
+          <div class="card card-pad" style="margin-top:20px;">
+            <div class="card-head">
+              <div>
+                <h3>Appeals &amp; Approvals</h3>
+                <div class="sub">Grade change requests, prerequisite waivers, credit transfers</div>
+              </div>
+              <button class="btn btn-primary" data-modal="appeal">+ Log New Appeal</button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Type</th>
+                  <th>Course</th>
+                  <th>Reason</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="appealsBody"></tbody>
+            </table>
+            <div id="noAppealsMsg" class="empty-state" style="display:none;">No appeals on file.</div>
+          </div>
+        </section>
+
+        <!-- ================= PROFILE ================= -->
+        <section class="page" id="page-profile">
+          <div class="card card-pad" style="max-width:520px;">
+            <div class="card-head">
+              <h3>My Profile</h3>
+            </div>
+            <div id="profileFields"></div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- GENERIC MODAL -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-box">
+      <h3 id="modalTitle">Add Entry</h3>
+      <form id="modalForm"></form>
+      <div class="modal-actions">
+        <button type="button" class="btn-outline btn" id="modalCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="modalSaveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/env-config.js"></script>
+  <script src="../shared/supabase-config.js"></script>
+  <script src="dean-dashboard.js"></script>
+</body>
+
+</html>
