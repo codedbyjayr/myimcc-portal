@@ -270,10 +270,13 @@
           <div class="card card-pad" style="margin-top:20px;">
             <div class="card-head">
               <div>
-                <h3>Assign Faculty to Courses</h3>
-                <div class="sub">Reassign the instructor for any course offering — saves instantly</div>
+                <h3>Course Offerings &amp; Faculty Assignment</h3>
+                <div class="sub">Manage subjects and assign instructors — saves instantly</div>
               </div>
-              <select id="assignSemesterFilter" class="field-input" style="width:auto;"></select>
+              <div style="display:flex;gap:10px;align-items:center;">
+                <select id="assignSemesterFilter" class="field-input" style="width:auto;"></select>
+                <button class="btn btn-primary" data-modal="courseOffering">+ Add Subject Offering</button>
+              </div>
             </div>
             <table>
               <thead>

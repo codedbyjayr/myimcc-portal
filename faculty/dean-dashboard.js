@@ -1011,6 +1011,45 @@ document.addEventListener('DOMContentLoaded', async () => {
             ],
             onSaved: loadAccreditation,
         },
+        courseOffering: {
+            title: 'Add Subject / Course Offering',
+            table: 'course_offerings',
+            fields: [
+                { name: 'code', label: 'Subject Code', type: 'text', required: true, placeholder: 'e.g. CC 101 or IT 101' },
+                { name: 'title', label: 'Course Title', type: 'text', required: true, placeholder: 'e.g. Introduction to Computing' },
+                { name: 'program', label: 'Program', type: 'select', required: true, options: [{ value: 'BSIT', label: 'BSIT' }, { value: 'BSCS', label: 'BSCS' }, { value: 'BSIS', label: 'BSIS' }] },
+                { name: 'year', label: 'Year Level', type: 'select', required: true, options: [{ value: '1', label: '1st Year' }, { value: '2', label: '2nd Year' }, { value: '3', label: '3rd Year' }, { value: '4', label: '4th Year' }] },
+                { name: 'semester', label: 'Semester', type: 'select', required: true, options: [{ value: '1st Semester', label: '1st Semester' }, { value: '2nd Semester', label: '2nd Semester' }, { value: 'Summer', label: 'Summer' }] },
+                { name: 'school_year', label: 'School Year', type: 'text', required: true, placeholder: '2026–2027', default: '2026–2027' },
+                { name: 'units', label: 'Total Units', type: 'number', required: true, placeholder: '3.0', default: '3.0' },
+                { name: 'schedule', label: 'Schedule', type: 'text', required: false, placeholder: 'e.g. MWF 08:00–09:30' },
+                { name: 'instructor_id', label: 'Assigned Faculty', type: 'select', required: false, optionsFn: () => [{ value: '', label: '— Unassigned —' }, ...state.facultyList.map(f => ({ value: f.id, label: f.full_name }))] },
+            ],
+            transform: (values) => {
+                const faculty = state.facultyList.find(f => f.id === values.instructor_id);
+                return {
+                    code: values.code,
+                    title: values.title,
+                    program: values.program,
+                    year: Number(values.year) || 1,
+                    semester: values.semester,
+                    school_year: values.school_year || '2026–2027',
+                    units: Number(values.units) || 3.0,
+                    schedule: values.schedule || null,
+                    instructor_id: values.instructor_id || null,
+                    instructor_name: faculty ? faculty.full_name : null,
+                };
+            },
+            onSaved: async () => {
+                const { data: offerings } = await supabaseClient.from('course_offerings').select('*');
+                state.offerings = offerings || [];
+                populateSemesterFilters();
+                renderWorkloads();
+                renderAssignments();
+                renderConflicts();
+                showToast('Subject offering created successfully.');
+            },
+        },
         appeal: {
             title: 'Log New Appeal',
             table: 'appeals',
