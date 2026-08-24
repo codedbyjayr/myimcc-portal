@@ -1,8 +1,10 @@
 // ── Universal Portal Map ──────────────────────────────────────────────
 const ROLE_DASHBOARDS = {
-    admin: '../admin/dashboard.html',
+    admin:   '../admin/admin-dashboard.html',
+    teacher: '../faculty/teacher-dashboard.html',
     faculty: '../faculty/teacher-dashboard.html',
-    staff: '../staff/staff-dashboard.html',
+    dean:    '../faculty/dean-dashboard.html',
+    staff:   '../staff/staff-dashboard.html',
     student: '../student/dashboard.html'
 };
 
