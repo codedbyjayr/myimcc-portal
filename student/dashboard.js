@@ -824,6 +824,11 @@ function renderGrades() {
     ? `<span style="color:var(--blue);font-weight:700;">${val}</span>`
     : `<span style="font-style:italic;color:var(--ink-300);">—</span>`;
 
+  if (!state.grades || state.grades.length === 0) {
+    target.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--ink-400);padding:36px;font-size:13px;">No enrolled course grades recorded for this term yet. Once faculty encodes your grades, they will appear here.</td></tr>`;
+    return;
+  }
+
   target.innerHTML = state.grades.map(g => `
     <tr>
       <td class="or-num">${escapeHtml(g.code)}</td>
@@ -842,12 +847,18 @@ function renderGrades() {
 
 function renderGradesHeader() {
   const d = state.dashboard;
-  if (!d) return;
+  const profile = state.studentProfile;
+  const program = d?.student?.program || profile?.program || 'BSIT';
+  const yearLevel = d?.student?.yearLevel || profile?.year_level || '';
+  const section = d?.student?.section || profile?.section || '';
+  const semester = d?.student?.semester || '1st Semester';
+  const schoolYear = d?.student?.schoolYear || '2026-2027';
+
   const setTitle = getEl('gradesTitle');
   if (setTitle) {
-    setTitle.innerHTML = `Grades — ${d.student.semester}, ${d.student.schoolYear}<br><span style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">${escapeHtml(d.student.program || '—')} ${d.student.yearLevel || ''}${d.student.section ? ' · Section ' + escapeHtml(d.student.section) : ''}</span>`;
+    setTitle.innerHTML = `Grades — ${semester}, ${schoolYear}<br><span style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">${escapeHtml(program)} ${escapeHtml(yearLevel)}${section ? ' · Section ' + escapeHtml(section) : ''}</span>`;
   }
-  setText('gradesTermPill', `${d.student.semester} ${d.student.schoolYear}`);
+  setText('gradesTermPill', `${semester} ${schoolYear}`);
 
   const aiEl = getEl('aiInsightText');
   if (aiEl) {
@@ -874,123 +885,264 @@ function setupProspectusButton() {
     prospectusBtn.removeEventListener('click', viewProspectus);
     prospectusBtn.addEventListener('click', viewProspectus);
   }
+
+  const closeBtn = getEl('prospectusClose');
+  const overlay = getEl('prospectusOverlay');
+  const modal = getEl('prospectusModal');
+
+  const closeModal = () => {
+    if (modal) modal.style.display = 'none';
+    const dyn = document.querySelector('.prospectus-modal-dynamic');
+    if (dyn) dyn.remove();
+  };
+
+  closeBtn?.removeEventListener('click', closeModal);
+  closeBtn?.addEventListener('click', closeModal);
+  overlay?.removeEventListener('click', closeModal);
+  overlay?.addEventListener('click', closeModal);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal();
+  });
 }
 
 function getOrdinalSuffix(n) {
+  const num = Number(n) || 1;
   const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  const v = num % 100;
+  return num + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
 async function viewProspectus() {
   const profile = state.studentProfile;
   if (!profile) return;
+
   try {
-    const { data: courses } = await supabaseClient
-      .from('course_offerings')
+    // 1. Fetch full degree curriculum courses from 'courses' table
+    let { data: courses, error: cErr } = await supabaseClient
+      .from('courses')
       .select('*')
-      .eq('program', profile.program)
-      .order('year', { ascending: true })
-      .order('semester', { ascending: true });
+      .order('year_level', { ascending: true })
+      .order('semester', { ascending: true })
+      .order('code', { ascending: true });
 
-    const { data: completed } = await supabaseClient
-      .from('enrollments')
-      .select('offering_id, grades(final)')
-      .eq('student_id', profile.id)
-      .eq('status', 'enrolled');
+    if (cErr) console.warn('Courses fetch error, falling back to course_offerings:', cErr);
 
-    const completedIds = new Set((completed || []).map(e => e.offering_id));
-    const totalUnits = (courses || []).reduce((s, c) => s + Number(c.units || 0), 0);
-    const unitsCompleted = (courses || []).filter(c => completedIds.has(c.id)).reduce((s, c) => s + Number(c.units || 0), 0);
-    const pct = totalUnits ? Math.round((unitsCompleted / totalUnits) * 100) : 0;
+    // Fallback if courses table returned no records
+    if (!courses || courses.length === 0) {
+      const { data: offerings } = await supabaseClient
+        .from('course_offerings')
+        .select('*')
+        .order('year', { ascending: true })
+        .order('semester', { ascending: true });
 
+      courses = (offerings || []).map(o => ({
+        code: o.code,
+        title: o.title,
+        year_level: o.year || 1,
+        semester: o.semester === '2nd Semester' ? 2 : 1,
+        lec_units: Number(o.units || 3),
+        lab_units: 0,
+        prerequisites: o.prerequisites || 'None',
+      }));
+    }
+
+    // 2. Fetch student's grades and enrollments
+    const [{ data: gradesData }, { data: enrollmentsData }] = await Promise.all([
+      supabaseClient
+        .from('grades')
+        .select('equivalent, final, remark, course_offerings(code)')
+        .eq('student_id', profile.id),
+      supabaseClient
+        .from('enrollments')
+        .select('status, course_offerings(code)')
+        .eq('student_id', profile.id)
+    ]);
+
+    // Build lookup maps
+    const completedMap = {};
+    (gradesData || []).forEach(g => {
+      const code = g.course_offerings?.code;
+      if (code) {
+        const isPassed = g.remark === 'Passed' || (g.equivalent && Number(g.equivalent) <= 3.0 && Number(g.equivalent) > 0);
+        completedMap[code.trim().toUpperCase()] = {
+          grade: g.final || g.equivalent,
+          isPassed: isPassed,
+          status: isPassed ? 'completed' : 'enrolled',
+        };
+      }
+    });
+
+    (enrollmentsData || []).forEach(e => {
+      const code = e.course_offerings?.code;
+      if (code && !completedMap[code.trim().toUpperCase()]) {
+        completedMap[code.trim().toUpperCase()] = {
+          grade: null,
+          isPassed: false,
+          status: 'enrolled',
+        };
+      }
+    });
+
+    const programName = profile.program || 'BSIT';
+    let totalUnits = 0;
+    let unitsCompleted = 0;
+
+    // Group courses by Year and Semester
     const bySem = {};
     (courses || []).forEach(c => {
-      const key = `${c.year}-${c.semester}`;
+      const yr = Number(c.year_level || 1);
+      const sem = Number(c.semester || 1);
+      const key = `${yr}-${sem}`;
+      const units = (Number(c.lec_units) || 0) + (Number(c.lab_units) || 0) || Number(c.units || 3);
+      totalUnits += units;
+
       if (!bySem[key]) {
         bySem[key] = {
-          year: c.year,
-          semester: c.semester,
-          semesterLabel: `${getOrdinalSuffix(c.year || 1)} Year - ${getOrdinalSuffix(c.semester || 1)} Sem`,
+          year: yr,
+          semester: sem,
+          semesterLabel: `${getOrdinalSuffix(yr)} Year — ${getOrdinalSuffix(sem)} Semester`,
           courses: []
         };
       }
 
-      const gradeVal = Array.isArray(completed) ? completed.find(e => e.offering_id === c.id)?.grades?.final : null;
+      const codeClean = (c.code || '').trim().toUpperCase();
+      const studentRec = completedMap[codeClean];
+      const isCompleted = studentRec?.isPassed || false;
+      const isEnrolled = !!studentRec && !isCompleted;
+
+      if (isCompleted) {
+        unitsCompleted += units;
+      }
+
+      // Identify major subjects
+      const isMajor = !!(c.is_major || /^(IT|NET|IAS|CAP|SIA|SA|PROF|IM|IPT|CS|CC)/i.test(c.code || ''));
+
       bySem[key].courses.push({
         code: c.code,
         title: c.title,
-        units: c.units,
-        isMajor: c.is_major,
-        completed: completedIds.has(c.id),
-        grade: gradeVal,
+        units: units,
+        lecUnits: c.lec_units,
+        labUnits: c.lab_units,
+        prerequisites: c.prerequisites,
+        isMajor: isMajor,
+        completed: isCompleted,
+        enrolled: isEnrolled,
+        grade: studentRec?.grade || null,
       });
     });
 
+    const completionPercentage = totalUnits > 0 ? Math.round((unitsCompleted / totalUnits) * 100) : 0;
+
     showProspectusModal({
-      program: profile.program,
+      program: programName,
       totalUnits,
       unitsCompleted,
-      completionPercentage: pct,
-      bySemester: Object.values(bySem),
+      completionPercentage,
+      bySemester: Object.values(bySem).sort((a, b) => a.year === b.year ? a.semester - b.semester : a.year - b.year),
     });
   } catch (err) {
     showToast('Could not load degree prospectus: ' + err.message, true);
-    console.error(err);
+    console.error('Prospectus error:', err);
   }
 }
 window.viewProspectus = viewProspectus;
 
 function showProspectusModal(data) {
-  const existing = document.querySelector('.prospectus-modal');
-  if (existing) existing.remove();
+  const modal = getEl('prospectusModal');
+  const container = getEl('prospectusContainer');
+  const subtitle = getEl('prospectusSubtitle');
+  const fill = getEl('prospectusProgressFill');
+  const text = getEl('prospectusProgressText');
 
-  const modal = document.createElement('div');
-  modal.className = 'prospectus-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px;';
+  if (modal && container) {
+    if (subtitle) subtitle.textContent = `${data.program || 'BSIT'} — Bachelor of Science in Information Technology`;
+    if (fill) fill.style.width = `${data.completionPercentage || 0}%`;
+    if (text) text.textContent = `Overall Curriculum Completion: ${data.completionPercentage || 0}% (${data.unitsCompleted || 0} / ${data.totalUnits || 0} units)`;
 
-  modal.innerHTML = `
-    <div class="prospectus-content" style="background:var(--bg-card, #ffffff);border:1px solid var(--line, #cbd5e1);border-radius:12px;padding:24px;max-width:700px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 40px rgba(0,0,0,0.3);">
-      <div class="prospectus-header" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
-        <div>
-          <h2 style="margin:0;font-size:20px;color:var(--ink-900);">Degree Prospectus</h2>
-          <p style="margin:4px 0 0;font-size:13px;color:var(--ink-500);">${escapeHtml(data.program || 'BSIT')} — Total ${data.totalUnits || 0} Units</p>
+    container.innerHTML = (data.bySemester || []).map(sem => `
+      <div class="semester-block">
+        <div class="semester-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:middle;margin-right:4px;">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          </svg>
+          ${sem.semesterLabel}
         </div>
-        <button class="prospectus-close" onclick="this.closest('.prospectus-modal').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--ink-500);">&times;</button>
-      </div>
-      <div class="prospectus-body">
-        <div class="prospectus-progress" style="margin-bottom:20px;">
-          <div class="progress-bar" style="height:10px;background:var(--line);border-radius:5px;overflow:hidden;"><div class="progress-fill" style="width:${data.completionPercentage || 0}%;height:100%;background:var(--pink-500, #ec4899);"></div></div>
-          <div class="progress-text" style="font-size:12px;color:var(--ink-600);margin-top:6px;font-weight:600;">Overall Curriculum Completion: ${data.completionPercentage || 0}% (${data.unitsCompleted || 0} / ${data.totalUnits || 0} units)</div>
-        </div>
-        <div class="prospectus-courses">
-          ${(data.bySemester || []).length > 0 ? data.bySemester.map(sem => `
-            <div class="semester-block" style="margin-bottom:18px;">
-              <div class="semester-title" style="font-weight:700;font-size:14px;color:var(--ink-800);margin-bottom:8px;border-bottom:1px solid var(--line);padding-bottom:4px;">${sem.semesterLabel}</div>
-              <div class="course-list">
-                ${(sem.courses || []).map(c => `
-                  <div class="prospectus-course" style="display:flex;align-items:center;justify-content:space-between;padding:8px;border-radius:6px;margin-bottom:4px;background:var(--bg, #f8fafc);">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                      <span class="course-status" style="font-weight:800;color:${c.completed ? 'var(--green, #10b981)' : 'var(--ink-300)'};">${c.completed ? '✓' : '○'}</span>
-                      <div>
-                        <div class="code-line">
-                          <span class="code" style="font-weight:700;font-size:13px;">${escapeHtml(c.code)}</span>
-                          ${c.isMajor ? '<span style="font-size:10px;background:var(--pink-50);color:var(--pink-600);padding:2px 6px;border-radius:4px;margin-left:6px;">⭐ MAJOR</span>' : ''}
-                        </div>
-                        <div class="title" style="font-size:12px;color:var(--ink-600);">${escapeHtml(c.title)}</div>
-                      </div>
-                    </div>
-                    <div class="meta" style="font-size:12px;font-weight:600;color:var(--ink-700);">${c.units} units${c.completed && c.grade ? ` · Grade: <strong>${c.grade}</strong>` : ''}</div>
-                  </div>
-                `).join('')}
+        <div class="course-list">
+          ${(sem.courses || []).map(c => `
+            <div class="prospectus-course ${c.isMajor ? 'is-major' : ''}" data-status="${c.completed ? 'completed' : 'pending'}">
+              <span class="course-status">${c.completed ? '✓' : (c.enrolled ? '⏳' : '○')}</span>
+              <div class="course-info">
+                <div class="code-line">
+                  <span class="code">${escapeHtml(c.code)}</span>
+                  ${c.isMajor ? '<span class="major-badge">⭐ MAJOR</span>' : ''}
+                  ${c.prerequisites && c.prerequisites !== 'None' ? `<span style="font-size:10px;color:var(--ink-400);background:var(--bg);padding:1px 6px;border-radius:4px;border:1px solid var(--line);margin-left:4px;">Prereq: ${escapeHtml(c.prerequisites)}</span>` : ''}
+                </div>
+                <div class="title">${escapeHtml(c.title)}</div>
+                <div class="meta">${c.lecUnits !== undefined ? `${c.lecUnits} Lec` : ''}${c.labUnits ? ` · ${c.labUnits} Lab` : ''}${c.completed && c.grade ? ` · Final Grade: <strong>${c.grade}</strong>` : (c.enrolled ? ' · Currently Enrolled' : '')}</div>
               </div>
+              <div class="units">${c.units} Units</div>
             </div>
-          `).join('') : '<div style="text-align:center;padding:30px;color:var(--ink-500);">No curriculum data available.</div>'}
+          `).join('')}
         </div>
       </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
+    `).join('');
+
+    modal.style.display = 'flex';
+  } else {
+    // Dynamic fallback modal
+    const existing = document.querySelector('.prospectus-modal-dynamic');
+    if (existing) existing.remove();
+
+    const dynModal = document.createElement('div');
+    dynModal.className = 'prospectus-modal prospectus-modal-dynamic';
+    dynModal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+    dynModal.innerHTML = `
+      <div class="prospectus-content" style="background:var(--bg-card, #ffffff);border:1px solid var(--line, #cbd5e1);border-radius:14px;padding:24px;max-width:760px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+        <div class="prospectus-header" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+          <div>
+            <h2 style="margin:0;font-size:20px;color:var(--ink-900);">Degree Prospectus</h2>
+            <p style="margin:4px 0 0;font-size:13px;color:var(--ink-500);">${escapeHtml(data.program || 'BSIT')} — Total ${data.totalUnits || 0} Units</p>
+          </div>
+          <button class="prospectus-close" onclick="this.closest('.prospectus-modal-dynamic').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--ink-500);">&times;</button>
+        </div>
+        <div class="prospectus-body">
+          <div class="prospectus-progress" style="margin-bottom:20px;">
+            <div class="progress-bar" style="height:10px;background:var(--line);border-radius:5px;overflow:hidden;"><div class="progress-fill" style="width:${data.completionPercentage || 0}%;height:100%;background:var(--pink-500, #ec4899);"></div></div>
+            <div class="progress-text" style="font-size:12px;color:var(--ink-600);margin-top:6px;font-weight:600;">Overall Curriculum Completion: ${data.completionPercentage || 0}% (${data.unitsCompleted || 0} / ${data.totalUnits || 0} units)</div>
+          </div>
+          <div class="prospectus-courses">
+            ${(data.bySemester || []).length > 0 ? data.bySemester.map(sem => `
+              <div class="semester-block" style="margin-bottom:18px;">
+                <div class="semester-title" style="font-weight:700;font-size:14px;color:var(--ink-800);margin-bottom:8px;border-bottom:1px solid var(--line);padding-bottom:4px;">${sem.semesterLabel}</div>
+                <div class="course-list">
+                  ${(sem.courses || []).map(c => `
+                    <div class="prospectus-course" style="display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:8px;margin-bottom:6px;background:var(--bg, #f8fafc);border:1px solid var(--line);">
+                      <div style="display:flex;align-items:center;gap:10px;">
+                        <span class="course-status" style="font-weight:800;color:${c.completed ? 'var(--green, #10b981)' : 'var(--ink-300)'};">${c.completed ? '✓' : (c.enrolled ? '⏳' : '○')}</span>
+                        <div>
+                          <div class="code-line">
+                            <span class="code" style="font-weight:700;font-size:13px;color:var(--pink-600);">${escapeHtml(c.code)}</span>
+                            ${c.isMajor ? '<span style="font-size:10px;background:var(--pink-50);color:var(--pink-600);padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:700;">⭐ MAJOR</span>' : ''}
+                            ${c.prerequisites && c.prerequisites !== 'None' ? `<span style="font-size:10px;color:var(--ink-400);background:var(--bg);padding:1px 6px;border-radius:4px;margin-left:4px;">Prereq: ${escapeHtml(c.prerequisites)}</span>` : ''}
+                          </div>
+                          <div class="title" style="font-size:12px;color:var(--ink-700);">${escapeHtml(c.title)}</div>
+                        </div>
+                      </div>
+                      <div class="meta" style="font-size:12px;font-weight:600;color:var(--ink-700);">${c.units} units${c.completed && c.grade ? ` · Grade: <strong>${c.grade}</strong>` : (c.enrolled ? ' · Enrolled' : '')}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            `).join('') : '<div style="text-align:center;padding:30px;color:var(--ink-500);">No curriculum data available.</div>'}
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(dynModal);
+  }
 }
 
 // ── Certificate of Registration (COR) Page ───────────────────────────
@@ -1186,10 +1338,26 @@ async function loadClearance() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  const { data: rows } = await supabaseClient
+  let { data: rows, error } = await supabaseClient
     .from('clearances')
     .select('*')
-    .eq('student_id', profile.id);
+    .eq('student_id', profile.id)
+    .order('department_name', { ascending: true });
+
+  // Self-healing: If no clearances exist for this student yet, initialize them
+  if (!rows || rows.length === 0) {
+    try {
+      await supabaseClient.rpc('initialize_student_clearances', { target_student_id: profile.id });
+      const { data: refreshed } = await supabaseClient
+        .from('clearances')
+        .select('*')
+        .eq('student_id', profile.id)
+        .order('department_name', { ascending: true });
+      rows = refreshed || [];
+    } catch (e) {
+      console.warn('Could not run initialize_student_clearances RPC:', e);
+    }
+  }
 
   state.departments = rows || [];
   renderClearance();
@@ -1200,7 +1368,11 @@ function renderClearance() {
   if (!grid) return;
 
   if (!state.departments || state.departments.length === 0) {
-    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--ink-300);padding:20px;">No clearance records found.</div>';
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--ink-400);padding:30px;background:var(--card);border-radius:12px;border:1px dashed var(--line);">No clearance records found for this term.</div>';
+    setText('clearFrac', '0/0 Cleared');
+    const fill = getEl('clearFill');
+    if (fill) fill.style.width = '0%';
+    setText('clearRemaining', 'No clearance departments required.');
     return;
   }
 
@@ -1212,35 +1384,35 @@ function renderClearance() {
   if (fill) fill.style.width = (cleared / totalDepts * 100) + '%';
 
   const remaining = totalDepts - cleared;
-  setText('clearRemaining', remaining === 0 ? 'All departments cleared. You are good to go!' : `${remaining} department(s) remaining.`);
+  setText('clearRemaining', remaining === 0 ? '✓ All departments cleared. You are in good standing!' : `${remaining} department(s) remaining.`);
 
   grid.innerHTML = state.departments.map(d => {
     const m = statusMeta[d.status] || statusMeta.pending;
     let actionBtn = '';
     if (d.department_code === 'cashier' && d.status === 'action_required') {
-      actionBtn = `<button class="mini-btn" onclick="goto('billing')" style="margin-top:8px;">Pay Balance →</button>`;
+      actionBtn = `<button class="mini-btn" onclick="goto('billing')" style="margin-top:10px;background:var(--pink-600);color:#fff;border:none;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;">Pay Balance →</button>`;
     }
-    if (state.adminView && d.status !== 'cleared' && d.department_code !== 'dean') {
-      actionBtn += ` <button class="mini-btn" style="margin-top:8px;background:var(--pink-600);color:#fff;border-color:var(--pink-600);" onclick="adminClear('${d.department_code}')">Mark as Cleared (Admin)</button>`;
+    if (state.adminView && d.status !== 'cleared') {
+      actionBtn += ` <button class="mini-btn" style="margin-top:10px;background:var(--pink-600);color:#fff;border:none;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;" onclick="adminClear('${d.department_code}')">Mark Cleared (Admin Simulation)</button>`;
     }
     return `
-    <div class="dept-card ${m.card}" style="padding:16px;border:1px solid var(--line);border-radius:12px;margin-bottom:12px;">
+    <div class="dept-card ${m.card}" style="padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:var(--shadow-sm);transition:all 0.2s;">
       <div class="dept-top" style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="display:flex;gap:10px;align-items:center;">
-          <div class="dept-icon" style="font-size:20px;">${d.icon || '📄'}</div>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <div class="dept-icon" style="font-size:24px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:10px;">${d.icon || '📄'}</div>
           <div>
-            <div class="dept-name" style="font-weight:700;font-size:14px;">${escapeHtml(d.department_name)}</div>
-            <div class="dept-officer" style="font-size:11px;color:var(--ink-500);">${escapeHtml(d.officer_name || '')}</div>
+            <div class="dept-name" style="font-weight:700;font-size:15px;color:var(--ink-900);">${escapeHtml(d.department_name)}</div>
+            <div class="dept-officer" style="font-size:12px;color:var(--ink-500);">${escapeHtml(d.officer_name || '')}</div>
           </div>
         </div>
         <span class="badge ${m.badge}">${m.label}</span>
       </div>
-      <div class="dept-note" style="font-size:12px;color:var(--ink-600);margin:8px 0;">${escapeHtml(d.note || '')}</div>
-      <div class="dept-status" style="font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px;">
-        <span class="sdot" style="width:6px;height:6px;border-radius:50%;background:${m.dotColor};"></span>
-        ${d.status === 'cleared' ? 'Digitally Signed & Cleared' : (d.status === 'action_required' ? 'Student Action Required' : 'Awaiting Review')}
+      <div class="dept-note" style="font-size:13px;color:var(--ink-600);margin:12px 0 8px;">${escapeHtml(d.note || '')}</div>
+      <div class="dept-status" style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;color:var(--ink-500);">
+        <span class="sdot" style="width:8px;height:8px;border-radius:50%;background:${m.dotColor};"></span>
+        ${d.status === 'cleared' ? 'Digitally Signed & Cleared' : (d.status === 'action_required' ? 'Student Action Required' : 'Awaiting Department Review')}
       </div>
-      ${actionBtn}
+      ${actionBtn ? `<div style="margin-top:6px;">${actionBtn}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -1250,7 +1422,7 @@ async function adminClear(code) {
   try {
     const { error } = await supabaseClient
       .from('clearances')
-      .update({ status: 'cleared' })
+      .update({ status: 'cleared', cleared_at: new Date().toISOString() })
       .eq('student_id', profile.id)
       .eq('department_code', code);
     if (error) throw error;
