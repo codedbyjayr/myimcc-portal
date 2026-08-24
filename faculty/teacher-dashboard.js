@@ -219,7 +219,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         roster = (enrollments || [])
             .map(e => {
                 const g = gradeByStudent[e.student_id];
-                return { student: e.profiles, gradeId: g?.id || null, midterm: g?.midterm ?? null, final: g?.final ?? null };
+                return {
+                    student: e.profiles, gradeId: g?.id || null,
+                    prelim: g?.prelim ?? null, midterm: g?.midterm ?? null,
+                    semifinal: g?.semifinal ?? null, final: g?.final ?? null,
+                };
             })
             .filter(r => r.student)
             .sort((a, b) => (a.student.full_name || '').localeCompare(b.student.full_name || ''));
@@ -241,40 +245,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         msg.style.display = 'none';
         table.style.display = 'table';
 
+        const periodInput = (r, idx, field, cls) =>
+            `<input type="number" min="0" max="100" step="0.01" class="field-input ${cls}" style="width:72px;" data-idx="${idx}" value="${r[field] ?? ''}">`;
+
         body.innerHTML = roster.map((r, idx) => `
       <tr data-idx="${idx}">
         <td><b>${escapeHtml(r.student.full_name || 'N/A')}</b></td>
         <td>${escapeHtml(r.student.student_no || r.student.id_number || '—')}</td>
-        <td><input type="number" min="0" max="100" step="0.01" class="field-input mid-input" style="width:80px;" data-idx="${idx}" value="${r.midterm ?? ''}"></td>
-        <td><input type="number" min="0" max="100" step="0.01" class="field-input final-input" style="width:80px;" data-idx="${idx}" value="${r.final ?? ''}"></td>
+        <td>${periodInput(r, idx, 'prelim', 'prelim-input')}</td>
+        <td>${periodInput(r, idx, 'midterm', 'mid-input')}</td>
+        <td>${periodInput(r, idx, 'semifinal', 'semifinal-input')}</td>
+        <td>${periodInput(r, idx, 'final', 'final-input')}</td>
         <td class="equiv-cell" data-idx="${idx}">${previewEquivalent(r)}</td>
         <td class="remark-cell" data-idx="${idx}">${previewRemarkBadge(r)}</td>
       </tr>
     `).join('');
 
-        document.querySelectorAll('.mid-input, .final-input').forEach(input => {
+        const fieldByClass = { 'prelim-input': 'prelim', 'mid-input': 'midterm', 'semifinal-input': 'semifinal', 'final-input': 'final' };
+        document.querySelectorAll('.prelim-input, .mid-input, .semifinal-input, .final-input').forEach(input => {
             input.addEventListener('input', (e) => {
                 const idx = Number(e.target.dataset.idx);
                 const val = e.target.value === '' ? null : Number(e.target.value);
-                if (e.target.classList.contains('mid-input')) roster[idx].midterm = val;
-                else roster[idx].final = val;
+                const field = fieldByClass[[...e.target.classList].find(c => fieldByClass[c])];
+                roster[idx][field] = val;
                 document.querySelector(`.equiv-cell[data-idx="${idx}"]`).textContent = previewEquivalent(roster[idx]);
                 document.querySelector(`.remark-cell[data-idx="${idx}"]`).innerHTML = previewRemarkBadge(roster[idx]);
             });
         });
     }
 
+    // Equal-weighted average of whichever grading periods have been entered so
+    // far (Pre-Lim, Midterm, Semi-Final, Final). Adjust the weights below if
+    // your institution weighs periods unevenly (e.g. Final worth more).
+    function periodAverage(r) {
+        const periods = [r.prelim, r.midterm, r.semifinal, r.final].filter(v => v !== null && v !== undefined);
+        if (!periods.length) return null;
+        return periods.reduce((s, v) => s + Number(v), 0) / periods.length;
+    }
+
     function previewEquivalent(r) {
-        if (r.final === null || r.final === undefined) return '—';
-        const avg = r.midterm !== null && r.midterm !== undefined ? (r.midterm * 0.4 + r.final * 0.6) : r.final;
+        const avg = periodAverage(r);
         const eq = computeEquivalent(avg);
         return eq === null ? '—' : eq.toFixed(2);
     }
 
     function previewRemarkBadge(r) {
         if (r.final === null || r.final === undefined) return '<span class="badge badge-amber">Pending</span>';
-        const avg = r.midterm !== null && r.midterm !== undefined ? (r.midterm * 0.4 + r.final * 0.6) : r.final;
-        const eq = computeEquivalent(avg);
+        const eq = computeEquivalent(periodAverage(r));
         const remark = eq !== null && eq <= 3.00 ? 'Passed' : 'Failed';
         return `<span class="badge ${remark === 'Passed' ? 'badge-green' : 'badge-red'}">${remark}</span>`;
     }
@@ -288,13 +305,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         let successCount = 0, failCount = 0;
 
         for (const r of roster) {
-            const avg = r.final !== null && r.final !== undefined
-                ? (r.midterm !== null && r.midterm !== undefined ? (r.midterm * 0.4 + r.final * 0.6) : r.final)
-                : null;
-            const equivalent = computeEquivalent(avg);
+            const equivalent = computeEquivalent(periodAverage(r));
             const remark = r.final === null || r.final === undefined ? 'Pending' : (equivalent <= 3.00 ? 'Passed' : 'Failed');
 
-            const payload = { student_id: r.student.id, offering_id: selectedOffering.id, midterm: r.midterm, final: r.final, equivalent, remark };
+            const payload = {
+                student_id: r.student.id, offering_id: selectedOffering.id,
+                prelim: r.prelim, midterm: r.midterm, semifinal: r.semifinal, final: r.final,
+                equivalent, remark,
+            };
 
             let error;
             if (r.gradeId) {

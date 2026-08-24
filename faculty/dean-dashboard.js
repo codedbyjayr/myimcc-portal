@@ -838,7 +838,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         myRoster = (enrollments || [])
             .map(e => {
                 const g = gradeByStudent[e.student_id];
-                return { student: e.profiles, gradeId: g?.id || null, midterm: g?.midterm ?? null, final: g?.final ?? null };
+                return {
+                    student: e.profiles, gradeId: g?.id || null,
+                    prelim: g?.prelim ?? null, midterm: g?.midterm ?? null,
+                    semifinal: g?.semifinal ?? null, final: g?.final ?? null,
+                };
             })
             .filter(r => r.student)
             .sort((a, b) => (a.student.full_name || '').localeCompare(b.student.full_name || ''));
@@ -860,40 +864,52 @@ document.addEventListener('DOMContentLoaded', async () => {
         msg.style.display = 'none';
         table.style.display = 'table';
 
+        const periodInput = (r, idx, field, cls) =>
+            `<input type="number" min="0" max="100" step="0.01" class="field-input ${cls}" style="width:72px;" data-idx="${idx}" value="${r[field] ?? ''}">`;
+
         body.innerHTML = myRoster.map((r, idx) => `
       <tr>
         <td><b>${escapeHtml(r.student.full_name || 'N/A')}</b></td>
         <td>${escapeHtml(r.student.student_no || r.student.id_number || '—')}</td>
-        <td><input type="number" min="0" max="100" step="0.01" class="field-input my-mid-input" style="width:80px;" data-idx="${idx}" value="${r.midterm ?? ''}"></td>
-        <td><input type="number" min="0" max="100" step="0.01" class="field-input my-final-input" style="width:80px;" data-idx="${idx}" value="${r.final ?? ''}"></td>
+        <td>${periodInput(r, idx, 'prelim', 'my-prelim-input')}</td>
+        <td>${periodInput(r, idx, 'midterm', 'my-mid-input')}</td>
+        <td>${periodInput(r, idx, 'semifinal', 'my-semifinal-input')}</td>
+        <td>${periodInput(r, idx, 'final', 'my-final-input')}</td>
         <td class="my-equiv-cell" data-idx="${idx}">${previewMyEquivalent(r)}</td>
         <td class="my-remark-cell" data-idx="${idx}">${previewMyRemarkBadge(r)}</td>
       </tr>
     `).join('');
 
-        document.querySelectorAll('.my-mid-input, .my-final-input').forEach(input => {
+        const fieldByClass = { 'my-prelim-input': 'prelim', 'my-mid-input': 'midterm', 'my-semifinal-input': 'semifinal', 'my-final-input': 'final' };
+        document.querySelectorAll('.my-prelim-input, .my-mid-input, .my-semifinal-input, .my-final-input').forEach(input => {
             input.addEventListener('input', (e) => {
                 const idx = Number(e.target.dataset.idx);
                 const val = e.target.value === '' ? null : Number(e.target.value);
-                if (e.target.classList.contains('my-mid-input')) myRoster[idx].midterm = val;
-                else myRoster[idx].final = val;
+                const field = fieldByClass[[...e.target.classList].find(c => fieldByClass[c])];
+                myRoster[idx][field] = val;
                 document.querySelector(`.my-equiv-cell[data-idx="${idx}"]`).textContent = previewMyEquivalent(myRoster[idx]);
                 document.querySelector(`.my-remark-cell[data-idx="${idx}"]`).innerHTML = previewMyRemarkBadge(myRoster[idx]);
             });
         });
     }
 
+    // Equal-weighted average of whichever grading periods have been entered so
+    // far (Pre-Lim, Midterm, Semi-Final, Final). Adjust the weights below if
+    // your institution weighs periods unevenly (e.g. Final worth more).
+    function myPeriodAverage(r) {
+        const periods = [r.prelim, r.midterm, r.semifinal, r.final].filter(v => v !== null && v !== undefined);
+        if (!periods.length) return null;
+        return periods.reduce((s, v) => s + Number(v), 0) / periods.length;
+    }
+
     function previewMyEquivalent(r) {
-        if (r.final === null || r.final === undefined) return '—';
-        const avg = r.midterm !== null && r.midterm !== undefined ? (r.midterm * 0.4 + r.final * 0.6) : r.final;
-        const eq = computeEquivalent(avg);
+        const eq = computeEquivalent(myPeriodAverage(r));
         return eq === null ? '—' : eq.toFixed(2);
     }
 
     function previewMyRemarkBadge(r) {
         if (r.final === null || r.final === undefined) return '<span class="badge badge-amber">Pending</span>';
-        const avg = r.midterm !== null && r.midterm !== undefined ? (r.midterm * 0.4 + r.final * 0.6) : r.final;
-        const eq = computeEquivalent(avg);
+        const eq = computeEquivalent(myPeriodAverage(r));
         const remark = eq !== null && eq <= 3.00 ? 'Passed' : 'Failed';
         return `<span class="badge ${remark === 'Passed' ? 'badge-green' : 'badge-red'}">${remark}</span>`;
     }
@@ -907,13 +923,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         let successCount = 0, failCount = 0;
 
         for (const r of myRoster) {
-            const avg = r.final !== null && r.final !== undefined
-                ? (r.midterm !== null && r.midterm !== undefined ? (r.midterm * 0.4 + r.final * 0.6) : r.final)
-                : null;
-            const equivalent = computeEquivalent(avg);
+            const equivalent = computeEquivalent(myPeriodAverage(r));
             const remark = r.final === null || r.final === undefined ? 'Pending' : (equivalent <= 3.00 ? 'Passed' : 'Failed');
 
-            const payload = { student_id: r.student.id, offering_id: selectedMyOffering.id, midterm: r.midterm, final: r.final, equivalent, remark };
+            const payload = {
+                student_id: r.student.id, offering_id: selectedMyOffering.id,
+                prelim: r.prelim, midterm: r.midterm, semifinal: r.semifinal, final: r.final,
+                equivalent, remark,
+            };
 
             let error;
             if (r.gradeId) {

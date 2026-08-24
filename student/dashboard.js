@@ -782,7 +782,9 @@ async function loadGrades() {
     title: g.course_offerings?.title || '—',
     instructor_name: g.course_offerings?.instructor_name,
     units: g.course_offerings?.units,
+    prelim: g.prelim,
     midterm: g.midterm,
+    semifinal: g.semifinal,
     final: g.final,
     equivalent: g.equivalent,
     ai_predicted_grade: g.ai_predicted_grade,
@@ -818,14 +820,20 @@ function renderGradeStats() {
 function renderGrades() {
   const target = getEl('gradesBody');
   if (!target) return;
+  const periodCell = (val) => val !== null && val !== undefined
+    ? `<span style="color:var(--blue);font-weight:700;">${val}</span>`
+    : `<span style="font-style:italic;color:var(--ink-300);">—</span>`;
+
   target.innerHTML = state.grades.map(g => `
     <tr>
       <td class="or-num">${escapeHtml(g.code)}</td>
       <td>${escapeHtml(g.title)}</td>
       <td style="color:var(--ink-500);">${escapeHtml(g.instructor_name || 'TBA')}</td>
       <td>${g.units || '—'}</td>
-      <td style="color:var(--blue);font-weight:700;">${g.midterm ?? '—'}</td>
-      <td style="${g.final ? 'color:var(--green);font-weight:700;' : 'font-style:italic;color:var(--ink-300);'}">${g.final ?? 'Pending'}</td>
+      <td>${periodCell(g.prelim)}</td>
+      <td>${periodCell(g.midterm)}</td>
+      <td>${periodCell(g.semifinal)}</td>
+      <td style="${g.final !== null && g.final !== undefined ? 'color:var(--green);font-weight:700;' : 'font-style:italic;color:var(--ink-300);'}">${g.final ?? 'Pending'}</td>
       <td style="font-weight:800;">${g.equivalent ?? '–'}</td>
       <td><span class="pred-chip" style="background:var(--pink-50, #fdf2f8);color:var(--pink-600, #db2777);padding:2px 8px;border-radius:12px;font-weight:600;font-size:12px;">~ ${g.ai_predicted_grade ?? '–'} <small>(${g.ai_predicted_equivalent ?? '–'})</small></span></td>
       <td><span class="badge ${g.remark === 'Passed' ? 'badge-green' : 'badge-blue'}">${escapeHtml(g.remark)}</span></td>
@@ -852,9 +860,9 @@ function renderGradesHeader() {
       const track = aiAvg <= 1.75 ? "Dean's List" : aiAvg <= 2.5 ? 'Good Standing' : 'At Risk';
       const weakest = withAi.reduce((min, g) => Number(g.ai_predicted_equivalent) < Number(min.ai_predicted_equivalent) ? g : min, withAi[0]);
       const weakTxt = weakest ? ` Focus on ${weakest.code} (${weakest.title}) where your trajectory shows the most room for improvement.` : '';
-      aiEl.innerHTML = `Based on your midterm performance, our AI model predicts a final GWA of <b>${aiAvg.toFixed(2)}</b> — placing you on the <b>${track}</b> track.${weakTxt}`;
+      aiEl.innerHTML = `Based on your recorded grading periods, our AI model predicts a final GWA of <b>${aiAvg.toFixed(2)}</b> — placing you on the <b>${track}</b> track.${weakTxt}`;
     } else {
-      aiEl.textContent = 'AI predictions will appear here once midterm grades and prediction data are available.';
+      aiEl.textContent = 'AI predictions will appear here once Pre-Lim or Midterm grades and prediction data are available.';
     }
   }
 }
