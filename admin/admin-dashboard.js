@@ -247,10 +247,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 4. Attach Listeners for Pending Approvals / Rejections
     function attachPendingListeners() {
-        document.querySelectorAll('.btn-approve').forEach(btn => {
+        pendingTableBody.querySelectorAll('.btn-approve').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const userId = e.target.getAttribute('data-id');
-                const roleSelect = document.querySelector(`.pending-role-select[data-id="${userId}"]`);
+                const roleSelect = pendingTableBody.querySelector(`.pending-role-select[data-id="${userId}"]`);
                 const targetRole = roleSelect ? roleSelect.value : 'student';
 
                 const { error } = await supabaseClient
@@ -267,7 +267,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
-        document.querySelectorAll('.btn-reject').forEach(btn => {
+        pendingTableBody.querySelectorAll('.btn-reject').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 if (!confirm('Reject this registration request?')) return;
                 const userId = e.target.getAttribute('data-id');
@@ -288,8 +288,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 5. Attach Listeners for Dynamic Role Updates and Access Revocation
     function attachApprovedListeners() {
-        // Live Role Changing Dropdown Listener
-        document.querySelectorAll('.role-select[data-id]').forEach(select => {
+        // Live Role Changing Dropdown Listener — scoped to approvedTableBody only
+        approvedTableBody.querySelectorAll('.role-select[data-id]').forEach(select => {
             select.addEventListener('change', async (e) => {
                 const userId = e.target.getAttribute('data-id');
                 const newRole = e.target.value;
@@ -306,14 +306,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // Subtle highlight to confirm save
                     e.target.style.borderColor = 'var(--success)';
                     setTimeout(() => { e.target.style.borderColor = 'var(--surface-border)'; }, 1500);
+                    // Update local cache so re-renders keep the new value
                     const cached = allApprovedUsers.find(u => u.id === userId);
                     if (cached) cached.role = newRole;
                 }
             });
         });
 
-        // Revoke Access Listener
-        document.querySelectorAll('.btn-revoke').forEach(btn => {
+        // Revoke Access Listener — scoped to approvedTableBody only
+        approvedTableBody.querySelectorAll('.btn-revoke').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 if (!confirm('Revoke access for this user? They will be locked out of the portal until approved again.')) return;
                 const userId = e.target.getAttribute('data-id');

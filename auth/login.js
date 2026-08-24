@@ -105,6 +105,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       case 'faculty':
         window.location.href = '../faculty/teacher-dashboard.html';
         break;
+      case 'dean':
+        window.location.href = '../faculty/dean-dashboard.html';
+        break;
       case 'admin':
         window.location.href = '../admin/admin-dashboard.html';
         break;
