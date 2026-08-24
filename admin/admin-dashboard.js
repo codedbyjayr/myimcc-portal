@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         faculty: 'Faculty',
         staff: 'Staff',
         admin: 'Admin',
+        dean: 'Dean',
     };
 
     // 1. Verify User is an Approved Admin
@@ -117,9 +118,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td>${highlight(user.email, term)}</td>
         <td><code>${highlight(user.id_number || 'N/A', term)}</code></td>
         <td>${highlight(user.program || '—', term)}</td>
-        <td><span class="badge badge-pending">${highlight(roleLabels[user.requested_role] || user.requested_role || 'student', term)}</span></td>
         <td>
-          <button class="btn-action btn-approve" data-id="${user.id}" data-role="${user.requested_role || 'student'}">Approve</button>
+          <select class="role-select pending-role-select" data-id="${user.id}">
+            <option value="student" ${(user.requested_role || 'student') === 'student' ? 'selected' : ''}>Student</option>
+            <option value="teacher" ${user.requested_role === 'teacher' || user.requested_role === 'faculty' ? 'selected' : ''}>Faculty</option>
+            <option value="staff" ${user.requested_role === 'staff' ? 'selected' : ''}>Staff</option>
+            <option value="admin" ${user.requested_role === 'admin' ? 'selected' : ''}>Admin</option>
+            <option value="dean" ${user.requested_role === 'dean' ? 'selected' : ''}>Dean</option>
+          </select>
+        </td>
+        <td>
+          <button class="btn-action btn-approve" data-id="${user.id}">Approve</button>
           <button class="btn-action btn-reject" data-id="${user.id}">Reject</button>
         </td>
       `;
@@ -158,6 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <option value="teacher" ${currentRole === 'teacher' || currentRole === 'faculty' ? 'selected' : ''}>Faculty</option>
             <option value="staff" ${currentRole === 'staff' ? 'selected' : ''}>Staff</option>
             <option value="admin" ${currentRole === 'admin' ? 'selected' : ''}>Admin</option>
+            <option value="dean" ${currentRole === 'dean' ? 'selected' : ''}>Dean</option>
           </select>
         </td>
         <td><span class="badge badge-approved">Approved</span></td>
@@ -240,7 +250,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('.btn-approve').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const userId = e.target.getAttribute('data-id');
-                const targetRole = e.target.getAttribute('data-role');
+                const roleSelect = document.querySelector(`.pending-role-select[data-id="${userId}"]`);
+                const targetRole = roleSelect ? roleSelect.value : 'student';
 
                 const { error } = await supabaseClient
                     .from('profiles')
