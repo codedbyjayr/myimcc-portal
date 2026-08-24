@@ -1043,10 +1043,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             onSaved: async () => {
                 const { data: offerings } = await supabaseClient.from('course_offerings').select('*');
                 state.offerings = offerings || [];
-                populateSemesterFilters();
-                renderWorkloads();
-                renderAssignments();
-                renderConflicts();
+                renderFacultyPage();
+                loadMyClasses();
                 showToast('Subject offering created successfully.');
             },
         },

@@ -230,8 +230,9 @@
         <section class="page" id="page-classes">
           <div class="grid-2">
             <div class="card card-pad">
-              <div class="card-head">
+              <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;">
                 <h3>My Classes</h3>
+                <button class="btn btn-primary" id="addSubjectBtn" style="padding:6px 12px;font-size:12px;">+ Add Subject</button>
               </div>
               <div id="courseList"></div>
               <div id="noCoursesMsg" class="empty-state" style="display:none;">No course offerings are assigned to you
@@ -375,6 +376,65 @@
           </div>
         </section>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD SUBJECT MODAL -->
+  <div class="modal-overlay" id="addSubjectModal">
+    <div class="modal-box">
+      <h3>Add New Subject / Course</h3>
+      <form id="addSubjectForm">
+        <div class="form-row">
+          <label for="subCode">Course Code *</label>
+          <input type="text" id="subCode" class="field-input" placeholder="e.g. IT 301" required>
+        </div>
+        <div class="form-row">
+          <label for="subTitle">Course Title *</label>
+          <input type="text" id="subTitle" class="field-input" placeholder="e.g. Advanced Web Systems" required>
+        </div>
+        <div class="form-row">
+          <label for="subProgram">Program / Department *</label>
+          <select id="subProgram" class="field-input" required>
+            <option value="BSIT">BSIT</option>
+            <option value="BSCS">BSCS</option>
+            <option value="BSIS">BSIS</option>
+            <option value="General Education">General Education</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="subUnits">Total Units *</label>
+          <input type="number" id="subUnits" class="field-input" value="3.0" step="0.5" min="1" max="10" required>
+        </div>
+        <div class="form-row">
+          <label for="subSchedule">Schedule</label>
+          <input type="text" id="subSchedule" class="field-input" placeholder="e.g. MWF 9:00-10:00 AM">
+        </div>
+        <div class="form-row">
+          <label for="subYear">Year Level</label>
+          <select id="subYear" class="field-input">
+            <option value="1">1st Year</option>
+            <option value="2">2nd Year</option>
+            <option value="3">3rd Year</option>
+            <option value="4">4th Year</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="subSemester">Semester *</label>
+          <select id="subSemester" class="field-input" required>
+            <option value="1st Semester">1st Semester</option>
+            <option value="2nd Semester" selected>2nd Semester</option>
+            <option value="Summer">Summer</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="subSchoolYear">School Year *</label>
+          <input type="text" id="subSchoolYear" class="field-input" value="2025-2026" required>
+        </div>
+      </form>
+      <div class="modal-actions">
+        <button type="button" class="btn-outline btn" id="cancelAddSubjectBtn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="saveAddSubjectBtn">Save Subject</button>
       </div>
     </div>
   </div>

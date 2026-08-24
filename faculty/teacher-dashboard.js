@@ -613,6 +613,85 @@ document.addEventListener('DOMContentLoaded', async () => {
       </a>`).join('') || '<div class="nav-item soon" style="opacity:.4;">No links configured</div>';
     }
 
+    // ── Add Subject Modal ────────────────────────────────────────────────
+    function setupAddSubjectModal() {
+        const modal = getEl('addSubjectModal');
+        const openBtn = getEl('addSubjectBtn');
+        const cancelBtn = getEl('cancelAddSubjectBtn');
+        const saveBtn = getEl('saveAddSubjectBtn');
+        const form = getEl('addSubjectForm');
+
+        if (!modal || !openBtn) return;
+
+        function openModal() {
+            modal.classList.add('open');
+            getEl('subCode')?.focus();
+        }
+
+        function closeModal() {
+            modal.classList.remove('open');
+            if (form) form.reset();
+        }
+
+        openBtn.addEventListener('click', openModal);
+        cancelBtn?.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+
+        saveBtn?.addEventListener('click', async () => {
+            const code = getEl('subCode')?.value.trim();
+            const title = getEl('subTitle')?.value.trim();
+            const program = getEl('subProgram')?.value;
+            const units = Number(getEl('subUnits')?.value || 3.0);
+            const schedule = getEl('subSchedule')?.value.trim();
+            const year = Number(getEl('subYear')?.value || 1);
+            const semester = getEl('subSemester')?.value;
+            const school_year = getEl('subSchoolYear')?.value.trim() || '2025-2026';
+
+            if (!code || !title || !program || !semester || !school_year) {
+                showToast('Please fill out all required fields marked with *', true);
+                return;
+            }
+
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+
+            const payload = {
+                code,
+                title,
+                program,
+                units,
+                schedule: schedule || null,
+                year,
+                semester,
+                school_year,
+                instructor_id: currentUser.id,
+                instructor_name: currentProfile.full_name,
+            };
+
+            let { error } = await supabaseClient.from('course_offerings').insert(payload);
+
+            if (error && error.message && error.message.includes('instructor_id')) {
+                // Fallback in case instructor_id column is not in DB yet
+                delete payload.instructor_id;
+                ({ error } = await supabaseClient.from('course_offerings').insert(payload));
+            }
+
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Subject';
+
+            if (error) {
+                showToast('Failed to create subject: ' + error.message, true);
+                return;
+            }
+
+            showToast(`Subject "${code} — ${title}" created successfully!`);
+            closeModal();
+            await loadMyCourses();
+        });
+    }
+
     // ── Logout ──────────────────────────────────────────────────────────
     getEl('signOutBtn').addEventListener('click', async () => {
         await supabaseClient.auth.signOut();
@@ -622,6 +701,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Init ────────────────────────────────────────────────────────────
     const ok = await checkFacultyAuth();
     if (!ok) return;
+    setupAddSubjectModal();
     await loadMyCourses();
     await loadSSOLinks();
 });
