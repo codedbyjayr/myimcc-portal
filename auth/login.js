@@ -1,6 +1,5 @@
 // auth/login.js
 document.addEventListener('DOMContentLoaded', async () => {
-  // 1. Wait for the dynamic Supabase client to load
   let supabaseClient;
   try {
     supabaseClient = await getSupabaseClientAsync();
@@ -64,7 +63,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // 🔑 Database-driven Router: Fetch status & role from 'profiles' table
+  // Database-driven Router: Fetch status & role from 'profiles' table
   async function routeUserByProfile(user) {
     const { data: profile, error } = await supabaseClient
       .from('profiles')
@@ -74,12 +73,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (error || !profile) {
       console.error("Profile fetch error:", error);
-      // Default fallback if profile isn't generated yet
       window.location.href = '../student/dashboard.html';
       return;
     }
 
-    // 1. Check account status & route to onboarding folder
     if (profile.status === 'onboarding') {
       window.location.href = '../onboarding/select-role.html';
       return;
@@ -97,7 +94,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    // 2. Route approved users to their respective portal folders
     const lowerRole = (profile.role || '').toLowerCase();
 
     switch (lowerRole) {
@@ -121,21 +117,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  async function bootstrap() {
-    const { data: { session }, error } = await supabaseClient.auth.getSession();
-    if (error || !session) {
+  // Step 1: Process Session Flow
+  async function processAuthFlow(session) {
+    if (!session) {
       showStep(stepSso);
+      return;
+    }
+
+    // Check domain restriction on the returned OAuth email
+    if (session.user?.email && !isAllowedDomain(session.user.email)) {
+      await supabaseClient.auth.signOut();
+      showStep(stepUnauthorized);
       return;
     }
 
     // Check if user is already fully authenticated (AAL2)
     const { data: aalData } = await supabaseClient.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aalData?.currentLevel === 'aal2') {
-      const { data: { user } } = await supabaseClient.auth.getUser();
-      await routeUserByProfile(user);
+      await routeUserByProfile(session.user);
       return;
     }
 
+    // Check MFA Factors
     const { data: factorData, error: fErr } = await supabaseClient.auth.mfa.listFactors();
     if (fErr) {
       showStep(stepSso);
@@ -150,6 +153,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Step 2: Set up auth listener to capture redirect sessions dynamically
+  supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    console.log("Auth event:", event);
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+      if (session) {
+        await processAuthFlow(session);
+      }
+    } else if (event === 'SIGNED_OUT') {
+      showStep(stepSso);
+    }
+  });
+
+  // SSO Submission
   if (ssoForm) {
     ssoForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -303,7 +319,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Handle Show Key Button mapping 
   const toggleSecretBtn = document.getElementById('toggleSecretBtn');
   if (toggleSecretBtn && enrollSecret) {
     toggleSecretBtn.addEventListener('click', () => {
@@ -316,6 +331,4 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   }
-
-  bootstrap();
 });
