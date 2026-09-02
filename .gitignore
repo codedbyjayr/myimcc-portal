@@ -13,3 +13,5 @@ build/
 *.env
 config/.env
 shared/supabase-config.js
+.agents/mcp.json*
+.agents/**
