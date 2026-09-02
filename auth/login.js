@@ -153,12 +153,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Step 2: Set up auth listener to capture redirect sessions dynamically
+  // Step 2: Set up auth listener with safety check for active OAuth code exchange
   supabaseClient.auth.onAuthStateChange(async (event, session) => {
     console.log("Auth event:", event);
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+
+    // Check if the URL currently holds an incoming OAuth code or token fragment
+    const hasAuthParams = window.location.search.includes('code=') || window.location.hash.includes('access_token=');
+
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || session) {
       if (session) {
         await processAuthFlow(session);
+      }
+    } else if (event === 'INITIAL_SESSION' && !session) {
+      // If an OAuth code exchange is happening, hold off on redirecting back to login
+      if (!hasAuthParams) {
+        showStep(stepSso);
+      } else {
+        console.log("Exchanging OAuth code for session...");
       }
     } else if (event === 'SIGNED_OUT') {
       showStep(stepSso);
