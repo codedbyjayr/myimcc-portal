@@ -37,6 +37,6 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/arm/v7,linux/arm64,linux/amd64
+          platforms: linux/386,linux/arm/v7,linux/arm64,linux/amd64
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
