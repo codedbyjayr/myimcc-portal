@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   web:
-    image: ghcr.io/codedbyjayr/myimcc-portal:latest
+    image: ghcr.io/codedbyjayr/myimccportal:latest
     container_name: portal_web
     ports:
       - "80:80"
