@@ -60,7 +60,7 @@ function escapeHtml(str) {
 async function getCurrentStudent() {
   const { data: { user }, error } = await supabaseClient.auth.getUser();
   if (error || !user) {
-    window.location.href = 'login.html';
+    window.location.href = '../auth/login.html';
     return null;
   }
   state.currentUser = user;
@@ -83,7 +83,7 @@ function setupAuthListener() {
   if (!supabaseClient) return;
   supabaseClient.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_OUT' || !session) {
-      window.location.href = 'login.html';
+      window.location.href = '../auth/login.html';
       return;
     }
     if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
@@ -1654,7 +1654,7 @@ getEl('signOutBtn')?.addEventListener('click', async () => {
   } catch (e) {
     console.warn('signOut error', e);
   }
-  window.location.href = 'login.html';
+  window.location.href = '../auth/login.html';
 });
 
 // ── Quick Links (SSO) Module ─────────────────────────────────────────

@@ -141,21 +141,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Check MFA Factors
     const { data: factorData, error: fErr } = await supabaseClient.auth.mfa.listFactors();
     if (fErr) {
+      console.error("MFA listFactors error:", fErr);
       showStep(stepSso);
       return;
     }
 
-    const totpFactors = factorData?.totp || [];
-    if (totpFactors.length === 0) {
+    const verifiedTotpFactors = (factorData?.totp || []).filter(f => f.status === 'verified');
+    if (verifiedTotpFactors.length === 0) {
+      // Clean up any unverified stale factors before starting new enrollment
+      const unverifiedFactors = (factorData?.totp || []).filter(f => f.status === 'unverified');
+      for (const factor of unverifiedFactors) {
+        await supabaseClient.auth.mfa.unenroll({ factorId: factor.id });
+      }
       await startEnrollment();
     } else {
-      await startChallenge(totpFactors[0].id);
+      await startChallenge(verifiedTotpFactors[0].id);
     }
   }
 
   // Step 2: Set up clean auth listener letting Supabase handle URL code exchange natively
   supabaseClient.auth.onAuthStateChange(async (event, session) => {
-    console.log("Auth event:", event);
+    console.log("Auth event:", event, session ? "Session active" : "No session");
 
     if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
       if (session) {
@@ -190,16 +196,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       refresh_token: refreshToken,
     });
     if (!setSessionError && setSessionData?.session) {
+      window.history.replaceState({}, document.title, window.location.pathname);
       await processAuthFlow(setSessionData.session);
-      return;
     }
   } else if (authCode) {
     console.log("Detected auth code in URL query, executing code exchange...");
-    const { data: exchangeData, error: exchangeError } = await supabaseClient.auth.exchangeCodeForSession(window.location.href);
-    if (!exchangeError && exchangeData?.session) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-      await processAuthFlow(exchangeData.session);
-      return;
+    try {
+      const { data: exchangeData, error: exchangeError } = await supabaseClient.auth.exchangeCodeForSession(authCode);
+      if (!exchangeError && exchangeData?.session) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        await processAuthFlow(exchangeData.session);
+      } else if (exchangeError) {
+        console.warn("Manual exchangeCodeForSession error (may already be handled by client):", exchangeError.message);
+      }
+    } catch (e) {
+      console.warn("Code exchange exception:", e);
     }
   }
 
@@ -209,11 +220,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log("Checking existing session state...");
     const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
     if (session && !sessionError) {
+      window.history.replaceState({}, document.title, window.location.pathname);
       await processAuthFlow(session);
     }
   }
 
-  // SSO Submission with Google Hosted Domain (hd) Parameter & Root Redirect Integration
+  // SSO Submission with Google Hosted Domain (hd) Parameter & Direct Redirect Integration
   if (ssoForm) {
     ssoForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -234,6 +246,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       ssoBtn.disabled = true;
 
       try {
+        const redirectUrl = window.location.origin + window.location.pathname;
         const { error: oauthError } = await supabaseClient.auth.signInWithOAuth({
           provider: 'google',
           options: {
@@ -241,7 +254,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               login_hint: email,
               hd: 'imcc.edu.ph' // Restricts/hints the Google auth window strictly to the school domain
             },
-            redirectTo: window.location.origin, // Points cleanly to the root domain to fix callback parsing mismatches
+            redirectTo: redirectUrl, // Points directly to the login page to capture the callback
           },
         });
         if (oauthError) throw oauthError;

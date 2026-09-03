@@ -664,7 +664,7 @@
       // 1. Require an active Supabase session.
       const { data: { user }, error: uErr } = await supabase.auth.getUser();
       if (uErr || !user) {
-        window.location.href = 'login.html';
+        window.location.href = '../auth/login.html';
         return;
       }
 
