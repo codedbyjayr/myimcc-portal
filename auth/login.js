@@ -175,6 +175,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // Explicit check for OAuth redirect tokens on load (Fixes ngrok callback loop bug)
+  const hasAuthParams = window.location.search.includes('code=') || window.location.hash.includes('access_token=');
+  if (hasAuthParams) {
+    console.log("Detected OAuth redirect parameters in URL, processing session...");
+    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+    if (session && !sessionError) {
+      await processAuthFlow(session);
+    }
+  }
+
   // SSO Submission with Google Hosted Domain (hd) Parameter & Root Redirect Integration
   if (ssoForm) {
     ssoForm.addEventListener('submit', async (e) => {
