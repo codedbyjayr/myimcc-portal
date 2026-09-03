@@ -1,5 +1,10 @@
-const SUPABASE_URL = window.__ENV__?.SUPABASE_URL;
+let SUPABASE_URL = window.__ENV__?.SUPABASE_URL;
 const SUPABASE_ANON_KEY = window.__ENV__?.SUPABASE_ANON_KEY;
+
+if (SUPABASE_URL) {
+  // Normalize SUPABASE_URL in case it has /rest/v1 or trailing slashes
+  SUPABASE_URL = SUPABASE_URL.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+}
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error("Supabase environment variables missing from window.__ENV__.");

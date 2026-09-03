@@ -159,69 +159,73 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Step 2: Set up clean auth listener letting Supabase handle URL code exchange natively
+  // Step 2: Clean auth listener letting Supabase manage URL code exchange
+  let authFlowInProgress = false;
+
   supabaseClient.auth.onAuthStateChange(async (event, session) => {
     console.log("Auth event:", event, session ? "Session active" : "No session");
 
     if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-      if (session) {
+      if (session && !authFlowInProgress) {
+        authFlowInProgress = true;
+        window.history.replaceState({}, document.title, window.location.pathname);
         await processAuthFlow(session);
       }
     } else if (event === 'INITIAL_SESSION') {
-      if (session) {
+      if (session && !authFlowInProgress) {
+        authFlowInProgress = true;
+        window.history.replaceState({}, document.title, window.location.pathname);
         await processAuthFlow(session);
-      } else {
-        const hasAuthParams = window.location.search.includes('code=') || window.location.hash.includes('access_token=');
+      } else if (!session) {
+        const hasAuthParams = window.location.search.includes('code=') || 
+                              window.location.hash.includes('access_token=');
         if (!hasAuthParams) {
           showStep(stepSso);
         }
       }
     } else if (event === 'SIGNED_OUT') {
+      authFlowInProgress = false;
       showStep(stepSso);
     }
   });
 
-  // Explicitly catch, parse, and exchange tokens or codes from ngrok / OAuth redirect URL
-  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  // Check URL parameters for OAuth errors or pending callback
   const queryParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const oauthError = queryParams.get('error_description') || queryParams.get('error') ||
+                     hashParams.get('error_description') || hashParams.get('error');
 
-  const accessToken = hashParams.get('access_token');
-  const refreshToken = hashParams.get('refresh_token');
-  const authCode = queryParams.get('code');
+  if (oauthError) {
+    console.error("OAuth Error:", oauthError);
+    window.history.replaceState({}, document.title, window.location.pathname);
+    showError(ssoError, oauthError);
+    showStep(stepSso);
+  } else {
+    const hasAuthParams = window.location.search.includes('code=') || 
+                          window.location.hash.includes('access_token=');
+    if (hasAuthParams) {
+      if (ssoBtn) ssoBtn.disabled = true;
+      const ssoBtnText = document.getElementById('ssoBtnText');
+      if (ssoBtnText) ssoBtnText.textContent = 'Verifying School Account...';
 
-  if (accessToken && refreshToken) {
-    console.log("Detected manual tokens in URL hash, setting session...");
-    const { data: setSessionData, error: setSessionError } = await supabaseClient.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
-    if (!setSessionError && setSessionData?.session) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-      await processAuthFlow(setSessionData.session);
-    }
-  } else if (authCode) {
-    console.log("Detected auth code in URL query, executing code exchange...");
-    try {
-      const { data: exchangeData, error: exchangeError } = await supabaseClient.auth.exchangeCodeForSession(authCode);
-      if (!exchangeError && exchangeData?.session) {
-        window.history.replaceState({}, document.title, window.location.pathname);
-        await processAuthFlow(exchangeData.session);
-      } else if (exchangeError) {
-        console.warn("Manual exchangeCodeForSession error (may already be handled by client):", exchangeError.message);
-      }
-    } catch (e) {
-      console.warn("Code exchange exception:", e);
-    }
-  }
-
-  // Fallback explicit check for standard session on load
-  const hasAuthParams = window.location.search.includes('code=') || window.location.hash.includes('access_token=');
-  if (hasAuthParams) {
-    console.log("Checking existing session state...");
-    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
-    if (session && !sessionError) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-      await processAuthFlow(session);
+      // Safety timeout: If Supabase does not resolve session within 4 seconds (e.g. stale/expired code)
+      setTimeout(async () => {
+        if (!authFlowInProgress) {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          if (session) {
+            authFlowInProgress = true;
+            window.history.replaceState({}, document.title, window.location.pathname);
+            await processAuthFlow(session);
+          } else {
+            console.warn("OAuth callback timeout - no valid session established.");
+            window.history.replaceState({}, document.title, window.location.pathname);
+            if (ssoBtn) ssoBtn.disabled = false;
+            if (ssoBtnText) ssoBtnText.textContent = 'Sign In with Google / School Account';
+            showError(ssoError, 'Sign-in session expired or invalid. Please click Sign In again.');
+            showStep(stepSso);
+          }
+        }
+      }, 4000);
     }
   }
 
