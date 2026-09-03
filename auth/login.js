@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // Domain Helper
+  // Domain Helper supporting student, faculty, admin, and general domains
   function isAllowedDomain(email) {
     const allowed = ['@student.imcc.edu.ph', '@faculty.imcc.edu.ph', '@admin.imcc.edu.ph', '@imcc.edu.ph'];
     return allowed.some(domain => email.toLowerCase().endsWith(domain));
@@ -175,7 +175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // SSO Submission
+  // SSO Submission with Google Hosted Domain (hd) Parameter Integration
   if (ssoForm) {
     ssoForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -199,7 +199,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { error: oauthError } = await supabaseClient.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            queryParams: { login_hint: email },
+            queryParams: {
+              login_hint: email,
+              hd: 'imcc.edu.ph' // Restricts/hints the Google auth window strictly to the school domain
+            },
             redirectTo: window.location.origin + window.location.pathname,
           },
         });
