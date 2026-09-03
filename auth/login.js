@@ -175,10 +175,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Explicit check for OAuth redirect tokens on load (Fixes ngrok callback loop bug)
+  // Explicitly catch, parse, and exchange tokens or codes from ngrok / OAuth redirect URL
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const queryParams = new URLSearchParams(window.location.search);
+
+  const accessToken = hashParams.get('access_token');
+  const refreshToken = hashParams.get('refresh_token');
+  const authCode = queryParams.get('code');
+
+  if (accessToken && refreshToken) {
+    console.log("Detected manual tokens in URL hash, setting session...");
+    const { data: setSessionData, error: setSessionError } = await supabaseClient.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (!setSessionError && setSessionData?.session) {
+      await processAuthFlow(setSessionData.session);
+      return;
+    }
+  } else if (authCode) {
+    console.log("Detected auth code in URL query, executing code exchange...");
+    const { data: exchangeData, error: exchangeError } = await supabaseClient.auth.exchangeCodeForSession(window.location.href);
+    if (!exchangeError && exchangeData?.session) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      await processAuthFlow(exchangeData.session);
+      return;
+    }
+  }
+
+  // Fallback explicit check for standard session on load
   const hasAuthParams = window.location.search.includes('code=') || window.location.hash.includes('access_token=');
   if (hasAuthParams) {
-    console.log("Detected OAuth redirect parameters in URL, processing session...");
+    console.log("Checking existing session state...");
     const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
     if (session && !sessionError) {
       await processAuthFlow(session);
