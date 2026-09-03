@@ -175,7 +175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // SSO Submission with Google Hosted Domain (hd) Parameter Integration
+  // SSO Submission with Google Hosted Domain (hd) Parameter & Root Redirect Integration
   if (ssoForm) {
     ssoForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -203,7 +203,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               login_hint: email,
               hd: 'imcc.edu.ph' // Restricts/hints the Google auth window strictly to the school domain
             },
-            redirectTo: window.location.origin + window.location.pathname,
+            redirectTo: window.location.origin, // Points cleanly to the root domain to fix callback parsing mismatches
           },
         });
         if (oauthError) throw oauthError;
