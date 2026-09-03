@@ -153,23 +153,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Step 2: Set up auth listener with safety check for active OAuth code exchange
+  // Step 2: Set up clean auth listener letting Supabase handle URL code exchange natively
   supabaseClient.auth.onAuthStateChange(async (event, session) => {
     console.log("Auth event:", event);
 
-    // Check if the URL currently holds an incoming OAuth code or token fragment
-    const hasAuthParams = window.location.search.includes('code=') || window.location.hash.includes('access_token=');
-
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || session) {
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
       if (session) {
         await processAuthFlow(session);
       }
-    } else if (event === 'INITIAL_SESSION' && !session) {
-      // If an OAuth code exchange is happening, hold off on redirecting back to login
-      if (!hasAuthParams) {
-        showStep(stepSso);
+    } else if (event === 'INITIAL_SESSION') {
+      if (session) {
+        await processAuthFlow(session);
       } else {
-        console.log("Exchanging OAuth code for session...");
+        const hasAuthParams = window.location.search.includes('code=') || window.location.hash.includes('access_token=');
+        if (!hasAuthParams) {
+          showStep(stepSso);
+        }
       }
     } else if (event === 'SIGNED_OUT') {
       showStep(stepSso);
