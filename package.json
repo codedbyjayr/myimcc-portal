@@ -1,4 +1,8 @@
 {
+  "type": "module",
+  "scripts": {
+    "backup": "node scripts/backup-supabase.js"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3"
   }

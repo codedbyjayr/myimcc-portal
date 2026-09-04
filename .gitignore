@@ -1,17 +1,26 @@
 # Environment and secret files
-# Exclude actual secrets
+.env
+.env.*
+*.env
 config/.env
-shared/supabase-config.js
+*.local
+/env-config.js
+
+# Database backups (Contains sensitive auth tokens, credentials, PII)
+database/backups/
+backups/
+*.sql.gz
+*.dump
 
 # Dependencies and build artifacts
 node_modules/
 dist/
 build/
+.temp/
+.vercel
 
-# Environment and secret files
-.env
-*.env
-config/.env
-shared/supabase-config.js
-.agents/mcp.json*
-.agents/**
+# IDE & agent configs
+.agents/
+.vscode/
+.DS_Store
+Thumbs.db
