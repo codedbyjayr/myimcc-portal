@@ -97,6 +97,89 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   outline-offset: 2px;
 }
 
+/* =====================================================================
+   Mobile-First RWD Utilities & Helpers
+   ===================================================================== */
+
+/* Responsive Table Wrapper */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 12px;
+  border-radius: 8px;
+}
+
+.table-responsive table {
+  min-width: 580px;
+  width: 100%;
+}
+
+.table-responsive::-webkit-scrollbar {
+  height: 6px;
+}
+.table-responsive::-webkit-scrollbar-track {
+  background: var(--bg);
+  border-radius: 3px;
+}
+.table-responsive::-webkit-scrollbar-thumb {
+  background: var(--ink-300);
+  border-radius: 3px;
+}
+
+/* Mobile Sidebar Drawer Overlay */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 10, 22, 0.55);
+  backdrop-filter: blur(2px);
+  z-index: 990;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.sidebar-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Responsive Visibility Helpers */
+.hide-desktop {
+  display: block;
+}
+.hide-mobile {
+  display: none !important;
+}
+
+@media (min-width: 1024px) {
+  .hide-desktop {
+    display: none !important;
+  }
+  .hide-mobile {
+    display: initial !important;
+  }
+}
+
+/* Touch Device & Input Zoom Prevention on iOS */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="number"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  button,
+  .btn,
+  .nav-item {
+    min-height: 40px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }

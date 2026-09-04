@@ -15,14 +15,23 @@
 <body data-theme="light">
   <div class="app">
 
+    <!-- Mobile Drawer Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <!-- SIDEBAR -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="brand">
         <div class="brand-mark">MI</div>
         <div>
           <div class="brand-name">MyIMCC</div>
           <div class="brand-sub">DEAN PORTAL</div>
         </div>
+        <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close Navigation" type="button">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
       <div class="user-chip">
         <div class="avatar" id="sidebarAvatar"></div>
@@ -92,7 +101,16 @@
     <!-- MAIN -->
     <div class="main">
       <div class="topbar">
-        <div class="page-title" id="pageTitle">Dashboard</div>
+        <div class="topbar-left">
+          <button class="menu-toggle" id="menuToggle" aria-label="Open Navigation" type="button">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <line x1="4" y1="6" x2="20" y2="6"></line>
+              <line x1="4" y1="12" x2="20" y2="12"></line>
+              <line x1="4" y1="18" x2="20" y2="18"></line>
+            </svg>
+          </button>
+          <div class="page-title" id="pageTitle">Dashboard</div>
+        </div>
         <div class="topbar-right">
           <div class="search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -180,17 +198,19 @@
                   <div class="sub">≥ 30% of recorded finals marked Failed</div>
                 </div>
               </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Course</th>
-                    <th>Program</th>
-                    <th>Finals</th>
-                    <th>Rate</th>
-                  </tr>
-                </thead>
-                <tbody id="flaggedCoursesBody"></tbody>
-              </table>
+              <div class="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Course</th>
+                      <th>Program</th>
+                      <th>Finals</th>
+                      <th>Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody id="flaggedCoursesBody"></tbody>
+                </table>
+              </div>
               <div id="noFlaggedMsg" class="empty-state" style="display:none;">No courses currently exceed the
                 failure-rate threshold.</div>
             </div>
@@ -222,7 +242,7 @@
               </div>
               <div class="notice">Enter midterm and final scores on a 0–100 scale. The equivalent grade and remark are
                 computed automatically when you save.</div>
-              <div style="overflow-x:auto;">
+              <div class="table-responsive">
                 <table id="myRosterTable" style="display:none;">
                   <thead>
                     <tr>
@@ -253,17 +273,19 @@
                 <div class="sub">Total credit units and sections per faculty member, selected term</div>
               </div>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Faculty</th>
-                  <th>Sections</th>
-                  <th>Total Units</th>
-                  <th>Load</th>
-                </tr>
-              </thead>
-              <tbody id="workloadBody"></tbody>
-            </table>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Faculty</th>
+                    <th>Sections</th>
+                    <th>Total Units</th>
+                    <th>Load</th>
+                  </tr>
+                </thead>
+                <tbody id="workloadBody"></tbody>
+              </table>
+            </div>
             <div id="noWorkloadMsg" class="empty-state" style="display:none;">No course offerings found for the current
               term.</div>
           </div>
@@ -279,19 +301,21 @@
                 <button class="btn btn-primary" data-modal="courseOffering">+ Add Subject Offering</button>
               </div>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Code</th>
-                  <th>Course Title</th>
-                  <th>Program</th>
-                  <th>Schedule</th>
-                  <th>Assigned Faculty</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="assignBody"></tbody>
-            </table>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Course Title</th>
+                    <th>Program</th>
+                    <th>Schedule</th>
+                    <th>Assigned Faculty</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="assignBody"></tbody>
+              </table>
+            </div>
             <div id="noOfferingsMsg" class="empty-state" style="display:none;">No course offerings found for this term.
             </div>
           </div>
@@ -316,17 +340,19 @@
               </div>
               <button class="btn btn-primary" data-modal="facultyNote">+ Add Note</button>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Faculty</th>
-                  <th>Type</th>
-                  <th>Note</th>
-                  <th>Logged</th>
-                </tr>
-              </thead>
-              <tbody id="notesBody"></tbody>
-            </table>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Faculty</th>
+                    <th>Type</th>
+                    <th>Note</th>
+                    <th>Logged</th>
+                  </tr>
+                </thead>
+                <tbody id="notesBody"></tbody>
+              </table>
+            </div>
             <div id="noNotesMsg" class="empty-state" style="display:none;">No performance notes logged yet.</div>
           </div>
         </section>
@@ -355,18 +381,20 @@
               </div>
               <button class="btn btn-primary" data-modal="grant">+ Add Grant</button>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Grant</th>
-                  <th>Department</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th>Source</th>
-                </tr>
-              </thead>
-              <tbody id="grantsBody"></tbody>
-            </table>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Grant</th>
+                    <th>Department</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Source</th>
+                  </tr>
+                </thead>
+                <tbody id="grantsBody"></tbody>
+              </table>
+            </div>
             <div id="noGrantsMsg" class="empty-state" style="display:none;">No grants logged yet.</div>
           </div>
         </section>
@@ -384,18 +412,20 @@
                 <input type="number" id="requiredUnitsInput" class="field-input" value="144" style="width:80px;">
               </div>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Program</th>
-                  <th>Units Earned</th>
-                  <th>Progress</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="gradReadinessBody"></tbody>
-            </table>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Program</th>
+                    <th>Units Earned</th>
+                    <th>Progress</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="gradReadinessBody"></tbody>
+              </table>
+            </div>
             <div id="noSeniorsMsg" class="empty-state" style="display:none;">No final-year students found.</div>
           </div>
 
@@ -407,17 +437,19 @@
               </div>
               <button class="btn btn-primary" data-modal="accreditation">+ Add Requirement</button>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Requirement</th>
-                  <th>Department</th>
-                  <th>Status</th>
-                  <th>Evidence</th>
-                </tr>
-              </thead>
-              <tbody id="accreditationBody"></tbody>
-            </table>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Requirement</th>
+                    <th>Department</th>
+                    <th>Status</th>
+                    <th>Evidence</th>
+                  </tr>
+                </thead>
+                <tbody id="accreditationBody"></tbody>
+              </table>
+            </div>
             <div id="noAccreditationMsg" class="empty-state" style="display:none;">No accreditation items tracked yet.
             </div>
           </div>
@@ -430,19 +462,21 @@
               </div>
               <button class="btn btn-primary" data-modal="appeal">+ Log New Appeal</button>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Type</th>
-                  <th>Course</th>
-                  <th>Reason</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="appealsBody"></tbody>
-            </table>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Type</th>
+                    <th>Course</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="appealsBody"></tbody>
+              </table>
+            </div>
             <div id="noAppealsMsg" class="empty-state" style="display:none;">No appeals on file.</div>
           </div>
         </section>

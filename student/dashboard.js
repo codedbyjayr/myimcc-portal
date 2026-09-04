@@ -94,6 +94,57 @@ function setupAuthListener() {
   });
 }
 
+// ── Mobile Navigation Drawer ──────────────────────────────────────────
+function closeMobileNav() {
+  const sidebar = getEl('sidebar');
+  const overlay = getEl('sidebarOverlay');
+  if (sidebar) sidebar.classList.remove('open');
+  if (overlay) overlay.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function openMobileNav() {
+  const sidebar = getEl('sidebar');
+  const overlay = getEl('sidebarOverlay');
+  if (sidebar) sidebar.classList.add('open');
+  if (overlay) overlay.classList.add('active');
+  if (window.innerWidth < 1024) {
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function toggleMobileNav() {
+  const sidebar = getEl('sidebar');
+  if (sidebar && sidebar.classList.contains('open')) {
+    closeMobileNav();
+  } else {
+    openMobileNav();
+  }
+}
+
+function setupMobileNav() {
+  const menuToggle = getEl('menuToggle');
+  const sidebarClose = getEl('sidebarCloseBtn');
+  const overlay = getEl('sidebarOverlay');
+
+  if (menuToggle) menuToggle.addEventListener('click', toggleMobileNav);
+  if (sidebarClose) sidebarClose.addEventListener('click', closeMobileNav);
+  if (overlay) overlay.addEventListener('click', closeMobileNav);
+
+  // Close drawer on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMobileNav();
+  });
+
+  // Automatically reset body overflow on window resize if crossing desktop threshold
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 1024) {
+      closeMobileNav();
+    }
+  });
+}
+setupMobileNav();
+
 // ── Navigation ────────────────────────────────────────────────────────
 function goto(page) {
   state.page = page;
@@ -116,6 +167,8 @@ function goto(page) {
   };
   const titleEl = getEl('pageTitle');
   if (titleEl) titleEl.textContent = titles[page] || 'Dashboard';
+  
+  closeMobileNav();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 window.goto = goto;

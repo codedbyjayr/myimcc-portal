@@ -98,6 +98,52 @@ document.addEventListener('DOMContentLoaded', async () => {
         budgets: [], grants: [], notes: [], accreditation: [], appeals: [],
     };
 
+    // ── Mobile Navigation Drawer ────────────────────────────────────────
+    function closeMobileNav() {
+        const sidebar = getEl('sidebar');
+        const overlay = getEl('sidebarOverlay');
+        if (sidebar) sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    function openMobileNav() {
+        const sidebar = getEl('sidebar');
+        const overlay = getEl('sidebarOverlay');
+        if (sidebar) sidebar.classList.add('open');
+        if (overlay) overlay.classList.add('active');
+        if (window.innerWidth < 1024) {
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function toggleMobileNav() {
+        const sidebar = getEl('sidebar');
+        if (sidebar && sidebar.classList.contains('open')) {
+            closeMobileNav();
+        } else {
+            openMobileNav();
+        }
+    }
+
+    const menuToggle = getEl('menuToggle');
+    const sidebarClose = getEl('sidebarCloseBtn');
+    const sidebarOverlay = getEl('sidebarOverlay');
+
+    if (menuToggle) menuToggle.addEventListener('click', toggleMobileNav);
+    if (sidebarClose) sidebarClose.addEventListener('click', closeMobileNav);
+    if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeMobileNav);
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeMobileNav();
+    });
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 1024) {
+            closeMobileNav();
+        }
+    });
+
     // ── Navigation (goto) ───────────────────────────────────────────────
     const titles = {
         dashboard: 'Dashboard',
@@ -114,6 +160,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('.nav-item[data-page]').forEach(n => n.classList.toggle('active', n.dataset.page === page));
         getEl('pageTitle').textContent = titles[page] || 'Dashboard';
         getEl('userDropdown')?.classList.remove('open');
+        closeMobileNav();
         if (page === 'profile') renderProfile();
         if (page === 'classes') loadMyClasses();
     }

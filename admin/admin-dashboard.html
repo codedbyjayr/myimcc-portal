@@ -248,6 +248,49 @@
       border-radius: 3px;
       padding: 0 1px;
     }
+
+    /* Responsive Table Wrapper */
+    .table-responsive {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin-top: 12px;
+    }
+
+    .table-responsive table {
+      min-width: 640px;
+      margin-top: 0;
+    }
+
+    /* Mobile Responsive Overrides */
+    @media (max-width: 640px) {
+      body {
+        padding: 12px 10px;
+      }
+      .header {
+        padding: 14px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .user-info {
+        width: 100%;
+        justify-content: space-between;
+      }
+      .dashboard-card {
+        padding: 16px 12px;
+      }
+      .filter-bar {
+        padding: 12px;
+        gap: 8px;
+      }
+      .filter-search {
+        min-width: 100%;
+      }
+      #courseFilter {
+        width: 100%;
+      }
+    }
   </style>
 </head>
 
@@ -283,7 +326,7 @@
       <span id="pendingCount" class="badge badge-pending">0 Pending</span>
     </div>
 
-    <div id="pendingTableWrap">
+    <div id="pendingTableWrap" class="table-responsive">
       <table>
         <thead>
           <tr>
@@ -304,20 +347,22 @@
   <!-- APPROVED USERS (WITH EDITABLE ROLES) -->
   <div class="dashboard-card">
     <div class="card-title">Approved Portal Users & Role Management</div>
-    <table>
-      <thead>
-        <tr>
-          <th>Full Name</th>
-          <th>Email</th>
-          <th>ID Number</th>
-          <th>Course</th>
-          <th>Assigned Role</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="approvedTableBody"></tbody>
-    </table>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Full Name</th>
+            <th>Email</th>
+            <th>ID Number</th>
+            <th>Course</th>
+            <th>Assigned Role</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="approvedTableBody"></tbody>
+      </table>
+    </div>
     <div id="noApprovedMsg" class="empty-state" style="display: none;">No users match your search or filter.</div>
   </div>
 

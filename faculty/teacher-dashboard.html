@@ -15,14 +15,23 @@
 <body data-theme="light">
   <div class="app">
 
+    <!-- Mobile Drawer Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <!-- SIDEBAR -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="brand">
         <div class="brand-mark">MI</div>
         <div>
           <div class="brand-name">MyIMCC</div>
           <div class="brand-sub">FACULTY PORTAL</div>
         </div>
+        <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close Navigation" type="button">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
       <div class="user-chip">
         <div class="avatar" id="sidebarAvatar"></div>
@@ -99,7 +108,16 @@
     <!-- MAIN -->
     <div class="main">
       <div class="topbar">
-        <div class="page-title" id="pageTitle">Dashboard</div>
+        <div class="topbar-left">
+          <button class="menu-toggle" id="menuToggle" aria-label="Open Navigation" type="button">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <line x1="4" y1="6" x2="20" y2="6"></line>
+              <line x1="4" y1="12" x2="20" y2="12"></line>
+              <line x1="4" y1="18" x2="20" y2="18"></line>
+            </svg>
+          </button>
+          <div class="page-title" id="pageTitle">Dashboard</div>
+        </div>
         <div class="topbar-right">
           <div class="search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -281,15 +299,17 @@
                 <button class="btn btn-primary" id="saveAttendanceBtn" disabled>Save Attendance</button>
               </div>
             </div>
-            <table id="attTable" style="display:none;">
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="attBody"></tbody>
-            </table>
+            <div class="table-responsive">
+              <table id="attTable" style="display:none;">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="attBody"></tbody>
+              </table>
+            </div>
             <div id="noAttMsg" class="empty-state">Pick a class and date to take attendance.</div>
           </div>
 
@@ -297,18 +317,20 @@
             <div class="card-head">
               <h3>Recent Attendance</h3>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Class</th>
-                  <th>Present</th>
-                  <th>Absent</th>
-                  <th>Late</th>
-                </tr>
-              </thead>
-              <tbody id="attHistoryBody"></tbody>
-            </table>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Class</th>
+                    <th>Present</th>
+                    <th>Absent</th>
+                    <th>Late</th>
+                  </tr>
+                </thead>
+                <tbody id="attHistoryBody"></tbody>
+              </table>
+            </div>
             <div id="noAttHistoryMsg" class="empty-state" style="display:none;">No attendance recorded yet.</div>
           </div>
         </section>
@@ -350,18 +372,20 @@
               <h3>Teaching Schedule</h3>
               <div class="sub">All course offerings assigned to you</div>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Code</th>
-                  <th>Course Title</th>
-                  <th>Schedule</th>
-                  <th>Units</th>
-                  <th>Term</th>
-                </tr>
-              </thead>
-              <tbody id="scheduleBody"></tbody>
-            </table>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Course Title</th>
+                    <th>Schedule</th>
+                    <th>Units</th>
+                    <th>Term</th>
+                  </tr>
+                </thead>
+                <tbody id="scheduleBody"></tbody>
+              </table>
+            </div>
             <div id="noScheduleMsg" class="empty-state" style="display:none;">No classes assigned yet.</div>
           </div>
         </section>

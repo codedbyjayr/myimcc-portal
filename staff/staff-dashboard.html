@@ -30,6 +30,12 @@
   .btn-logout { background: none; border: 1px solid var(--line); color: var(--ink-700); padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
   .btn-logout:hover { border-color: var(--pink-500); color: var(--pink-600); }
   @media (max-width: 768px) { .container { padding: 20px 14px; } table { font-size: 12px; } table th, table td { padding: 8px 6px; } }
+  @media (max-width: 640px) {
+    .container { padding: 16px 12px; }
+    .page-header h1 { font-size: 22px; }
+    .card { padding: 16px 12px; }
+    .stats-grid { grid-template-columns: 1fr; gap: 10px; }
+  }
 </style>
 </head>
 <body data-theme="light">
@@ -71,21 +77,23 @@
         <option value="action_required">Action Required</option>
       </select>
     </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Student</th>
-          <th>Program</th>
-          <th>Department</th>
-          <th>Status</th>
-          <th>Note</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody id="clearanceTable">
-        <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--ink-300);">Loading clearance data...</td></tr>
-      </tbody>
-    </table>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Program</th>
+            <th>Department</th>
+            <th>Status</th>
+            <th>Note</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="clearanceTable">
+          <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--ink-300);">Loading clearance data...</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
