@@ -810,40 +810,58 @@ document.addEventListener('DOMContentLoaded', async () => {
         return 5.00;
     }
 
-    async function loadMyClasses() {
+    async function loadMyClasses(autoSelectId = null) {
         // The dean may be assigned as instructor on some offerings even without
         // logging in through the faculty portal — pull straight from state if
         // already loaded, otherwise query directly.
         myOfferings = state.offerings.filter(o =>
-            o.instructor_id === currentUserId || o.instructor_name === currentProfile.full_name
+            (o.instructor_id && o.instructor_id === currentUserId) ||
+            (o.instructor_name && currentProfile && o.instructor_name === currentProfile.full_name)
         );
 
         const notice = getEl('myClassesNotice');
-        notice.style.display = myOfferings.length ? 'none' : 'block';
+        if (notice) notice.style.display = myOfferings.length ? 'none' : 'block';
 
         myOfferings.sort((a, b) => (b.school_year || '').localeCompare(a.school_year || ''));
-        renderMyCourseList();
+        renderMyCourseList(autoSelectId);
     }
 
-    function renderMyCourseList() {
+    function renderMyCourseList(autoSelectId = null) {
         const wrap = getEl('myCourseList');
         const msg = getEl('noMyCoursesMsg');
-        if (!myOfferings.length) { wrap.innerHTML = ''; msg.style.display = 'block'; return; }
-        msg.style.display = 'none';
+        if (!myOfferings.length) {
+            if (wrap) wrap.innerHTML = '';
+            if (msg) msg.style.display = 'block';
+            if (getEl('selectedMyCourseTitle')) getEl('selectedMyCourseTitle').textContent = 'Select a class';
+            if (getEl('selectedMyCourseSub')) getEl('selectedMyCourseSub').textContent = '';
+            if (getEl('saveMyGradesBtn')) getEl('saveMyGradesBtn').disabled = true;
+            if (getEl('myRosterTable')) getEl('myRosterTable').style.display = 'none';
+            if (getEl('noMyRosterMsg')) {
+                getEl('noMyRosterMsg').style.display = 'block';
+                getEl('noMyRosterMsg').textContent = 'No course offerings are assigned to you yet.';
+            }
+            return;
+        }
+        if (msg) msg.style.display = 'none';
 
         wrap.innerHTML = myOfferings.map(o => `
-      <button type="button" class="nav-item" style="border:1px solid var(--line);margin-bottom:8px;" data-id="${o.id}">
-        <div style="text-align:left;">
-          <div style="font-weight:800;font-size:13.5px;">${escapeHtml(o.code || '—')}</div>
-          <div style="font-size:12px;color:var(--ink-500);font-weight:500;">${escapeHtml(o.title || '—')}</div>
-          <div style="font-size:11px;color:var(--ink-300);margin-top:4px;">${escapeHtml(o.schedule || 'Schedule TBA')} · ${escapeHtml(o.semester || '')} ${escapeHtml(o.school_year || '')}</div>
-        </div>
+      <button type="button" class="nav-item dean-course-item" style="border:1px solid var(--line);margin-bottom:8px;width:100%;text-align:left;display:block;padding:10px 14px;" data-id="${o.id}">
+        <div style="font-weight:800;font-size:13.5px;">${escapeHtml(o.code || '—')}</div>
+        <div style="font-size:12px;color:var(--ink-500);font-weight:500;">${escapeHtml(o.title || '—')}</div>
+        <div style="font-size:11px;color:var(--ink-300);margin-top:4px;">${escapeHtml(o.schedule || 'Schedule TBA')} · ${escapeHtml(o.semester || '')} ${escapeHtml(o.school_year || '')}</div>
       </button>
     `).join('');
 
         document.querySelectorAll('#myCourseList .nav-item').forEach(btn => {
             btn.addEventListener('click', () => selectMyCourse(btn.dataset.id, btn));
         });
+
+        // Automatically select target course or first course so it displays immediately!
+        const targetId = autoSelectId || (selectedMyOffering ? selectedMyOffering.id : myOfferings[0]?.id);
+        const targetBtn = document.querySelector(`#myCourseList .nav-item[data-id="${targetId}"]`) || document.querySelector('#myCourseList .nav-item');
+        if (targetBtn) {
+            selectMyCourse(targetBtn.dataset.id, targetBtn);
+        }
     }
 
     async function selectMyCourse(offeringId, btnEl) {
@@ -986,6 +1004,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderGradReadiness();
     });
 
+    getEl('deanAddClassBtn')?.addEventListener('click', () => {
+        openModal('courseOffering', { instructor_id: currentUserId });
+    });
+
     // ══════════════════════════════════════════════════════════════════
     // GENERIC MODAL SYSTEM
     // ══════════════════════════════════════════════════════════════════
@@ -1045,7 +1067,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             title: 'Add Subject / Course Offering',
             table: 'course_offerings',
             fields: [
-                { name: 'catalog_course', label: 'Quick Select Subject from Curriculum (Auto-fills details)', type: 'select', required: false, optionsFn: () => [{ value: '', label: '— Choose from Curriculum (50+ Subjects) —' }, ...state.courses.map(c => ({ value: c.code, label: `${c.code} — ${c.title} (${c.units || 3.0} units)` }))] },
+                { name: 'catalog_course', label: 'Quick Select Subject from Curriculum (Auto-fills details)', type: 'select', required: false, optionsFn: () => [{ value: '', label: '— Choose from Curriculum (50+ Subjects) —' }, ...state.courses.map(c => ({ value: c.code, label: `${c.code} — ${c.title} (${(c.lec_units || 0) + (c.lab_units || 0) || c.units || 3.0} units)` }))] },
                 { name: 'code', label: 'Subject Code', type: 'text', required: true, placeholder: 'e.g. CAP 102 or CC 101' },
                 { name: 'title', label: 'Course Title', type: 'text', required: true, placeholder: 'e.g. Capstone Project and Research 2' },
                 { name: 'program', label: 'Program', type: 'select', required: true, options: [{ value: 'BSIT', label: 'BSIT' }, { value: 'BSCS', label: 'BSCS' }, { value: 'BSIS', label: 'BSIS' }] },
@@ -1071,11 +1093,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     instructor_name: faculty ? faculty.full_name : null,
                 };
             },
-            onSaved: async () => {
+            onSaved: async (savedRow) => {
                 const { data: offerings } = await supabaseClient.from('course_offerings').select('*');
                 state.offerings = offerings || [];
                 renderFacultyPage();
-                loadMyClasses();
+                await loadMyClasses(savedRow?.id);
                 showToast('Subject offering saved successfully.');
             },
         },
@@ -1137,20 +1159,51 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // If courseOffering, bind catalog course auto-fill
         if (key === 'courseOffering') {
+            const codeInput = getEl('field_code');
             const catalogSelect = getEl('field_catalog_course');
-            if (catalogSelect) {
-                catalogSelect.addEventListener('change', (e) => {
-                    const c = state.courses.find(course => course.code === e.target.value);
-                    if (c) {
-                        if (getEl('field_code')) getEl('field_code').value = c.code || '';
-                        if (getEl('field_title')) getEl('field_title').value = c.title || '';
-                        if (getEl('field_units')) getEl('field_units').value = c.units || '3.0';
-                        if (getEl('field_program') && c.program) getEl('field_program').value = c.program;
-                        if (getEl('field_year') && c.year_level) getEl('field_year').value = String(c.year_level);
-                        if (getEl('field_semester') && c.semester) getEl('field_semester').value = c.semester;
-                    }
-                });
+
+            // Add datalist for codeInput
+            if (codeInput && state.courses && state.courses.length) {
+                let dl = getEl('deanCurriculumDatalist');
+                if (!dl) {
+                    dl = document.createElement('datalist');
+                    dl.id = 'deanCurriculumDatalist';
+                    document.body.appendChild(dl);
+                }
+                dl.innerHTML = state.courses.map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.title)}</option>`).join('');
+                codeInput.setAttribute('list', 'deanCurriculumDatalist');
+                codeInput.setAttribute('autocomplete', 'off');
             }
+
+            const applyCourse = (c) => {
+                if (!c) return;
+                const units = (c.lec_units || 0) + (c.lab_units || 0) || c.units || 3.0;
+                const semStr = c.semester === 2 ? '2nd Semester' : (c.semester === 3 ? 'Summer' : '1st Semester');
+                if (getEl('field_code')) getEl('field_code').value = c.code || '';
+                if (getEl('field_title')) getEl('field_title').value = c.title || '';
+                if (getEl('field_units')) getEl('field_units').value = units;
+                if (getEl('field_program')) getEl('field_program').value = c.program || 'BSIT';
+                if (getEl('field_year') && c.year_level) getEl('field_year').value = String(c.year_level);
+                if (getEl('field_semester')) getEl('field_semester').value = semStr;
+                if (catalogSelect) catalogSelect.value = c.code || '';
+            };
+
+            catalogSelect?.addEventListener('change', (e) => {
+                const val = (e.target.value || '').trim().toLowerCase();
+                const matched = state.courses.find(c => c.code.toLowerCase() === val);
+                if (matched) applyCourse(matched);
+            });
+
+            codeInput?.addEventListener('input', (e) => {
+                const rawVal = (e.target.value || '').trim();
+                const normalized = rawVal.replace(/\s+/g, '').toLowerCase();
+                if (!normalized) return;
+                const matched = state.courses.find(c =>
+                    c.code.toLowerCase() === rawVal.toLowerCase() ||
+                    c.code.replace(/\s+/g, '').toLowerCase() === normalized
+                );
+                if (matched) applyCourse(matched);
+            });
         }
 
         getEl('modalOverlay').classList.add('open');
@@ -1177,12 +1230,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const payload = cfg.transform ? cfg.transform(values) : values;
         let saveRes;
         if (editingOfferingId) {
-            saveRes = await supabaseClient.from(cfg.table).update(payload).eq('id', editingOfferingId);
+            saveRes = await supabaseClient.from(cfg.table).update(payload).eq('id', editingOfferingId).select().single();
         } else {
-            saveRes = await supabaseClient.from(cfg.table).insert(payload);
+            saveRes = await supabaseClient.from(cfg.table).insert(payload).select().single();
         }
 
-        const { error } = saveRes;
+        const { data: savedRow, error } = saveRes;
 
         if (error) {
             if (isMissingTableError(error)) showToast(`This feature needs the "${cfg.table}" table — run dean-dashboard-schema.sql first.`, true);
@@ -1192,7 +1245,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showToast(editingOfferingId ? 'Updated successfully.' : 'Saved successfully.');
         closeModal();
-        if (cfg.onSaved) cfg.onSaved();
+        if (cfg.onSaved) cfg.onSaved(savedRow);
     });
 
     // ── Quick Links (SSO) — same sso_links table the student portal uses ──
@@ -1224,5 +1277,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderOverview();
     renderFacultyPage();
     renderGradReadiness();
+    await loadMyClasses();
     await Promise.all([loadFinancials(), loadNotes(), loadAccreditation(), loadAppeals()]);
 });

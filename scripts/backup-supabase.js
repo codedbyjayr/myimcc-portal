@@ -15,6 +15,7 @@ const envPath = path.resolve(__dirname, '../config/.env');
 // Check root .env first, then config/.env
 const rootEnvPath = path.resolve(__dirname, '../.env');
 const targetEnvPath = fs.existsSync(rootEnvPath) ? rootEnvPath : envPath;
+let envConfig = {};
 if (fs.existsSync(targetEnvPath)) {
   const envContent = fs.readFileSync(targetEnvPath, 'utf8');
   envContent.split('\n').forEach(line => {

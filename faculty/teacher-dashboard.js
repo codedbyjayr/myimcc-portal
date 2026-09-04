@@ -57,6 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let selectedOffering = null;
     let roster = [];
     let darkMode = false;
+    let coursesCatalog = [];
 
     // ── Navigation (goto) ───────────────────────────────────────────────
     const titles = {
@@ -620,10 +621,71 @@ document.addEventListener('DOMContentLoaded', async () => {
         const cancelBtn = getEl('cancelAddSubjectBtn');
         const saveBtn = getEl('saveAddSubjectBtn');
         const form = getEl('addSubjectForm');
+        const catalogSelect = getEl('subCatalogSelect');
+        const datalist = getEl('curriculumDatalist');
+        const codeInput = getEl('subCode');
+        const matchNotice = getEl('subMatchNotice');
 
         if (!modal || !openBtn) return;
 
+        function populateCurriculumOptions() {
+            if (catalogSelect && coursesCatalog.length) {
+                catalogSelect.innerHTML = '<option value="">— Choose a Subject (50+ available) —</option>' +
+                    coursesCatalog.map(c => {
+                        const units = (c.lec_units || 0) + (c.lab_units || 0) || c.units || 3.0;
+                        return `<option value="${escapeHtml(c.code)}">${escapeHtml(c.code)} — ${escapeHtml(c.title)} (${units} units)</option>`;
+                    }).join('');
+            }
+            if (datalist && coursesCatalog.length) {
+                datalist.innerHTML = coursesCatalog.map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.title)}</option>`).join('');
+            }
+        }
+
+        function applyCourseSelection(course) {
+            if (!course) return;
+            const units = (course.lec_units || 0) + (course.lab_units || 0) || course.units || 3.0;
+            const semStr = course.semester === 2 ? '2nd Semester' : (course.semester === 3 ? 'Summer' : (typeof course.semester === 'string' ? course.semester : '1st Semester'));
+            if (getEl('subCode')) getEl('subCode').value = course.code || '';
+            if (getEl('subTitle')) getEl('subTitle').value = course.title || '';
+            if (getEl('subUnits')) getEl('subUnits').value = units;
+            if (getEl('subProgram')) getEl('subProgram').value = course.program || 'BSIT';
+            if (getEl('subYear') && course.year_level) getEl('subYear').value = String(course.year_level);
+            if (getEl('subSemester')) getEl('subSemester').value = semStr;
+
+            if (catalogSelect) catalogSelect.value = course.code || '';
+
+            if (matchNotice) {
+                matchNotice.style.display = 'block';
+                matchNotice.textContent = `✓ Auto-filled: ${course.code} — ${course.title} (${units} Units, ${course.program || 'BSIT'})`;
+            }
+        }
+
+        catalogSelect?.addEventListener('change', (e) => {
+            const val = (e.target.value || '').trim().toLowerCase();
+            const matched = coursesCatalog.find(c => c.code.toLowerCase() === val);
+            if (matched) applyCourseSelection(matched);
+        });
+
+        codeInput?.addEventListener('input', (e) => {
+            const rawVal = (e.target.value || '').trim();
+            const normalized = rawVal.replace(/\s+/g, '').toLowerCase();
+            if (!normalized) {
+                if (matchNotice) matchNotice.style.display = 'none';
+                return;
+            }
+            const matched = coursesCatalog.find(c =>
+                c.code.toLowerCase() === rawVal.toLowerCase() ||
+                c.code.replace(/\s+/g, '').toLowerCase() === normalized
+            );
+            if (matched) {
+                applyCourseSelection(matched);
+            } else if (matchNotice) {
+                matchNotice.style.display = 'none';
+            }
+        });
+
         function openModal() {
+            populateCurriculumOptions();
             modal.classList.add('open');
             getEl('subCode')?.focus();
         }
@@ -631,6 +693,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         function closeModal() {
             modal.classList.remove('open');
             if (form) form.reset();
+            if (matchNotice) matchNotice.style.display = 'none';
         }
 
         openBtn.addEventListener('click', openModal);
@@ -647,7 +710,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const schedule = getEl('subSchedule')?.value.trim();
             const year = Number(getEl('subYear')?.value || 1);
             const semester = getEl('subSemester')?.value;
-            const school_year = getEl('subSchoolYear')?.value.trim() || '2025-2026';
+            const school_year = getEl('subSchoolYear')?.value.trim() || '2026–2027';
 
             if (!code || !title || !program || !semester || !school_year) {
                 showToast('Please fill out all required fields marked with *', true);
@@ -670,12 +733,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 instructor_name: currentProfile.full_name,
             };
 
-            let { error } = await supabaseClient.from('course_offerings').insert(payload);
+            let { data: newOffering, error } = await supabaseClient.from('course_offerings').insert(payload).select().single();
 
             if (error && error.message && error.message.includes('instructor_id')) {
                 // Fallback in case instructor_id column is not in DB yet
                 delete payload.instructor_id;
-                ({ error } = await supabaseClient.from('course_offerings').insert(payload));
+                ({ data: newOffering, error } = await supabaseClient.from('course_offerings').insert(payload).select().single());
             }
 
             saveBtn.disabled = false;
@@ -689,6 +752,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast(`Subject "${code} — ${title}" created successfully!`);
             closeModal();
             await loadMyCourses();
+
+            // Automatically select the newly created offering so it displays immediately
+            if (newOffering) {
+                const targetBtn = document.querySelector(`#courseList .nav-item[data-id="${newOffering.id}"]`);
+                selectCourse(newOffering.id, targetBtn);
+            }
         });
     }
 
@@ -701,6 +770,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Init ────────────────────────────────────────────────────────────
     const ok = await checkFacultyAuth();
     if (!ok) return;
+
+    // Load curriculum master catalog for auto-fill
+    try {
+        const { data: cData } = await supabaseClient.from('courses').select('*').order('code');
+        coursesCatalog = cData || [];
+    } catch (e) {
+        console.warn('Could not pre-fetch courses catalog:', e);
+    }
+
     setupAddSubjectModal();
     await loadMyCourses();
     await loadSSOLinks();

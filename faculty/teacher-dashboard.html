@@ -386,8 +386,16 @@
       <h3>Add New Subject / Course</h3>
       <form id="addSubjectForm">
         <div class="form-row">
+          <label for="subCatalogSelect">Quick Select Subject from Curriculum (Auto-fills details)</label>
+          <select id="subCatalogSelect" class="field-input">
+            <option value="">— Choose a Subject (50+ available) —</option>
+          </select>
+        </div>
+        <div class="form-row">
           <label for="subCode">Course Code *</label>
-          <input type="text" id="subCode" class="field-input" placeholder="e.g. IT 301" required>
+          <input type="text" id="subCode" class="field-input" placeholder="e.g. CAP 102 or IT 301" list="curriculumDatalist" required autocomplete="off">
+          <datalist id="curriculumDatalist"></datalist>
+          <small id="subMatchNotice" style="color:var(--green);font-size:12px;margin-top:4px;display:none;font-weight:600;"></small>
         </div>
         <div class="form-row">
           <label for="subTitle">Course Title *</label>
@@ -429,7 +437,7 @@
         </div>
         <div class="form-row">
           <label for="subSchoolYear">School Year *</label>
-          <input type="text" id="subSchoolYear" class="field-input" value="2025-2026" required>
+          <input type="text" id="subSchoolYear" class="field-input" value="2026–2027" required>
         </div>
       </form>
       <div class="modal-actions">
