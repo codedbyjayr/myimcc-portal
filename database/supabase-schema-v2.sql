@@ -258,7 +258,7 @@ ON CONFLICT DO NOTHING;
 
 -- ── Seed Data: SSO Links ─────────────────────────────────────────────
 INSERT INTO sso_links (label, url, icon, sort_order, is_active, roles) VALUES
-  ('LMS', 'https://gooey-kick-outsmart.ngrok-free.dev/', '📚', 1, true, 'student,faculty'),
+  ('LMS', 'https://gooey-kick-outsmart.ngrok-free.dev/', '📚', 1, true, 'student,faculty,teacher,dean,admin,staff'),
   ('Career Hub', 'https://careers.imcc.edu.ph', '💼', 2, true, 'student,faculty'),
   ('Library', 'https://library.imcc.edu.ph', '📖', 3, true, 'student,faculty,staff,admin'),
   ('Email', 'https://mail.imcc.edu.ph', '📧', 4, true, 'student,faculty,staff,admin')
