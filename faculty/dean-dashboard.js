@@ -166,18 +166,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ── Bulk data load ──────────────────────────────────────────────────
     async function loadAllData() {
-        const [{ data: profiles }, { data: offerings }, { data: gradeRows }, { data: enrollRows }] = await Promise.all([
+        const [{ data: profiles }, { data: offerings }, { data: gradeRows }, { data: enrollRows }, { data: courses }] = await Promise.all([
             supabaseClient.from('profiles').select('*'),
             supabaseClient.from('course_offerings').select('*'),
             supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)'),
             supabaseClient.from('enrollments').select('student_id, status, offering_id, course_offerings(school_year, semester)').eq('status', 'enrolled'),
+            supabaseClient.from('courses').select('*').order('code'),
         ]);
 
         state.profiles = profiles || [];
         state.offerings = offerings || [];
         state.grades = gradeRows || [];
         state.enrollments = enrollRows || [];
-        state.facultyList = state.profiles.filter(p => p.role === 'teacher' && p.status === 'approved');
+        state.courses = courses || [];
+        state.facultyList = state.profiles.filter(p => ['teacher', 'faculty', 'dean'].includes(p.role) && p.status === 'approved');
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -488,7 +490,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const facultyOptions = state.facultyList
             .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
-            .map(f => `<option value="${f.id}">${escapeHtml(f.full_name)}</option>`).join('');
+            .map(f => `<option value="${f.id}">${escapeHtml(f.full_name)} ${f.role === 'dean' ? '(Dean)' : ''}</option>`).join('');
 
         body.innerHTML = offerings.map(o => `
       <tr>
@@ -501,6 +503,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             <option value="">— Unassigned —</option>
             ${facultyOptions}
           </select>
+        </td>
+        <td>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button type="button" class="mini-btn edit-offering-btn" data-id="${o.id}" style="background:var(--blue,#0284c7);color:#fff;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-weight:600;font-size:11.5px;">Edit</button>
+            <button type="button" class="mini-btn danger delete-offering-btn" data-id="${o.id}">Delete</button>
+          </div>
         </td>
       </tr>
     `).join('');
@@ -515,6 +523,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             sel.addEventListener('change', () => assignFaculty(sel));
         });
+
+        document.querySelectorAll('.edit-offering-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const offering = offerings.find(o => String(o.id) === btn.dataset.id);
+                if (offering) openModal('courseOffering', offering);
+            });
+        });
+
+        document.querySelectorAll('.delete-offering-btn').forEach(btn => {
+            btn.addEventListener('click', () => deleteOffering(btn.dataset.id));
+        });
+    }
+
+    async function deleteOffering(offeringId) {
+        if (!confirm('Are you sure you want to delete this subject offering?')) return;
+        const { error } = await supabaseClient.from('course_offerings').delete().eq('id', offeringId);
+        if (error) { showToast('Failed to delete offering: ' + error.message, true); return; }
+        showToast('Subject offering deleted.');
+        state.offerings = state.offerings.filter(o => String(o.id) !== String(offeringId));
+        renderFacultyPage();
+        loadMyClasses();
     }
 
     async function assignFaculty(sel) {
@@ -542,6 +571,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (offering) { offering.instructor_id = facultyId || null; offering.instructor_name = instructorName; }
         renderWorkloads();
         renderConflicts();
+        loadMyClasses();
     }
 
     function renderConflicts() {
@@ -1015,15 +1045,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             title: 'Add Subject / Course Offering',
             table: 'course_offerings',
             fields: [
-                { name: 'code', label: 'Subject Code', type: 'text', required: true, placeholder: 'e.g. CC 101 or IT 101' },
-                { name: 'title', label: 'Course Title', type: 'text', required: true, placeholder: 'e.g. Introduction to Computing' },
+                { name: 'catalog_course', label: 'Quick Select Subject from Curriculum (Auto-fills details)', type: 'select', required: false, optionsFn: () => [{ value: '', label: '— Choose from Curriculum (50+ Subjects) —' }, ...state.courses.map(c => ({ value: c.code, label: `${c.code} — ${c.title} (${c.units || 3.0} units)` }))] },
+                { name: 'code', label: 'Subject Code', type: 'text', required: true, placeholder: 'e.g. CAP 102 or CC 101' },
+                { name: 'title', label: 'Course Title', type: 'text', required: true, placeholder: 'e.g. Capstone Project and Research 2' },
                 { name: 'program', label: 'Program', type: 'select', required: true, options: [{ value: 'BSIT', label: 'BSIT' }, { value: 'BSCS', label: 'BSCS' }, { value: 'BSIS', label: 'BSIS' }] },
                 { name: 'year', label: 'Year Level', type: 'select', required: true, options: [{ value: '1', label: '1st Year' }, { value: '2', label: '2nd Year' }, { value: '3', label: '3rd Year' }, { value: '4', label: '4th Year' }] },
                 { name: 'semester', label: 'Semester', type: 'select', required: true, options: [{ value: '1st Semester', label: '1st Semester' }, { value: '2nd Semester', label: '2nd Semester' }, { value: 'Summer', label: 'Summer' }] },
                 { name: 'school_year', label: 'School Year', type: 'text', required: true, placeholder: '2026–2027', default: '2026–2027' },
                 { name: 'units', label: 'Total Units', type: 'number', required: true, placeholder: '3.0', default: '3.0' },
-                { name: 'schedule', label: 'Schedule', type: 'text', required: false, placeholder: 'e.g. MWF 08:00–09:30' },
-                { name: 'instructor_id', label: 'Assigned Faculty', type: 'select', required: false, optionsFn: () => [{ value: '', label: '— Unassigned —' }, ...state.facultyList.map(f => ({ value: f.id, label: f.full_name }))] },
+                { name: 'schedule', label: 'Schedule', type: 'text', required: false, placeholder: 'e.g. MWF 08:00–09:30 or TTH 13:00–14:30' },
+                { name: 'instructor_id', label: 'Assigned Faculty', type: 'select', required: false, optionsFn: () => [{ value: '', label: '— Unassigned —' }, ...state.facultyList.map(f => ({ value: f.id, label: `${f.full_name} ${f.role === 'dean' ? '(Dean)' : ''}` }))] },
             ],
             transform: (values) => {
                 const faculty = state.facultyList.find(f => f.id === values.instructor_id);
@@ -1045,7 +1076,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 state.offerings = offerings || [];
                 renderFacultyPage();
                 loadMyClasses();
-                showToast('Subject offering created successfully.');
+                showToast('Subject offering saved successfully.');
             },
         },
         appeal: {
@@ -1063,18 +1094,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     let activeModalKey = null;
+    let editingOfferingId = null;
 
     document.querySelectorAll('[data-modal]').forEach(btn => btn.addEventListener('click', () => openModal(btn.dataset.modal)));
 
-    function openModal(key) {
+    function openModal(key, initialValues = null) {
         const cfg = modalConfigs[key];
         if (!cfg) return;
         activeModalKey = key;
-        getEl('modalTitle').textContent = cfg.title;
+        editingOfferingId = (initialValues && initialValues.id) ? initialValues.id : null;
+        getEl('modalTitle').textContent = editingOfferingId ? `Edit ${cfg.title.replace(/^Add\s+/i, '')}` : cfg.title;
 
         const form = getEl('modalForm');
         form.innerHTML = cfg.fields.map(f => {
             const id = `field_${f.name}`;
+            const initialVal = (initialValues && initialValues[f.name] !== undefined) ? initialValues[f.name] : (f.default ?? '');
+
             if (f.type === 'select') {
                 const options = f.options || (f.optionsFn ? f.optionsFn() : []);
                 return `
@@ -1082,7 +1117,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <label for="${id}">${escapeHtml(f.label)}</label>
             <select id="${id}" class="field-input" ${f.required ? 'required' : ''}>
               <option value="">Select…</option>
-              ${options.map(o => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join('')}
+              ${options.map(o => `<option value="${escapeHtml(o.value)}" ${String(o.value) === String(initialVal) ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
             </select>
           </div>`;
             }
@@ -1090,20 +1125,38 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return `
           <div class="form-row">
             <label for="${id}">${escapeHtml(f.label)}</label>
-            <textarea id="${id}" class="field-input" placeholder="${escapeHtml(f.placeholder || '')}" ${f.required ? 'required' : ''}></textarea>
+            <textarea id="${id}" class="field-input" placeholder="${escapeHtml(f.placeholder || '')}" ${f.required ? 'required' : ''}>${escapeHtml(String(initialVal || ''))}</textarea>
           </div>`;
             }
             return `
         <div class="form-row">
           <label for="${id}">${escapeHtml(f.label)}</label>
-          <input type="${f.type}" id="${id}" class="field-input" placeholder="${escapeHtml(f.placeholder || '')}" value="${f.default ?? ''}" ${f.required ? 'required' : ''}>
+          <input type="${f.type}" id="${id}" class="field-input" placeholder="${escapeHtml(f.placeholder || '')}" value="${escapeHtml(String(initialVal ?? ''))}" ${f.required ? 'required' : ''}>
         </div>`;
         }).join('');
+
+        // If courseOffering, bind catalog course auto-fill
+        if (key === 'courseOffering') {
+            const catalogSelect = getEl('field_catalog_course');
+            if (catalogSelect) {
+                catalogSelect.addEventListener('change', (e) => {
+                    const c = state.courses.find(course => course.code === e.target.value);
+                    if (c) {
+                        if (getEl('field_code')) getEl('field_code').value = c.code || '';
+                        if (getEl('field_title')) getEl('field_title').value = c.title || '';
+                        if (getEl('field_units')) getEl('field_units').value = c.units || '3.0';
+                        if (getEl('field_program') && c.program) getEl('field_program').value = c.program;
+                        if (getEl('field_year') && c.year_level) getEl('field_year').value = String(c.year_level);
+                        if (getEl('field_semester') && c.semester) getEl('field_semester').value = c.semester;
+                    }
+                });
+            }
+        }
 
         getEl('modalOverlay').classList.add('open');
     }
 
-    function closeModal() { getEl('modalOverlay').classList.remove('open'); activeModalKey = null; }
+    function closeModal() { getEl('modalOverlay').classList.remove('open'); activeModalKey = null; editingOfferingId = null; }
     getEl('modalCancelBtn').addEventListener('click', closeModal);
     getEl('modalOverlay').addEventListener('click', (e) => { if (e.target.id === 'modalOverlay') closeModal(); });
 
@@ -1113,14 +1166,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const values = {};
         for (const f of cfg.fields) {
+            if (f.name === 'catalog_course') continue;
             const el = getEl(`field_${f.name}`);
+            if (!el) continue;
             const val = el.value.trim();
             if (f.required && !val) { showToast(`${f.label} is required.`, true); el.focus(); return; }
             values[f.name] = f.type === 'number' ? (val === '' ? null : Number(val)) : (val || null);
         }
 
         const payload = cfg.transform ? cfg.transform(values) : values;
-        const { error } = await supabaseClient.from(cfg.table).insert(payload);
+        let saveRes;
+        if (editingOfferingId) {
+            saveRes = await supabaseClient.from(cfg.table).update(payload).eq('id', editingOfferingId);
+        } else {
+            saveRes = await supabaseClient.from(cfg.table).insert(payload);
+        }
+
+        const { error } = saveRes;
 
         if (error) {
             if (isMissingTableError(error)) showToast(`This feature needs the "${cfg.table}" table — run dean-dashboard-schema.sql first.`, true);
@@ -1128,7 +1190,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        showToast('Saved.');
+        showToast(editingOfferingId ? 'Updated successfully.' : 'Saved successfully.');
         closeModal();
         if (cfg.onSaved) cfg.onSaved();
     });
