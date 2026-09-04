@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', user.id).single();
 
-        if (!profile || profile.status !== 'approved' || !['teacher', 'faculty'].includes(profile.role)) {
+        if (!profile || profile.status !== 'approved' || !['teacher', 'faculty', 'dean', 'admin'].includes(profile.role)) {
             alert('Unauthorized access. Faculty privileges required.');
             await supabaseClient.auth.signOut();
             window.location.href = '../auth/login.html';
@@ -358,14 +358,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const [{ data: enrollments }, existingRes] = await Promise.all([
             supabaseClient.from('enrollments').select('student_id, profiles(id, full_name, student_no)').eq('offering_id', offeringId).eq('status', 'enrolled'),
-            supabaseClient.from('attendance_records').select('*').eq('offering_id', offeringId).eq('session_date', date),
+            supabaseClient.from('attendance').select('*').eq('offering_id', offeringId).eq('date', date),
         ]);
 
         if (isMissingTableError(existingRes.error)) {
             getEl('attTable').style.display = 'none';
             const msg = getEl('noAttMsg');
             msg.style.display = 'block';
-            msg.textContent = 'Attendance needs the attendance_records table — run faculty-schema-additions.sql, then reload.';
+            msg.textContent = 'Attendance table could not be loaded.';
             getEl('saveAttendanceBtn').disabled = true;
             return;
         }
@@ -424,21 +424,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         btn.textContent = 'Saving…';
 
         const rows = attRoster.map(r => ({
-            offering_id: offeringId,
+            offering_id: Number(offeringId),
             student_id: r.student.id,
-            session_date: date,
+            date: date,
             status: r.status,
-            recorded_by: currentUser.id,
+            marked_by: currentUser.id,
         }));
 
-        const { error } = await supabaseClient.from('attendance_records').upsert(rows, { onConflict: 'offering_id,student_id,session_date' });
+        const { error } = await supabaseClient.from('attendance').upsert(rows, { onConflict: 'student_id,offering_id,date' });
 
         btn.disabled = false;
         btn.textContent = 'Save Attendance';
 
         if (error) {
-            if (isMissingTableError(error)) showToast('Attendance needs the attendance_records table — see faculty-schema-additions.sql.', true);
-            else showToast('Failed to save attendance: ' + error.message, true);
+            showToast('Failed to save attendance: ' + error.message, true);
             return;
         }
         showToast('Attendance saved.');
@@ -449,10 +448,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!offerings.length) return;
         const offeringIds = offerings.map(o => o.id);
         const { data, error } = await supabaseClient
-            .from('attendance_records')
-            .select('session_date, status, offering_id')
+            .from('attendance')
+            .select('date, status, offering_id')
             .in('offering_id', offeringIds)
-            .order('session_date', { ascending: false })
+            .order('date', { ascending: false })
             .limit(300);
 
         const body = getEl('attHistoryBody');
@@ -467,8 +466,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const grouped = {};
         data.forEach(r => {
-            const key = `${r.session_date}|${r.offering_id}`;
-            if (!grouped[key]) grouped[key] = { date: r.session_date, offeringId: r.offering_id, present: 0, absent: 0, late: 0 };
+            const key = `${r.date}|${r.offering_id}`;
+            if (!grouped[key]) grouped[key] = { date: r.date, offeringId: r.offering_id, present: 0, absent: 0, late: 0 };
             if (r.status === 'present') grouped[key].present++;
             else if (r.status === 'absent') grouped[key].absent++;
             else if (r.status === 'late') grouped[key].late++;
@@ -505,15 +504,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!title || !message) { showToast('Title and message are required.', true); return; }
 
         const { error } = await supabaseClient.from('class_announcements').insert({
-            offering_id: offeringId,
-            posted_by: currentUser.id,
-            posted_by_name: currentProfile.full_name,
-            title, message,
+            offering_id: Number(offeringId),
+            author_id: currentUser.id,
+            title,
+            body: message,
+            is_active: true,
         });
 
         if (error) {
-            if (isMissingTableError(error)) showToast('Announcements need the class_announcements table — see faculty-schema-additions.sql.', true);
-            else showToast('Failed to post: ' + error.message, true);
+            showToast('Failed to post announcement: ' + error.message, true);
             return;
         }
 
@@ -539,7 +538,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (isMissingTableError(error)) {
             wrap.innerHTML = '';
             msg.style.display = 'block';
-            msg.textContent = 'Announcements need the class_announcements table — run faculty-schema-additions.sql, then reload.';
+            msg.textContent = 'Announcements could not be loaded.';
             return;
         }
         if (!data || !data.length) { wrap.innerHTML = ''; msg.style.display = 'block'; msg.textContent = 'No announcements posted yet.'; return; }
@@ -547,12 +546,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         wrap.innerHTML = data.map(a => {
             const offering = offerings.find(o => String(o.id) === String(a.offering_id));
+            const announcementText = a.body || a.message || '';
             return `
         <div class="activity-row">
           <div class="adot" style="background:var(--pink-500);"></div>
           <div>
             <div class="t">${escapeHtml(a.title)} <span style="color:var(--ink-300);font-weight:500;">— ${escapeHtml(offering?.code || '')}</span></div>
-            <div class="d">${escapeHtml(a.message)}</div>
+            <div class="d">${escapeHtml(announcementText)}</div>
             <div class="d" style="margin-top:2px;">${fmtDate(a.created_at)}</div>
           </div>
         </div>
