@@ -56,6 +56,27 @@
               <span id="ssoBtnText">Sign In with Google / School Account</span>
             </button>
           </form>
+
+          <!-- DEMO ACCESS SECTION -->
+          <div class="demo-access-card" style="margin-top:22px;padding:16px;border-radius:12px;background:rgba(231,51,138,0.06);border:1.5px dashed rgba(231,51,138,0.35);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <span style="font-size:11.5px;font-weight:700;color:var(--primary,#e7338a);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;">
+                <span>⚡</span> Evaluator / Demo Access
+              </span>
+              <span style="font-size:10.5px;background:rgba(231,51,138,0.15);color:var(--primary,#e7338a);padding:2px 8px;border-radius:99px;font-weight:700;">Student Portal</span>
+            </div>
+            <p style="font-size:12px;color:var(--ink-700,#334155);margin-bottom:10px;line-height:1.4;">
+              For testing &amp; demo purposes. Use one-click sign in below or log in with credentials:
+            </p>
+            <div style="font-size:11.5px;color:var(--ink-500,#64748b);margin-bottom:12px;background:#fff;padding:8px 10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);line-height:1.6;">
+              <div><b>Email:</b> <code style="color:var(--primary,#e7338a);font-weight:600;">student.demo@imcc.edu.ph</code></div>
+              <div><b>Password:</b> <code style="color:var(--ink-900,#0f172a);font-weight:600;">DemoStudent2026!</code></div>
+            </div>
+            <button type="button" id="demoStudentBtn" class="btn-login" style="background:#0f172a;color:#fff;font-weight:700;font-size:13px;padding:11px 16px;box-shadow:none;display:flex;align-items:center;justify-content:center;gap:8px;">
+              <span>🚀</span> One-Click Sign In as Demo Student
+            </button>
+            <div id="demoStatus" style="font-size:12px;color:var(--primary,#e7338a);text-align:center;margin-top:8px;display:none;font-weight:600;"></div>
+          </div>
         </div>
 
         <!-- STEP 2A: TOTP Enrollment -->

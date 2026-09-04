@@ -131,6 +131,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    // Demo student bypasses MFA directly to student dashboard
+    if (session.user?.email === 'student.demo@imcc.edu.ph') {
+      window.location.href = '../student/dashboard.html';
+      return;
+    }
+
     // Check if user is already fully authenticated (AAL2)
     const { data: aalData } = await supabaseClient.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aalData?.currentLevel === 'aal2') {
@@ -241,6 +247,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
+      if (email.toLowerCase() === 'student.demo@imcc.edu.ph') {
+        await loginAsDemoStudent();
+        return;
+      }
+
       if (!isAllowedDomain(email)) {
         showStep(stepUnauthorized);
         return;
@@ -268,6 +279,41 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   }
+
+  // ── Demo Student Access ─────────────────────────────────────────────
+  const demoStudentBtn = document.getElementById('demoStudentBtn');
+  const demoStatus = document.getElementById('demoStatus');
+
+  async function loginAsDemoStudent() {
+    if (demoStudentBtn) {
+      demoStudentBtn.disabled = true;
+      demoStudentBtn.innerHTML = '<span>⏳</span> Signing in as Demo Student...';
+    }
+    if (demoStatus) {
+      demoStatus.style.display = 'block';
+      demoStatus.textContent = 'Authenticating demo session...';
+    }
+
+    try {
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email: 'student.demo@imcc.edu.ph',
+        password: 'DemoStudent2026!'
+      });
+      if (error) throw error;
+
+      if (demoStatus) demoStatus.textContent = 'Redirecting to Student Dashboard...';
+      window.location.href = '../student/dashboard.html';
+    } catch (err) {
+      console.error('Demo sign-in failed:', err);
+      if (demoStatus) demoStatus.textContent = 'Error: ' + (err.message || 'Failed to sign in');
+      if (demoStudentBtn) {
+        demoStudentBtn.disabled = false;
+        demoStudentBtn.innerHTML = '<span>🚀</span> One-Click Sign In as Demo Student';
+      }
+    }
+  }
+
+  demoStudentBtn?.addEventListener('click', loginAsDemoStudent);
 
   async function startEnrollment() {
     try {
