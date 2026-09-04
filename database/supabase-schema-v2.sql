@@ -288,3 +288,83 @@ INSERT INTO timetable (offering_id, day_of_week, start_time, end_time, room_id, 
   (3, 'Wed', '10:00', '11:00', 3, NULL),
   (3, 'Fri', '10:00', '11:00', 3, NULL)
 ON CONFLICT DO NOTHING;
+
+-- ── Clearance Departments Table & Initialization ──────────────────────
+CREATE TABLE IF NOT EXISTS clearance_departments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code text UNIQUE NOT NULL,
+  name text NOT NULL,
+  icon text DEFAULT '📄'
+);
+
+ALTER TABLE clearance_departments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated read clearance_departments" ON clearance_departments FOR SELECT TO authenticated USING (true);
+
+INSERT INTO clearance_departments (code, name, icon) VALUES
+  ('cashier', 'Cashier', '💵'),
+  ('medical_dental', 'Medical/Dental Clinic', '🩺'),
+  ('property_custodian', 'Property Custodian', '📦'),
+  ('guidance', 'Guidance', '🧭'),
+  ('dean', 'Dean', '🏛️'),
+  ('registrar', 'Registrar', '📋'),
+  ('dsa', 'Dean of Student Affairs (DSA)', '🎓'),
+  ('library', 'Library', '📚'),
+  ('laboratory', 'Laboratory/Nursing Arts/Cybershack', '🔬'),
+  ('rotc_cwts', 'ROTC/CWTS', '🎖️')
+ON CONFLICT (code) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION public.initialize_student_clearances(target_student_id uuid DEFAULT NULL)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
+BEGIN
+  IF target_student_id IS NULL THEN
+    target_student_id := auth.uid();
+  END IF;
+
+  IF target_student_id IS NULL THEN
+    RETURN;
+  END IF;
+
+  INSERT INTO public.clearances (student_id, department_code, department_name, officer_name, icon, status, note, cleared_at)
+  SELECT 
+    target_student_id,
+    cd.code,
+    cd.name,
+    CASE 
+      WHEN cd.code = 'cashier' THEN 'Ms. Maria Clara'
+      WHEN cd.code = 'medical_dental' THEN 'Dr. Josefa Llanes'
+      WHEN cd.code = 'property_custodian' THEN 'Engr. Emilio Aguinaldo'
+      WHEN cd.code = 'guidance' THEN 'Ms. Leonor Rivera'
+      WHEN cd.code = 'dean' THEN 'Dr. Joeselito Ortiz'
+      WHEN cd.code = 'registrar' THEN 'Atty. Apolinario Mabini'
+      WHEN cd.code = 'dsa' THEN 'Prof. Marcelo Del Pilar'
+      WHEN cd.code = 'library' THEN 'Mr. Jose Rizal'
+      WHEN cd.code = 'laboratory' THEN 'Mr. Juan Luna'
+      WHEN cd.code = 'rotc_cwts' THEN 'Col. Antonio Luna'
+      ELSE 'Department Officer'
+    END,
+    cd.icon,
+    'cleared',
+    CASE 
+      WHEN cd.code = 'cashier' THEN 'All tuition installments settled'
+      WHEN cd.code = 'medical_dental' THEN 'Annual medical & dental checkup cleared'
+      WHEN cd.code = 'property_custodian' THEN 'No unreturned school property or equipment'
+      WHEN cd.code = 'guidance' THEN 'Counseling clearance cleared'
+      WHEN cd.code = 'dean' THEN 'Academic requirements certified'
+      WHEN cd.code = 'registrar' THEN 'Credentials and academic documents verified'
+      WHEN cd.code = 'dsa' THEN 'Good moral standing, no disciplinary records'
+      WHEN cd.code = 'library' THEN 'No pending book holds or overdue materials'
+      WHEN cd.code = 'laboratory' THEN 'All hardware, glassware & kits accounted for'
+      WHEN cd.code = 'rotc_cwts' THEN 'NSTP/ROTC requirements completed'
+      ELSE 'No pending holds'
+    END,
+    now()
+  FROM public.clearance_departments cd
+  ON CONFLICT (student_id, department_code) DO UPDATE
+  SET department_name = EXCLUDED.department_name,
+      icon = EXCLUDED.icon;
+END;
+$function$;
+
