@@ -10,9 +10,11 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../shared/supabase-config.js"></script>
     <script src="../shared/authGuard.js"></script>
+    <script src="../shared/loading.js"></script>
     <script src="registrar-dashboard.js"></script>
 
     <link rel="stylesheet" href="registrar-dashboard.css">
+    <link rel="stylesheet" href="../shared/loading.css">
 </head>
 
 <body>
@@ -528,6 +530,7 @@
             if (!auth) return;
             document.getElementById("userName").textContent = auth.profile.full_name || "Registrar";
             await loadAll();
+            if (window.imccHidePreloader) window.imccHidePreloader();
         }
         init();
     </script>

@@ -156,7 +156,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function goto(page) {
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        getEl('page-' + page)?.classList.add('active');
+        const pageEl = getEl('page-' + page);
+        if (pageEl) {
+            pageEl.classList.add('active');
+            if (window.imccFadeIn) window.imccFadeIn(pageEl);
+        }
         document.querySelectorAll('.nav-item[data-page]').forEach(n => n.classList.toggle('active', n.dataset.page === page));
         getEl('pageTitle').textContent = titles[page] || 'Dashboard';
         getEl('userDropdown')?.classList.remove('open');
@@ -1326,4 +1330,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderGradReadiness();
     await loadMyClasses();
     await Promise.all([loadFinancials(), loadNotes(), loadAccreditation(), loadAppeals()]);
+
+    if (window.imccHidePreloader) window.imccHidePreloader();
 });

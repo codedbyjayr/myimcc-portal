@@ -150,7 +150,10 @@ function goto(page) {
   state.page = page;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const pageEl = getEl('page-' + page);
-  if (pageEl) pageEl.classList.add('active');
+  if (pageEl) {
+    pageEl.classList.add('active');
+    if (window.imccFadeIn) window.imccFadeIn(pageEl);
+  }
 
   document.querySelectorAll('.nav-item[data-page]').forEach(n => n.classList.toggle('active', n.dataset.page === page));
 
@@ -2024,6 +2027,8 @@ async function init() {
     showToast('Failed to load portal data: ' + err.message, true);
     console.error('Initialization error:', err);
   }
+
+  if (window.imccHidePreloader) window.imccHidePreloader();
 }
 
 // Wait for shared supabase-config.js to initialize window.__myimcc_supabase_client__

@@ -358,4 +358,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkAdminAuth();
     await loadPendingUsers();
     await loadApprovedUsers();
+
+    if (window.imccHidePreloader) window.imccHidePreloader();
 });

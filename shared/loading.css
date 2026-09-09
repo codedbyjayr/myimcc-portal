@@ -1,0 +1,171 @@
+/* =====================================================================
+   MyIMCC Portal — Smooth Loading System
+   Preloader overlay, skeleton shimmer placeholders, and fade-in
+   transitions shared across all dashboards.
+   ===================================================================== */
+
+/* ── Full-screen branded preloader ─────────────────────────────────── */
+.imcc-preloader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: var(--bg, #F7F5FA);
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity .45s ease, visibility .45s ease;
+}
+
+.imcc-preloader.hidden {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.imcc-preloader .pl-mark {
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--pink-600, #E32B4F), var(--pink-700, #9D1F3A));
+  color: #fff;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: .02em;
+  box-shadow: 0 10px 30px rgba(227, 43, 79, .35);
+  animation: plFloat 1.6s ease-in-out infinite;
+}
+
+.imcc-preloader .pl-ring {
+  width: 34px;
+  height: 34px;
+  border: 3px solid var(--pink-100, #FBDEEC);
+  border-top-color: var(--pink-600, #E32B4F);
+  border-radius: 50%;
+  animation: plSpin .8s linear infinite;
+}
+
+.imcc-preloader .pl-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-500, #6B6478);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+@keyframes plSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes plFloat {
+  0%, 100% { transform: translateY(0); box-shadow: 0 10px 30px rgba(227,43,79,.35); }
+  50% { transform: translateY(-6px); box-shadow: 0 16px 40px rgba(227,43,79,.45); }
+}
+
+/* ── Branded spinner (inline, for buttons/small areas) ─────────────── */
+.imcc-spinner {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  border: 2.5px solid rgba(255,255,255,.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: plSpin .7s linear infinite;
+  vertical-align: -3px;
+  margin-right: 8px;
+}
+
+/* ── Skeleton shimmer placeholders ─────────────────────────────────── */
+.imcc-skel {
+  position: relative;
+  overflow: hidden;
+  background: var(--line, #EDE6F0);
+  border-radius: 8px;
+}
+
+.imcc-skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+  animation: skelShimmer 1.4s infinite;
+}
+
+[data-theme="dark"] .imcc-skel::after {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent);
+}
+
+@keyframes skelShimmer {
+  100% { transform: translateX(100%); }
+}
+
+.imcc-skel-line   { height: 12px; margin: 6px 0; }
+.imcc-skel-title  { height: 20px; width: 40%; margin: 4px 0 10px; }
+.imcc-skel-avatar { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; }
+.imcc-skel-card   { height: 110px; border-radius: var(--radius, 14px); margin-bottom: 14px; }
+.imcc-skel-row    { height: 34px; border-radius: 8px; margin-bottom: 8px; }
+.imcc-skel-chip   { width: 60px; height: 16px; border-radius: 20px; display: inline-block; }
+
+/* Skeletons inside stat-card layout */
+.imcc-skel-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.imcc-skel-stats .imcc-skel-card { margin-bottom: 0; height: 96px; }
+
+.imcc-skel-list { padding: 8px 2px; }
+.imcc-skel-list .imcc-skel-row:last-child { margin-bottom: 0; }
+
+/* ── Fade-in transitions for content ───────────────────────────────── */
+.imcc-fade-in {
+  animation: fadeInUp .5s ease both;
+}
+
+.imcc-fade-in-slow {
+  animation: fadeInUp .8s ease both;
+}
+
+.imcc-stagger > * {
+  animation: fadeInUp .5s ease both;
+}
+.imcc-stagger > *:nth-child(1) { animation-delay: .05s; }
+.imcc-stagger > *:nth-child(2) { animation-delay: .12s; }
+.imcc-stagger > *:nth-child(3) { animation-delay: .19s; }
+.imcc-stagger > *:nth-child(4) { animation-delay: .26s; }
+.imcc-stagger > *:nth-child(5) { animation-delay: .33s; }
+.imcc-stagger > *:nth-child(6) { animation-delay: .4s; }
+.imcc-stagger > *:nth-child(7) { animation-delay: .47s; }
+.imcc-stagger > *:nth-child(8) { animation-delay: .54s; }
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Section swap between dashboard pages */
+.imcc-section {
+  animation: fadeInUp .35s ease both;
+}
+
+/* Reduce motion safety */
+@media (prefers-reduced-motion: reduce) {
+  .imcc-preloader .pl-mark,
+  .imcc-spinner,
+  .imcc-skel::after {
+    animation: none;
+  }
+  .imcc-fade-in, .imcc-fade-in-slow, .imcc-section, .imcc-stagger > * {
+    animation: none;
+    transform: none;
+  }
+}
