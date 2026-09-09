@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let darkMode = false;
     const state = {
         profiles: [], offerings: [], grades: [], enrollments: [], facultyList: [],
-        budgets: [], grants: [], notes: [], accreditation: [], appeals: [],
+        budgets: [], grants: [], notes: [], accreditation: [], appeals: [], courses: [],
     };
 
     // ── Mobile Navigation Drawer ────────────────────────────────────────

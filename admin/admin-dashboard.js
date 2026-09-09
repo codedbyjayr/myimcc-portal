@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             tr.innerHTML = `
         <td><b>${highlight(user.full_name || 'N/A', term)}</b></td>
         <td>${highlight(user.email, term)}</td>
-        <td><code>${highlight(user.id_number || 'N/A', term)}</code></td>
+        <td><code>${highlight(user.student_no || 'N/A', term)}</code></td>
         <td>${highlight(user.program || '—', term)}</td>
         <td>
           <select class="role-select pending-role-select" data-id="${user.id}">
@@ -159,7 +159,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             tr.innerHTML = `
         <td><b>${highlight(user.full_name || 'N/A', term)}</b> ${isSelf ? '<small style="color:var(--primary);">(You)</small>' : ''}</td>
         <td>${highlight(user.email, term)}</td>
-        <td><code>${highlight(user.id_number || 'N/A', term)}</code></td>
+        <td><code>${highlight(user.student_no || 'N/A', term)}</code></td>
         <td>${highlight(user.program || '—', term)}</td>
         <td>
           <select class="role-select" data-id="${user.id}" ${isSelf ? 'disabled' : ''}>
@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const haystack = [
                 user.full_name,
                 user.email,
-                user.id_number,
+                user.student_no,
                 user.program,
                 roleRaw,
                 roleLabel,
@@ -321,7 +321,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 const { error } = await supabaseClient
                     .from('profiles')
-                    .update({ status: 'onboarding', role: null })
+                    .update({ status: 'pending', role: 'student' })
                     .eq('id', userId);
 
                 if (error) {

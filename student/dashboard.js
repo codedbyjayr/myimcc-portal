@@ -1219,10 +1219,10 @@ async function loadCor() {
       .select('*')
       .eq('student_id', profile.id)
       .eq('is_current', true)
-      .single();
+      .maybeSingle();
 
-    const activeSchoolYear = sem?.school_year || '2025–2026';
-    const activeSemester = sem?.semester || '2nd Semester';
+    const activeSchoolYear = sem?.school_year || '2026-2027';
+    const activeSemester = sem?.semester || '1st Semester';
 
     const { data: enrollments } = await supabaseClient
       .from('enrollments')
@@ -1963,11 +1963,12 @@ getEl('saveProfileBtn')?.addEventListener('click', async () => {
   const avatar_url = getEl('editAvatar')?.value.trim() || null;
 
   try {
-    const { error } = await supabaseClient.from('profiles').update({
-      phone,
-      address,
-      avatar_url,
-    }).eq('id', profile.id);
+    const updateData = {};
+    if (phone !== null) updateData.phone = phone;
+    if (address !== null) updateData.address = address;
+    if (avatar_url !== null) updateData.avatar_url = avatar_url;
+
+    const { error } = await supabaseClient.from('profiles').update(updateData).eq('id', profile.id);
 
     if (error) throw error;
 

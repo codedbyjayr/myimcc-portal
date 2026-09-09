@@ -9,6 +9,7 @@
     <!-- Supabase client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../shared/supabase-config.js"></script>
+    <script src="../shared/authGuard.js"></script>
     <script src="registrar-dashboard.js"></script>
 
     <link rel="stylesheet" href="registrar-dashboard.css">
@@ -239,15 +240,13 @@
            schema differs, this is the only section you should need to edit.
            ========================================================================= */
         const TABLES = {
-            students: "students",
-            subjects: "subjects",
-            offerings: "offerings"
+            students: "profiles",
+            subjects: "courses",
+            offerings: "enrollments"
         };
 
         /* Use pre-initialized client from shared/supabase-config.js if available */
-        const sb = window.supabaseClient || (window.supabase && typeof SUPABASE_URL !== 'undefined'
-            ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-            : null);
+        const sb = window.supabaseClient || null;
 
         /* =========================================================================
            STATE
@@ -336,7 +335,7 @@
         }
 
         async function loadStudents() {
-            const { data, error } = await sb.from(TABLES.students).select("*").order("full_name");
+            const { data, error } = await sb.from(TABLES.students).select("*").eq("role", "student").order("full_name");
             if (error) { toast("Failed to load students: " + error.message, true); return; }
             allStudents = data || [];
         }
@@ -348,7 +347,9 @@
         }
 
         async function loadOfferings() {
-            const { data, error } = await sb.from(TABLES.offerings).select("*");
+            const { data, error } = await sb.from(TABLES.offerings)
+                .select("*, course_offerings(code, title, units)")
+                .in("student_id", allStudents.map(s => s.id));
             if (error) { toast("Failed to load offerings: " + error.message, true); return; }
             allOfferings = data || [];
         }
@@ -360,7 +361,7 @@
             document.getElementById("statStudents").textContent = allStudents.length;
             document.getElementById("statSubjects").textContent = allSubjects.length;
             document.getElementById("statPending").textContent =
-                allOfferings.filter(o => o.status === "offered").length;
+                allOfferings.filter(o => o.status === "enrolled").length;
         }
 
         /* =========================================================================
@@ -408,7 +409,7 @@
     <tr class="student-row" onclick="selectStudent('${s.id}')">
       <td>${s.student_no || ""}</td>
       <td><b>${s.full_name || ""}</b></td>
-      <td>${s.major || ""}</td>
+      <td>${s.program || ""}</td>
       <td>${s.year_level || ""}</td>
     </tr>
   `).join("");
@@ -419,15 +420,18 @@
             if (!selectedStudent) return;
             document.getElementById("studentDetailPanel").style.display = "block";
             document.getElementById("studentDetailName").textContent =
-                selectedStudent.full_name + " — " + (selectedStudent.major || "");
+                selectedStudent.full_name + " — " + (selectedStudent.program || "");
             renderStudentOffers();
         }
 
         function renderStudentOffers() {
             if (!selectedStudent) return;
             const rows = allOfferings
-                .filter(o => String(o.student_id) === String(selectedStudent.id) && o.status !== "removed")
-                .map(o => ({ ...o, subject: allSubjects.find(s => String(s.id) === String(o.subject_id)) }))
+                .filter(o => String(o.student_id) === String(selectedStudent.id) && o.status !== "dropped")
+                .map(o => ({
+                    ...o,
+                    subject: o.course_offerings ? { code: o.course_offerings.code, title: o.course_offerings.title, units: o.course_offerings.units } : null
+                }))
                 .filter(o => o.subject);
 
             const body = document.getElementById("offersBody");
@@ -436,7 +440,7 @@
       <td><b>${o.subject.code}</b></td>
       <td>${o.subject.title}</td>
       <td>${o.subject.units ?? ""}</td>
-      <td>${categoryBadge(o.subject.category)}</td>
+      <td>—</td>
       <td><span class="badge ${o.status === 'enrolled' ? 'enrolled' : 'offered'}">${o.status}</span></td>
       <td><button class="btn btn-danger" onclick="removeOffer('${o.id}')">Remove</button></td>
     </tr>
@@ -466,11 +470,11 @@
         function populateOfferSubjects() {
             const cat = document.getElementById("offerCategory").value;
             const already = new Set(
-                allOfferings.filter(o => String(o.student_id) === String(selectedStudent.id) && o.status !== "removed")
-                    .map(o => String(o.subject_id))
+                allOfferings.filter(o => String(o.student_id) === String(selectedStudent.id) && o.status !== "dropped")
+                    .map(o => String(o.offering_id))
             );
             const options = allSubjects
-                .filter(s => (cat === "ALL" || (s.category || "").toUpperCase() === cat) && !already.has(String(s.id)))
+                .filter(s => (cat === "ALL" || (s.code || "").startsWith(cat === "IT" ? "" : "GE")) && !already.has(String(s.id)))
                 .map(s => `<option value="${s.id}">${s.code} — ${s.title}</option>`)
                 .join("");
             document.getElementById("offerSubject").innerHTML = options || `<option value="">No subjects available</option>`;
@@ -482,8 +486,8 @@
 
             const { error } = await sb.from(TABLES.offerings).insert({
                 student_id: selectedStudent.id,
-                subject_id: subjectId,
-                status: "offered"
+                offering_id: subjectId,
+                status: "enrolled"
             });
 
             if (error) { toast("Could not offer subject: " + error.message, true); return; }
@@ -518,7 +522,14 @@
         /* =========================================================================
            INIT
            ========================================================================= */
-        loadAll();
+        async function init() {
+            if (!sb) { toast("Supabase client not available", true); return; }
+            const auth = await initAuthGuard(['admin', 'staff', 'dean']);
+            if (!auth) return;
+            document.getElementById("userName").textContent = auth.profile.full_name || "Registrar";
+            await loadAll();
+        }
+        init();
     </script>
 </body>
 

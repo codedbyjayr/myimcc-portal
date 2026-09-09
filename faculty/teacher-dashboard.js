@@ -206,10 +206,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         let { data, error } = await supabaseClient
             .from('course_offerings')
             .select('*')
-            .or(`instructor_id.eq.${currentUser.id},instructor_name.eq.${currentProfile.full_name}`);
+            .eq('instructor_id', currentUser.id);
 
-        if (error) {
-            // instructor_id column may not exist yet — fall back to name matching only.
+        if (error || !data || data.length === 0) {
+            // Fall back to name matching (handles missing instructor_id column too).
             ({ data, error } = await supabaseClient
                 .from('course_offerings')
                 .select('*')
@@ -254,7 +254,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         getEl('selectedCourseTitle').textContent = `${selectedOffering.code} — ${selectedOffering.title}`;
         getEl('selectedCourseSub').textContent = `${selectedOffering.semester || ''} ${selectedOffering.school_year || ''} · ${selectedOffering.schedule || 'Schedule TBA'}`;
-        getEl('saveGradesBtn').disabled = false;
+        getEl('saveGradesBtn').disabled = true;
 
         const [{ data: enrollments }, { data: existingGrades }] = await Promise.all([
             supabaseClient.from('enrollments').select('student_id, profiles(id, full_name, student_no, id_number)').eq('offering_id', offeringId).eq('status', 'enrolled'),
@@ -277,6 +277,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .sort((a, b) => (a.student.full_name || '').localeCompare(b.student.full_name || ''));
 
         renderRoster();
+        getEl('saveGradesBtn').disabled = roster.length === 0;
     }
 
     function renderRoster() {

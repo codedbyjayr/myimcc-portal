@@ -45,7 +45,7 @@
       <h1>Staff Dashboard</h1>
       <p>Manage clearances and student records</p>
     </div>
-    <button class="btn-logout" onclick="signOut()">Sign Out</button>
+    <button class="btn-logout" id="signOutBtn">Sign Out</button>
   </div>
 
   <div class="stats-grid">
@@ -98,11 +98,17 @@
 </div>
 
 <script src="../shared/supabase-config.js"></script>
+<script src="../shared/authGuard.js"></script>
 <script>
 let allClearances = [];
+let supabaseClient;
 
 async function init() {
-  const auth = await requireAuth(['staff', 'admin']);
+  const client = await getSupabaseClientAsync();
+  if (!client) { console.error('Supabase client not available'); return; }
+  supabaseClient = client;
+
+  const auth = await initAuthGuard(['staff', 'admin']);
   if (!auth) return;
 
   await loadClearances();
@@ -110,7 +116,7 @@ async function init() {
 
 async function loadClearances() {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('clearances')
       .select('*, profiles!inner(student_no, full_name, program)')
       .order('created_at', { ascending: false });
@@ -177,7 +183,7 @@ function renderStats() {
 async function clearStudent(studentId, deptCode) {
   if (!confirm(`Mark this student as cleared for ${deptCode}?`)) return;
   try {
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from('clearances')
       .update({ status: 'cleared', cleared_at: new Date().toISOString() })
       .eq('student_id', studentId)
@@ -202,6 +208,11 @@ function showToast(msg, isError) {
 document.getElementById('searchInput').addEventListener('input', renderTable);
 document.getElementById('filterDept').addEventListener('change', renderTable);
 document.getElementById('filterStatus').addEventListener('change', renderTable);
+
+document.getElementById('signOutBtn').addEventListener('click', async () => {
+  await supabaseClient.auth.signOut();
+  window.location.href = '../auth/login.html';
+});
 
 init();
 </script>
