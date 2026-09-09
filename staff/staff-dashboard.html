@@ -10,32 +10,41 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <link rel="stylesheet" href="../shared/portal.css">
 <link rel="stylesheet" href="../shared/loading.css">
+<link rel="stylesheet" href="../shared/rwd.css">
 <style>
-  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
-  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; flex-wrap: wrap; gap: 12px; }
-  .page-header h1 { font-size: 28px; font-weight: 800; color: var(--ink-900); margin: 0; }
-  .page-header p { color: var(--ink-500); font-size: 14px; margin: 4px 0 0; }
-  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; margin-bottom: 24px; box-shadow: var(--shadow); }
-  .card h2 { font-size: 16px; font-weight: 800; color: var(--ink-900); margin: 0 0 16px; }
-  table { width: 100%; font-size: 13px; border-collapse: collapse; }
-  table th { text-align: left; padding: 12px; border-bottom: 1px solid var(--line); color: var(--ink-500); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
-  table td { padding: 12px; border-bottom: 1px solid var(--line); color: var(--ink-900); }
+  .container { max-width: 1200px; margin: 0 auto; padding: 16px 12px; }
+  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+  .page-header h1 { font-size: clamp(22px, 5vw, 28px); font-weight: 800; color: var(--ink-900); margin: 0; }
+  .page-header p { color: var(--ink-500); font-size: 13px; margin: 4px 0 0; }
+  .stats-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 12px; margin-bottom: 20px; box-shadow: var(--shadow); }
+  .card h2 { font-size: 16px; font-weight: 800; color: var(--ink-900); margin: 0 0 14px; }
+  table { width: 100%; font-size: 12px; border-collapse: collapse; }
+  table th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); color: var(--ink-500); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  table td { padding: 8px 6px; border-bottom: 1px solid var(--line); color: var(--ink-900); }
   table tr:hover td { background: var(--pink-50); }
   .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; }
   .badge-cleared { background: var(--green-bg); color: var(--green); }
   .badge-pending { background: var(--amber-bg); color: var(--amber); }
   .badge-action { background: var(--red-bg); color: var(--red); }
-  .btn-clear { background: var(--pink-600); color: #fff; border: none; padding: 7px 14px; border-radius: 7px; font-size: 12px; cursor: pointer; font-weight: 600; }
+  .btn-clear { background: var(--pink-600); color: #fff; border: none; padding: 10px 14px; border-radius: 7px; font-size: 12px; cursor: pointer; font-weight: 600; }
   .btn-clear:hover { filter: brightness(1.1); }
-  .btn-logout { background: none; border: 1px solid var(--line); color: var(--ink-700); padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-logout { background: none; border: 1px solid var(--line); color: var(--ink-700); padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
   .btn-logout:hover { border-color: var(--pink-500); color: var(--pink-600); }
-  @media (max-width: 768px) { .container { padding: 20px 14px; } table { font-size: 12px; } table th, table td { padding: 8px 6px; } }
-  @media (max-width: 640px) {
-    .container { padding: 16px 12px; }
-    .page-header h1 { font-size: 22px; }
-    .card { padding: 16px 12px; }
-    .stats-grid { grid-template-columns: 1fr; gap: 10px; }
+
+  @media (min-width: 640px) {
+    .container { padding: 20px 14px; }
+    .stats-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .card { padding: 20px; }
+    table { font-size: 13px; }
+    table th, table td { padding: 10px 8px; }
+  }
+
+  @media (min-width: 768px) {
+    .container { padding: 32px 24px; }
+    .page-header h1 { font-size: 28px; }
+    .card { padding: 24px; }
+    table th, table td { padding: 12px; }
   }
 </style>
 </head>

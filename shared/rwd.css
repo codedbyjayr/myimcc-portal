@@ -1,0 +1,185 @@
+/* =====================================================================
+   MyIMCC Portal — Mobile-First Responsive Enhancement Layer
+   Load THIS stylesheet LAST across all dashboards. It fills the gaps
+   for small screens and touch devices on top of each page's own CSS.
+   ===================================================================== */
+
+/* ── Viewport / text sizing safety ─────────────────────────────────── */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* ── Fluid type scale (base ~320px → desktop ~1400px) ──────────────── */
+.page-header h1,
+.topbar h1,
+.main h1,
+h1.display { font-size: clamp(22px, 4.5vw, 32px); line-height: 1.15; }
+
+.page-header p,
+.topbar p,
+.hero p { font-size: clamp(13px, 2.8vw, 15px); }
+
+/* ── Grid fluidity: favor minmax + auto columns on any page ────────── */
+.bar-row {
+  grid-template-columns: minmax(96px, 130px) minmax(0, 1fr) 46px;
+}
+
+/* ── Tables: activate horizontal scroll with a sane content width ──── */
+.table-responsive {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.table-responsive table {
+  min-width: 640px;
+}
+
+.table-responsive table.min-table-500 { min-width: 500px; }
+.table-responsive table.min-table-720 { min-width: 720px; }
+
+/* ── Touch targets: ensure interactive controls ≥ 44px on coarse ───── */
+@media (hover: none), (pointer: coarse) {
+
+  .menu-toggle,
+  .icon-btn,
+  .sidebar-close-btn,
+  .chat-send,
+  .btn,
+  .btn-primary,
+  .btn-action,
+  .btn-clear,
+  .btn-logout,
+  .btn-login,
+  .btn-ghost,
+  .mini-btn,
+  .chip,
+  .role-select,
+  select,
+  button.nav-item,
+  button,
+  .eye-btn {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+
+  .menu-toggle,
+  .icon-btn,
+  .sidebar-close-btn,
+  .chat-send {
+    width: 44px !important;
+    height: 44px !important;
+  }
+
+  /* Small pill/action buttons keep height without blowing up layout */
+  .mini-btn,
+  .btn-action,
+  .chip,
+  .badge-action {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+
+  /* Inline row checkboxes: keep visual size compact but give a
+     comfortable hit area (rows themselves are also tappable) */
+  .chk,
+  input[type="checkbox"] {
+    width: 26px !important;
+    height: 26px !important;
+    border-radius: 7px !important;
+    min-width: 26px !important;
+    min-height: 26px !important;
+  }
+}
+
+/* ── Fixed elements respect device safe areas (notches) ────────────── */
+.toast,
+.chat-fab,
+.chat-panel {
+  bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
+}
+.sidebar {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Small phones: ≤ 480px refinements ─────────────────────────────── */
+@media (max-width: 480px) {
+
+  /* Tighten main paddings, prevent cramped scroll feel */
+  .app .main,
+  .main,
+  .container {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  /* Overlapping page header actions wrap cleanly */
+  .page-header,
+  .panel-head,
+  .hero {
+    gap: 10px;
+  }
+
+  /* Stack form toolbars under each other */
+  .filter-bar,
+  .filters,
+  .table-responsive .toolbar,
+  .search-row {
+    flex-wrap: wrap;
+  }
+
+  /* Full-width controls inside filters */
+  #searchInput,
+  #courseFilter,
+  #filterDept,
+  #filterStatus,
+  .filter-search,
+  input[type="search"] {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Toast should breathe on tiny screens */
+  .toast {
+    left: 14px !important;
+    right: 14px !important;
+    max-width: none !important;
+  }
+
+  /* Stats grid single column for tight screens */
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Ensure modal forms never clip on small screens */
+  .modal-box,
+  .modal-card {
+    width: calc(100vw - 28px) !important;
+    max-width: 100vw !important;
+  }
+}
+
+/* ── Landscape phones: keep interactive rows compact ───────────────── */
+@media (max-height: 520px) and (orientation: landscape) {
+  .imcc-preloader { padding: 12px; }
+  .imcc-preloader .pl-mark { width: 44px; height: 44px; font-size: 18px; }
+  .sidebar { max-width: 78vw; }
+}
+
+/* ── Visibility helpers for responsive breakpoints ─────────────────── */
+.show-below-640 { display: none; }
+@media (max-width: 640px) {
+  .show-below-640 { display: initial; }
+  .hide-below-640 { display: none !important; }
+}
+@media (min-width: 641px) {
+  .show-above-640 { display: initial; }
+}
+.show-above-640 { display: none; }
+
+/* ── Print safety: expand tables so nothing clips in PDF exports ────── */
+@media print {
+  .table-responsive { overflow: visible !important; }
+  .table-responsive table { min-width: 0 !important; }
+  .sidebar, .topbar, .menu-toggle, .chat-fab, .chat-panel, .toast { display: none !important; }
+}

@@ -2481,6 +2481,29 @@ tr:last-child td {
     grid-template-columns: 1fr;
   }
 
+  /* Flexible label width on small screens */
+  .cor-doc .cor-info-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .cor-doc .cor-info-item span {
+    width: auto;
+    flex-shrink: 0;
+  }
+  .cor-doc .cor-info-item strong {
+    text-align: right;
+  }
+
+  /* COR tables become their own horizontal scroll container */
+  .cor-doc table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+
   .cor-doc .cor-signatures {
     grid-template-columns: 1fr;
     gap: 26px;
