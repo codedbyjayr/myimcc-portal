@@ -685,6 +685,31 @@ button {
   gap: 16px;
 }
 
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+@media (min-width: 580px) {
+  .grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+  .grid-3 > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+}
+
 @media (min-width: 580px) {
   .grid-4 {
     grid-template-columns: repeat(2, 1fr);
@@ -2465,6 +2490,21 @@ tr:last-child td {
 @media (max-width: 640px) {
   .cor-doc {
     padding: 18px;
+  }
+
+  /* Card headers with toolbars wrap instead of squeezing */
+  .card-head.wrap {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .card-head.wrap h3 {
+    flex: 1 1 100%;
+  }
+  .grades-tools {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
   }
 
   .cor-doc .cor-doc-head {

@@ -358,7 +358,7 @@
 
         <!-- ================= BILLING ================= -->
         <section class="page" id="page-billing">
-          <div class="grid-4" style="grid-template-columns:repeat(3,1fr);">
+          <div class="grid-3">
             <div class="stat" style="border-left-color:var(--green);">
               <div class="stat-top"><span class="stat-label">TOTAL PAID</span></div>
               <div class="stat-value" style="color:var(--green);" id="bill-totalpaid">—</div>
@@ -382,7 +382,7 @@
                 <h3>Transaction History</h3>
                 <button class="btn-ghost" id="exportBtn">⭳ Export CSV</button>
               </div>
-              <div style="overflow-x:auto;">
+              <div class="table-responsive">
                 <table>
                   <thead>
                     <tr>
@@ -441,19 +441,19 @@
           </div>
 
           <div class="card card-pad">
-            <div class="card-head">
+            <div class="card-head wrap">
               <h3 id="gradesTitle">Grades — Loading…<br><span
                   style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">Loading program
                   info…</span></h3>
-              <div style="display:flex;gap:8px;align-items:center;">
+              <div class="grades-tools">
                 <span class="pill pill-soft" style="padding:6px 12px;" id="gradesTermPill">Loading…</span>
                 <button class="btn-ghost" id="prospectusBtn"
                   style="padding:6px 12px;border:1px solid var(--line);border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;background:var(--bg);color:var(--ink-700);transition:all 0.2s;font-weight:700;">📋
                   View Degree Prospectus</button>
               </div>
             </div>
-            <div style="overflow-x:auto;">
-              <table>
+            <div class="table-responsive">
+              <table class="min-table-900">
                 <thead>
                   <tr>
                     <th>SUBJECT CODE</th>
@@ -563,7 +563,7 @@
             <div class="card-head">
               <h3>Attendance History</h3>
             </div>
-            <div style="overflow-x:auto;">
+            <div class="table-responsive">
               <table>
                 <thead>
                   <tr>

@@ -37,6 +37,7 @@ h1.display { font-size: clamp(22px, 4.5vw, 32px); line-height: 1.15; }
 
 .table-responsive table.min-table-500 { min-width: 500px; }
 .table-responsive table.min-table-720 { min-width: 720px; }
+.table-responsive table.min-table-900 { min-width: 900px; }
 
 /* ── Touch targets: ensure interactive controls ≥ 44px on coarse ───── */
 @media (hover: none), (pointer: coarse) {
@@ -90,6 +91,13 @@ h1.display { font-size: clamp(22px, 4.5vw, 32px); line-height: 1.15; }
     min-width: 26px !important;
     min-height: 26px !important;
   }
+
+  .prospectus-close,
+  .chat-close {
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 22px !important;
+  }
 }
 
 /* ── Fixed elements respect device safe areas (notches) ────────────── */
@@ -100,6 +108,23 @@ h1.display { font-size: clamp(22px, 4.5vw, 32px); line-height: 1.15; }
 }
 .sidebar {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Notifications dropdown: pin to viewport on phones ─────────────── */
+@media (max-width: 640px) {
+
+  /* The bell sits mid-cluster in the topbar, so its absolute dropdown
+     clips off the left edge. Pin it to the viewport instead. */
+  #bellDropdown {
+    position: fixed !important;
+    top: 64px !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
 }
 
 /* ── Small phones: ≤ 480px refinements ─────────────────────────────── */
@@ -144,6 +169,17 @@ h1.display { font-size: clamp(22px, 4.5vw, 32px); line-height: 1.15; }
     left: 14px !important;
     right: 14px !important;
     max-width: none !important;
+  }
+
+  /* Keep the topbar cluster from squeezing: icon-only theme toggle */
+  .theme-toggle {
+    padding: 0 !important;
+    width: 40px !important;
+    height: 40px !important;
+    justify-content: center;
+  }
+  .theme-toggle span {
+    display: none !important;
   }
 
   /* Stats grid single column for tight screens */
