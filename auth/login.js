@@ -153,17 +153,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const verifiedTotpFactors = (factorData?.totp || []).filter(f => f.status === 'verified');
-    if (verifiedTotpFactors.length === 0) {
-      // Clean up any unverified stale factors before starting new enrollment
-      const unverifiedFactors = (factorData?.totp || []).filter(f => f.status === 'unverified');
-      for (const factor of unverifiedFactors) {
-        await supabaseClient.auth.mfa.unenroll({ factorId: factor.id });
-      }
-      await startEnrollment();
-    } else {
+
+    if (verifiedTotpFactors.length > 0) {
+      // User has MFA set up — require them to complete the challenge
       await startChallenge(verifiedTotpFactors[0].id);
+    } else {
+      // No MFA set up yet — fetch their role and route directly at AAL1.
+      // Only students are prompted to enroll MFA (optional). Other roles go straight to their dashboard.
+      const { data: profile } = await supabaseClient
+        .from('profiles')
+        .select('role, status')
+        .eq('id', session.user.id)
+        .single();
+
+      if (!profile) {
+        // Can't determine role — fall back to SSO step
+        showStep(stepSso);
+        return;
+      }
+
+      const role = (profile.role || '').toLowerCase();
+
+      if (role === 'student') {
+        // Students are invited (not forced) to set up MFA for extra security
+        // Clean up any unverified stale factors before starting new enrollment
+        const unverifiedFactors = (factorData?.totp || []).filter(f => f.status === 'unverified');
+        for (const factor of unverifiedFactors) {
+          await supabaseClient.auth.mfa.unenroll({ factorId: factor.id });
+        }
+        await startEnrollment();
+      } else {
+        // Admin / Dean / Teacher / Staff — route directly, MFA is optional for them
+        await routeUserByProfile(session.user);
+      }
     }
   }
+
 
   // Step 2: Clean auth listener letting Supabase manage URL code exchange
   let authFlowInProgress = false;
