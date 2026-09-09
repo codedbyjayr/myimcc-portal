@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   year_level  TEXT,
   section     TEXT,
   role        TEXT NOT NULL DEFAULT 'student'
-              CHECK (role IN ('student','faculty','staff','admin')),
+              CHECK (role IN ('student','faculty','teacher','staff','admin','dean')),
   created_at  TIMESTAMPTZ DEFAULT now(),
   updated_at  TIMESTAMPTZ DEFAULT now()
 );
