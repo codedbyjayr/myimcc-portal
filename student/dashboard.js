@@ -703,44 +703,144 @@ async function loadBilling() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  const { data: summary } = await supabaseClient
-    .from('billing_summary')
-    .select('*')
+  // Get current semester
+  const { data: sem } = await supabaseClient
+    .from('student_semesters')
+    .select('school_year, semester')
     .eq('student_id', profile.id)
+    .eq('is_current', true)
     .maybeSingle();
 
-  const { data: txns } = await supabaseClient
-    .from('transactions')
-    .select('*')
-    .eq('student_id', profile.id)
-    .order('txn_date', { ascending: false });
+  const activeSchoolYear = sem?.school_year || '2026-2027';
+  const activeSemester = sem?.semester || '1st Semester';
 
-  const { data: inst } = await supabaseClient
-    .from('installments')
-    .select('*')
-    .eq('student_id', profile.id)
-    .order('due_date', { ascending: true });
+  const [summaryRes, txnsRes, instRes, enrollmentsRes, miscRes] = await Promise.all([
+    supabaseClient.from('billing_summary').select('*').eq('student_id', profile.id).maybeSingle(),
+    supabaseClient.from('transactions').select('*').eq('student_id', profile.id).order('txn_date', { ascending: false }),
+    supabaseClient.from('installments').select('*').eq('student_id', profile.id).order('due_date', { ascending: true }),
+    supabaseClient.from('enrollments').select('offering_id, course_offerings(code, title, units, fee, semester, school_year)').eq('student_id', profile.id).eq('status', 'enrolled'),
+    supabaseClient.from('misc_fees').select('*').eq('semester', activeSemester).eq('school_year', activeSchoolYear),
+  ]);
+
+  // Compute tuition from currently enrolled courses this semester
+  const enrolledCourses = (enrollmentsRes.data || [])
+    .map(e => e.course_offerings)
+    .filter(c => c && c.school_year === activeSchoolYear && c.semester === activeSemester);
+
+  const tuitionTotal = enrolledCourses.reduce((s, c) => s + Number(c.fee || 0), 0);
+  const miscTotal = (miscRes.data || []).reduce((s, f) => s + Number(f.amount || 0), 0);
+  const totalAssessment = tuitionTotal + miscTotal;
+  const totalPaid = Number(summaryRes.data?.total_paid || 0);
+  const balance = Math.max(0, totalAssessment - totalPaid);
+
+  // Auto-generate installment schedule from assessment if DB has none
+  let installments = instRes.data || [];
+  if (!installments.length && totalAssessment > 0) {
+    installments = [
+      { id: 'auto-1', name: 'Downpayment / Prelim', amount: Math.round(totalAssessment * 0.32), due_date: null, status: 'pending', or_number: null },
+      { id: 'auto-2', name: 'Midterm Installment',  amount: Math.round(totalAssessment * 0.25), due_date: null, status: 'pending', or_number: null },
+      { id: 'auto-3', name: 'Semi-Final Installment', amount: Math.round(totalAssessment * 0.25), due_date: null, status: 'pending', or_number: null },
+      { id: 'auto-4', name: 'Final Balance',          amount: totalAssessment - Math.round(totalAssessment * 0.32) - Math.round(totalAssessment * 0.25) * 2, due_date: null, status: 'pending', or_number: null },
+    ];
+  }
 
   state.billing = {
-    totalPaid: summary?.total_paid || 0,
-    installments: inst || [],
-    transactions: txns || [],
+    totalPaid,
+    totalAssessment,
+    tuitionTotal,
+    miscTotal,
+    balance,
+    installments,
+    transactions: txnsRes.data || [],
+    enrolledCourses,
+    miscFeesList: miscRes.data || [],
+    activeSemester,
+    activeSchoolYear,
   };
 
-  renderTxns();
+  renderBillingStats();
+  renderBillingBreakdown();
   renderInstallments();
   renderUpay();
-  renderBillingStats();
+  renderTxns();
 }
 
 function renderBillingStats() {
-  const pending = state.billing.installments.filter(i => i.status === 'pending');
-  setText('bill-totalpaid', peso(state.billing.totalPaid));
-  setText('bill-balance', peso(pending.reduce((s, i) => s + Number(i.amount || 0), 0)));
+  const b = state.billing;
+  const pending = b.installments.filter(i => i.status === 'pending');
+  setText('bill-totalpaid', peso(b.totalPaid));
+  setText('bill-balance', peso(b.balance));
   const next = pending[0];
-  setText('bill-nextdate', next ? fmtDate(next.due_date).split(',')[0] : '—');
+  setText('bill-nextdate', next?.due_date ? fmtDate(next.due_date).split(',')[0] : (next ? 'See schedule' : '—'));
   setText('bill-nextlabel', next ? next.name.toLowerCase() : 'nothing due');
 }
+
+function renderBillingBreakdown() {
+  const b = state.billing;
+  const target = getEl('billingBreakdown');
+  if (!target) return;
+
+  const courseRows = (b.enrolledCourses || []).map(c =>
+    `<tr><td>${escapeHtml(c.code)}</td><td>${escapeHtml(c.title)}</td><td style="text-align:right">${Number(c.units||0).toFixed(1)} u</td><td style="text-align:right;font-weight:700;">${peso(c.fee)}</td></tr>`
+  ).join('');
+
+  const miscRows = (b.miscFeesList || []).map(f =>
+    `<tr><td colspan="3" style="color:var(--ink-500)">${escapeHtml(f.name)}</td><td style="text-align:right;">${peso(f.amount)}</td></tr>`
+  ).join('');
+
+  const installRows = (b.installments || []).map(i => {
+    const pct = b.totalAssessment > 0 ? Math.round((Number(i.amount)/b.totalAssessment)*100) : 0;
+    const paid = i.status === 'paid';
+    return `<tr>
+      <td><b>${escapeHtml(i.name)}</b></td>
+      <td>${i.due_date ? fmtDate(i.due_date) : '<span style="color:var(--ink-300)">TBA</span>'}</td>
+      <td style="text-align:right;font-weight:800;color:${paid ? 'var(--green)' : 'var(--pink-600)'};">${peso(i.amount)}</td>
+      <td><span style="font-size:10px;font-weight:800;color:${paid ? 'var(--green)' : 'var(--amber)'};">${paid ? '✓ PAID' : `${pct}%`}</span></td>
+    </tr>`;
+  }).join('');
+
+  target.innerHTML = `
+    <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:16px;">
+      <div style="background:var(--card);padding:12px 16px;font-weight:800;font-size:13px;border-bottom:1px solid var(--line);">
+        📚 Enrolled Subjects — ${escapeHtml(b.activeSemester)} ${escapeHtml(b.activeSchoolYear)}
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="background:var(--bg);">
+          <th style="padding:8px 12px;text-align:left;color:var(--ink-500);font-size:11px;">CODE</th>
+          <th style="padding:8px 12px;text-align:left;color:var(--ink-500);font-size:11px;">SUBJECT</th>
+          <th style="padding:8px 12px;text-align:right;color:var(--ink-500);font-size:11px;">UNITS</th>
+          <th style="padding:8px 12px;text-align:right;color:var(--ink-500);font-size:11px;">FEE</th>
+        </tr></thead>
+        <tbody>${courseRows || '<tr><td colspan="4" style="padding:12px;text-align:center;color:var(--ink-400);">No enrolled subjects this term.</td></tr>'}</tbody>
+        ${miscRows ? `<tbody style="border-top:1px solid var(--line);">${miscRows}</tbody>` : ''}
+        <tfoot style="border-top:2px solid var(--line);background:var(--bg);">
+          <tr><td colspan="3" style="padding:10px 12px;font-weight:800;">Tuition Subtotal</td><td style="padding:10px 12px;text-align:right;font-weight:800;">${peso(b.tuitionTotal)}</td></tr>
+          ${b.miscTotal ? `<tr><td colspan="3" style="padding:4px 12px;color:var(--ink-500);">Miscellaneous Fees</td><td style="padding:4px 12px;text-align:right;">${peso(b.miscTotal)}</td></tr>` : ''}
+          <tr style="background:rgba(231,51,138,0.06);"><td colspan="3" style="padding:10px 12px;font-weight:800;color:var(--pink-600);">Total Assessment</td><td style="padding:10px 12px;text-align:right;font-weight:800;color:var(--pink-600);font-size:15px;">${peso(b.totalAssessment)}</td></tr>
+        </tfoot>
+      </table>
+    </div>
+    ${installRows ? `
+    <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;">
+      <div style="background:var(--card);padding:12px 16px;font-weight:800;font-size:13px;border-bottom:1px solid var(--line);">
+        💳 Per-Term Payment Schedule
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="background:var(--bg);">
+          <th style="padding:8px 12px;text-align:left;color:var(--ink-500);font-size:11px;">TERM</th>
+          <th style="padding:8px 12px;text-align:left;color:var(--ink-500);font-size:11px;">DUE DATE</th>
+          <th style="padding:8px 12px;text-align:right;color:var(--ink-500);font-size:11px;">AMOUNT</th>
+          <th style="padding:8px 12px;text-align:center;color:var(--ink-500);font-size:11px;">STATUS</th>
+        </tr></thead>
+        <tbody>${installRows}</tbody>
+        <tfoot style="border-top:2px solid var(--line);background:var(--bg);">
+          <tr><td colspan="2" style="padding:10px 12px;font-weight:800;">Total Paid</td><td style="padding:10px 12px;text-align:right;color:var(--green);font-weight:800;">${peso(b.totalPaid)}</td><td></td></tr>
+          <tr><td colspan="2" style="padding:4px 12px;font-weight:800;color:var(--red);">Remaining Balance</td><td style="padding:4px 12px;text-align:right;color:var(--red);font-weight:800;font-size:15px;">${peso(b.balance)}</td><td></td></tr>
+        </tfoot>
+      </table>
+    </div>` : ''}`;
+}
+
 
 function renderTxns() {
   const target = getEl('txnBody');
@@ -855,12 +955,13 @@ async function loadGrades() {
 }
 
 function renderGradeStats() {
-  const withFinal = state.grades.filter(g => g.final !== null && g.final !== undefined);
+  const termGrades = gradesForSelectedTerm();
+  const withFinal = termGrades.filter(g => g.final !== null && g.final !== undefined);
   const avg = withFinal.length ? (withFinal.reduce((s, g) => s + Number(g.equivalent || 0), 0) / withFinal.length).toFixed(2) : '—';
   const highest = withFinal.length ? Math.max(...withFinal.map(g => Number(g.final))) : '—';
   const highestCourse = withFinal.find(g => Number(g.final) === highest);
   const completed = withFinal.length;
-  const total = state.grades.length;
+  const total = termGrades.length;
 
   setText('grade-gwa', avg);
   setText('grade-gwa-sub', `${completed} subject${completed === 1 ? '' : 's'} with final grades`);
@@ -880,12 +981,13 @@ function renderGrades() {
     ? `<span style="color:var(--blue);font-weight:700;">${val}</span>`
     : `<span style="font-style:italic;color:var(--ink-300);">—</span>`;
 
-  if (!state.grades || state.grades.length === 0) {
-    target.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--ink-400);padding:36px;font-size:13px;">No enrolled course grades recorded for this term yet. Once faculty encodes your grades, they will appear here.</td></tr>`;
+  const termGrades = gradesForSelectedTerm();
+  if (!termGrades || termGrades.length === 0) {
+    target.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--ink-400);padding:36px;font-size:13px;">No grades recorded for this term yet. Once faculty encodes your grades, they will appear here.</td></tr>`;
     return;
   }
 
-  target.innerHTML = state.grades.map(g => `
+  target.innerHTML = termGrades.map(g => `
     <tr>
       <td class="or-num">${escapeHtml(g.code)}</td>
       <td>${escapeHtml(g.title)}</td>
@@ -902,13 +1004,18 @@ function renderGrades() {
 }
 
 function renderGradesHeader() {
-  const d = state.dashboard;
   const profile = state.studentProfile;
-  const program = d?.student?.program || profile?.program || 'BSIT';
-  const yearLevel = d?.student?.yearLevel || profile?.year_level || '';
-  const section = d?.student?.section || profile?.section || '';
-  const semester = d?.student?.semester || '1st Semester';
-  const schoolYear = d?.student?.schoolYear || '2026-2027';
+  const program = profile?.program || 'BSIT';
+  const yearLevel = profile?.year_level || '';
+  const section = profile?.section || '';
+
+  // Use selected term from dropdown, fall back to current semester
+  let semester = '1st Semester', schoolYear = '2026-2027';
+  if (_gradesSelectedTerm) {
+    const [sy, sem] = _gradesSelectedTerm.split('|');
+    schoolYear = sy;
+    semester = sem;
+  }
 
   const setTitle = getEl('gradesTitle');
   if (setTitle) {
@@ -916,23 +1023,23 @@ function renderGradesHeader() {
   }
   setText('gradesTermPill', `${semester} ${schoolYear}`);
 
+  const termGrades = gradesForSelectedTerm();
   const aiEl = getEl('aiInsightText');
   if (aiEl) {
-    const withFinal = state.grades.filter(g => g.final !== null && g.final !== undefined);
-    const curAvg = withFinal.length ? (withFinal.reduce((s, g) => s + Number(g.equivalent || 0), 0) / withFinal.length) : null;
-    const withAi = state.grades.filter(g => g.ai_predicted_equivalent !== null && g.ai_predicted_equivalent !== undefined);
+    const withAi = termGrades.filter(g => g.ai_predicted_equivalent !== null && g.ai_predicted_equivalent !== undefined);
     const aiAvg = withAi.length ? (withAi.reduce((s, g) => s + Number(g.ai_predicted_equivalent), 0) / withAi.length) : null;
 
-    if (curAvg !== null && aiAvg !== null) {
+    if (aiAvg !== null) {
       const track = aiAvg <= 1.75 ? "Dean's List" : aiAvg <= 2.5 ? 'Good Standing' : 'At Risk';
       const weakest = withAi.reduce((min, g) => Number(g.ai_predicted_equivalent) < Number(min.ai_predicted_equivalent) ? g : min, withAi[0]);
-      const weakTxt = weakest ? ` Focus on ${weakest.code} (${weakest.title}) where your trajectory shows the most room for improvement.` : '';
-      aiEl.innerHTML = `Based on your recorded grading periods, our AI model predicts a final GWA of <b>${aiAvg.toFixed(2)}</b> — placing you on the <b>${track}</b> track.${weakTxt}`;
+      const weakTxt = weakest ? ` Focus on ${weakest.code} (${weakest.title}) for improvement.` : '';
+      aiEl.innerHTML = `Predicted GWA of <b>${aiAvg.toFixed(2)}</b> — <b>${track}</b> track.${weakTxt}`;
     } else {
-      aiEl.textContent = 'AI predictions will appear here once Pre-Lim or Midterm grades and prediction data are available.';
+      aiEl.textContent = 'AI predictions will appear once Pre-Lim or Midterm grade data is available.';
     }
   }
 }
+
 
 // ── Degree Prospectus Modal ──────────────────────────────────────────
 function setupProspectusButton() {

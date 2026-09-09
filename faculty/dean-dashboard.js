@@ -603,6 +603,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const faculty = state.facultyList.find(f => f.id === facultyId);
         const instructorName = faculty ? faculty.full_name : null;
 
+        // 1. Update course_offerings (instructor_id + instructor_name)
         let { error } = await supabaseClient
             .from('course_offerings')
             .update({ instructor_id: facultyId || null, instructor_name: instructorName })
@@ -617,8 +618,35 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (error) { showToast('Failed to update faculty assignment: ' + error.message, true); return; }
 
-        showToast(instructorName ? `Assigned ${instructorName}.` : 'Unassigned faculty.');
+        // 2. Sync teacher_assignments — deactivate all old assignments for this
+        //    offering, then upsert the new one so the teacher's dropdown shows it.
         const offering = state.offerings.find(o => String(o.id) === offeringId);
+        const academicYear = offering?.school_year || '2026-2027';
+        const semester = offering?.semester || '1st Semester';
+
+        // Deactivate previous assignments for this offering
+        await supabaseClient
+            .from('teacher_assignments')
+            .update({ is_active: false })
+            .eq('offering_id', offeringId);
+
+        if (facultyId) {
+            // Upsert active assignment for the new teacher
+            const { error: taErr } = await supabaseClient
+                .from('teacher_assignments')
+                .upsert({
+                    teacher_id: facultyId,
+                    offering_id: Number(offeringId),
+                    academic_year: academicYear,
+                    semester: semester,
+                    is_active: true,
+                    assigned_by: currentUserId,
+                }, { onConflict: 'teacher_id,offering_id,academic_year,semester' });
+
+            if (taErr) console.warn('teacher_assignments sync warning:', taErr.message);
+        }
+
+        showToast(instructorName ? `Assigned ${instructorName}.` : 'Unassigned faculty.');
         if (offering) { offering.instructor_id = facultyId || null; offering.instructor_name = instructorName; }
         renderWorkloads();
         renderConflicts();
