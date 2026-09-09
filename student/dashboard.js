@@ -924,13 +924,68 @@ getEl('exportBtn')?.addEventListener('click', () => {
 });
 
 // ── Grades Module ────────────────────────────────────────────────────
+// Term filter state for grades dropdown
+let _gradesSelectedTerm = null;
+
+function gradesForSelectedTerm() {
+  if (!_gradesSelectedTerm || !state.grades || !state.grades.length) return state.grades || [];
+  const [sy, sem] = _gradesSelectedTerm.split('|');
+  return state.grades.filter(g => g.school_year === sy && g.semester === sem);
+}
+
+function buildGradesTermDropdown() {
+  const termMap = new Map();
+  (state.grades || []).forEach(g => {
+    if (!g.school_year) return;
+    const key = `${g.school_year}|${g.semester}`;
+    termMap.set(key, { key, school_year: g.school_year, semester: g.semester });
+  });
+  const terms = [...termMap.values()].sort((a, b) => {
+    const ya = parseInt(a.school_year), yb = parseInt(b.school_year);
+    if (ya !== yb) return yb - ya;
+    return a.semester.includes('2nd') ? 1 : -1;
+  });
+
+  if (!_gradesSelectedTerm && terms.length) _gradesSelectedTerm = terms[0].key;
+
+  let dd = getEl('gradeTermSelect');
+  if (!dd) {
+    const gradesTitle = getEl('gradesTitle');
+    if (gradesTitle && gradesTitle.parentNode) {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;';
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'font-size:12px;font-weight:700;color:var(--ink-500);white-space:nowrap;';
+      lbl.textContent = 'Semester:';
+      dd = document.createElement('select');
+      dd.id = 'gradeTermSelect';
+      dd.style.cssText = 'background:var(--card,#fff);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;color:var(--ink-900);outline:none;cursor:pointer;';
+      dd.addEventListener('change', () => {
+        _gradesSelectedTerm = dd.value;
+        renderGrades();
+        renderGradeStats();
+        renderGradesHeader();
+      });
+      wrap.appendChild(lbl);
+      wrap.appendChild(dd);
+      gradesTitle.parentNode.insertBefore(wrap, gradesTitle.nextSibling);
+    }
+  }
+
+  if (dd) {
+    dd.innerHTML = terms.map(t =>
+      `<option value="${t.key}" ${t.key === _gradesSelectedTerm ? 'selected' : ''}>${t.semester} — ${t.school_year}</option>`
+    ).join('');
+  }
+}
+
 async function loadGrades() {
   const profile = state.studentProfile;
   if (!profile) return;
 
   const { data: rows } = await supabaseClient
     .from('grades')
-    .select('*, course_offerings(code, title, units, instructor_name)')
+    .select('*, course_offerings(code, title, units, instructor_name, semester, school_year)')
     .eq('student_id', profile.id);
 
   state.grades = (rows || []).map(g => ({
@@ -938,6 +993,8 @@ async function loadGrades() {
     title: g.course_offerings?.title || '—',
     instructor_name: g.course_offerings?.instructor_name,
     units: g.course_offerings?.units,
+    semester: g.course_offerings?.semester || '',
+    school_year: g.course_offerings?.school_year || '',
     prelim: g.prelim,
     midterm: g.midterm,
     semifinal: g.semifinal,
@@ -948,11 +1005,13 @@ async function loadGrades() {
     remark: g.remark || 'Pending',
   }));
 
+  buildGradesTermDropdown();
   renderGrades();
   renderGradeStats();
   renderGradesHeader();
   setupProspectusButton();
 }
+
 
 function renderGradeStats() {
   const termGrades = gradesForSelectedTerm();
