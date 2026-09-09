@@ -39,6 +39,18 @@ h1.display { font-size: clamp(22px, 4.5vw, 32px); line-height: 1.15; }
 .table-responsive table.min-table-720 { min-width: 720px; }
 .table-responsive table.min-table-900 { min-width: 900px; }
 
+/* Grid/flex children default to min-width:auto, which makes a scrollable
+   table stretch the whole page instead (clipped by .app overflow-x:hidden).
+   Forcing min-width:0 keeps the horizontal scroll INSIDE the card. */
+.grid-2 > *,
+.grid-3 > *,
+.grid-4 > *,
+.stats-grid > *,
+.dept-grid > *,
+.filter-bar > .table-responsive {
+  min-width: 0;
+}
+
 /* ── Touch targets: ensure interactive controls ≥ 44px on coarse ───── */
 @media (hover: none), (pointer: coarse) {
 
