@@ -12,6 +12,10 @@ backups/
 *.sql.gz
 *.dump
 
+# Local-only SQL scripts (not for version control)
+database/assign-faculty-and-enroll.sql
+database/master-fix-migration.sql
+
 # Dependencies and build artifacts
 node_modules/
 dist/
