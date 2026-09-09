@@ -57,6 +57,15 @@ function escapeHtml(str) {
 }
 
 // ── Auth Guard & Session Management ──────────────────────────────────
+// Maps non-student roles to their dashboards
+const ROLE_REDIRECTS = {
+  admin:   '../admin/admin-dashboard.html',
+  teacher: '../faculty/teacher-dashboard.html',
+  faculty: '../faculty/teacher-dashboard.html',
+  dean:    '../faculty/dean-dashboard.html',
+  staff:   '../staff/staff-dashboard.html',
+};
+
 async function getCurrentStudent() {
   const { data: { user }, error } = await supabaseClient.auth.getUser();
   if (error || !user) {
@@ -73,8 +82,19 @@ async function getCurrentStudent() {
 
   if (pErr || !profile) {
     console.error('Profile fetch error:', pErr);
+    window.location.href = '../auth/login.html';
     return null;
   }
+
+  // Role guard — redirect non-students to their correct dashboard
+  const role = (profile.role || '').toLowerCase();
+  if (role !== 'student') {
+    const target = ROLE_REDIRECTS[role] || '../auth/login.html';
+    console.warn(`Role "${role}" is not a student — redirecting to ${target}`);
+    window.location.href = target;
+    return null;
+  }
+
   state.studentProfile = profile;
   return profile;
 }
@@ -2173,26 +2193,25 @@ async function init() {
 
   setupAuthListener();
   state.apiOnline = true;
-  try {
-    await Promise.all([
-      loadDashboard(),
-      loadEnrollment(),
-      loadBilling(),
-      loadGrades(),
-      loadClearance(),
-      loadCor(),
-      loadAnnouncements(),
-      loadDeadlines(),
-      loadNotifications(),
-      loadSSOLinks(),
-      loadAttendance(),
-      loadFacultyEval(),
-      loadProfile(),
-    ]);
-  } catch (err) {
-    showToast('Failed to load portal data: ' + err.message, true);
-    console.error('Initialization error:', err);
-  }
+
+  // Load all modules independently — a failure in one should not block the rest
+  const loadSafely = (name, fn) => fn().catch(err => console.warn(`[${name}] load error:`, err));
+
+  await Promise.all([
+    loadSafely('dashboard',    loadDashboard),
+    loadSafely('enrollment',   loadEnrollment),
+    loadSafely('billing',      loadBilling),
+    loadSafely('grades',       loadGrades),
+    loadSafely('clearance',    loadClearance),
+    loadSafely('cor',          loadCor),
+    loadSafely('announcements',loadAnnouncements),
+    loadSafely('deadlines',    loadDeadlines),
+    loadSafely('notifications',loadNotifications),
+    loadSafely('sso',          loadSSOLinks),
+    loadSafely('attendance',   loadAttendance),
+    loadSafely('evaluation',   loadFacultyEval),
+    loadSafely('profile',      loadProfile),
+  ]);
 
   if (window.imccHidePreloader) window.imccHidePreloader();
 }

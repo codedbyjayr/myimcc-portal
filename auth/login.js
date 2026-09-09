@@ -73,7 +73,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (error || !profile) {
       console.error("Profile fetch error:", error);
-      window.location.href = '../student/dashboard.html';
+      showError(ssoError, "Could not load user profile: " + (error?.message || "Profile not found. Please contact administration."));
+      showStep(stepSso);
       return;
     }
 

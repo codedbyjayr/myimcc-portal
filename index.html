@@ -6,17 +6,17 @@
     <title>Redirecting...</title>
     <script>
         // Forward any OAuth callback parameters (e.g. ?code=... or #access_token=...) to login.html
-        const target = '/auth/login.html' + window.location.search + window.location.hash;
+        const target = './auth/login.html' + window.location.search + window.location.hash;
         window.location.replace(target);
     </script>
 </head>
 
 <body>
-    <p>Redirecting to <a id="loginLink" href="/auth/login.html">Login</a>...</p>
+    <p>Redirecting to <a id="loginLink" href="./auth/login.html">Login</a>...</p>
     <script>
         const link = document.getElementById('loginLink');
         if (link) {
-            link.href = '/auth/login.html' + window.location.search + window.location.hash;
+            link.href = './auth/login.html' + window.location.search + window.location.hash;
         }
     </script>
 </body>
