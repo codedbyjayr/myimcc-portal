@@ -873,17 +873,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     let selectedMyOffering = null;
     let myRoster = [];
 
-    // Standard Philippine collegiate 0–100 → 1.00–5.00 conversion.
-    // Adjust these cutoffs to match your institution's actual grading policy.
+    // Standard Philippine collegiate 0–100 → 1.00–5.00 conversion matching official grading_scale
     function computeEquivalent(avg) {
         if (avg === null || avg === undefined || isNaN(avg)) return null;
-        if (avg >= 97) return 1.00;
+        if (avg >= 96) return 1.00;
         if (avg >= 94) return 1.25;
-        if (avg >= 91) return 1.50;
-        if (avg >= 88) return 1.75;
-        if (avg >= 85) return 2.00;
-        if (avg >= 82) return 2.25;
-        if (avg >= 79) return 2.50;
+        if (avg >= 92) return 1.50;
+        if (avg >= 89) return 1.75;
+        if (avg >= 86) return 2.00;
+        if (avg >= 83) return 2.25;
+        if (avg >= 80) return 2.50;
         if (avg >= 76) return 2.75;
         if (avg >= 75) return 3.00;
         return 5.00;
@@ -897,6 +896,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             (o.instructor_id && o.instructor_id === currentUserId) ||
             (o.instructor_name && currentProfile && o.instructor_name === currentProfile.full_name)
         );
+
+        if (!myOfferings.length) {
+            // Fall back to teacher_assignments table
+            const { data: taRows } = await supabaseClient
+                .from('teacher_assignments')
+                .select('offering_id, course_offerings(*)')
+                .eq('teacher_id', currentUserId)
+                .eq('is_active', true);
+            if (taRows && taRows.length > 0) {
+                myOfferings = taRows.map(t => t.course_offerings).filter(Boolean);
+            }
+        }
 
         const notice = getEl('myClassesNotice');
         if (notice) notice.style.display = myOfferings.length ? 'none' : 'block';
@@ -1059,14 +1070,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 equivalent, remark,
             };
 
-            let error;
-            if (r.gradeId) {
-                ({ error } = await supabaseClient.from('grades').update(payload).eq('id', r.gradeId));
-            } else {
-                const { data, error: insertErr } = await supabaseClient.from('grades').insert(payload).select().single();
-                error = insertErr;
-                if (!error && data) r.gradeId = data.id;
-            }
+            const { data, error } = await supabaseClient
+                .from('grades')
+                .upsert(payload, { onConflict: 'student_id,offering_id' })
+                .select()
+                .single();
+            if (!error && data) r.gradeId = data.id;
             if (error) failCount++; else successCount++;
         }
 
