@@ -2,7 +2,7 @@
    MyIMCC Portal — Shared Design Tokens & Base Styles
    Used by staff, faculty, and admin dashboards.
    Design language: Build studio luxury minimalism — generous whitespace,
-   subtle weight contrast, single accent (pink/maroon) with breathing room.
+   subtle weight contrast, single accent (pink) with breathing room.
    ===================================================================== */
 
 :root {
@@ -10,7 +10,6 @@
   --pink-500: #E7338A;
   --pink-600: #E32B4F;
   --pink-700: #9D1F3A;
-  --maroon-800: #6B162A;
   --pink-50: #FEF3F8;
   --pink-100: #FBDEEC;
   --pink-200: #F6B6D5;
@@ -35,8 +34,8 @@
   --blue-bg: #E7EFFC;
 
   /* Shadows */
-  --shadow: 0 1px 2px rgba(27,20,36,.04), 0 8px 24px rgba(27,20,36,.06);
-  --radius: 14px;
+  --shadow: 0 1px 2px rgba(23,20,31,.05);
+  --radius: 8px;
 }
 
 [data-theme="dark"] {
@@ -53,7 +52,7 @@
   --amber-bg: #2C2107;
   --red-bg: #2C1219;
   --blue-bg: #101E33;
-  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.4);
+  --shadow: 0 1px 2px rgba(0,0,0,.35);
 }
 
 * { box-sizing: border-box; }
@@ -132,7 +131,6 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   position: fixed;
   inset: 0;
   background: rgba(15, 10, 22, 0.55);
-  backdrop-filter: blur(2px);
   z-index: 990;
   opacity: 0;
   pointer-events: none;

@@ -206,7 +206,7 @@ function showToast(msg, isError = false) {
   const msgEl = getEl('toastMsg');
   if (!t || !msgEl) return;
   msgEl.textContent = msg;
-  t.style.background = isError ? 'var(--red, #ef4444)' : 'var(--ink-900, #0f172a)';
+  t.style.background = isError ? 'var(--red, #D6274A)' : 'var(--ink-900, #141019)';
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
@@ -225,6 +225,10 @@ function setupDropdown(btnId, ddId) {
 }
 setupDropdown('bellBtn', 'bellDropdown');
 setupDropdown('userBtn', 'userDropdown');
+
+getEl('bellBtn')?.addEventListener('click', () => {
+  if (getEl('bellDropdown')?.classList.contains('open')) markBellSeen();
+});
 
 // ── Theme Switcher ───────────────────────────────────────────────────
 getEl('themeToggle')?.addEventListener('click', () => {
@@ -312,7 +316,7 @@ function renderDashboard() {
   const initials = getInitials(studentName);
   const firstName = studentName.split(' ')[0];
 
-  setText('heroGreeting', `${greeting}, ${firstName}! 👋`);
+  setText('heroGreeting', `${greeting}, ${firstName}!`);
 
   const heroSubtitle = getEl('heroSubtitle');
   if (heroSubtitle) {
@@ -429,6 +433,13 @@ async function loadNotifications() {
     .order('created_at', { ascending: false })
     .limit(3);
 
+  if (Array.isArray(rows)) {
+    pendingNotifIds = rows.map(r => r.id);
+  } else {
+    pendingNotifIds = [];
+  }
+  refreshBellDot();
+
   const target = getEl('notifList');
   if (target) {
     target.innerHTML = (rows && rows.length) ? rows.map(n => `
@@ -438,6 +449,38 @@ async function loadNotifications() {
       </div>
     `).join('') : `<div class="notif-item"><div class="t">No new notifications</div></div>`;
   }
+}
+
+// ── Notification unread badge (client-side "seen" tracking) ───────────
+let pendingNotifIds = [];
+function notifSeenKey() {
+  return `imcc_notif_seen_${state.studentProfile?.id || 'anon'}`;
+}
+function getNotifSeen() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(notifSeenKey()) || '[]'));
+  } catch (e) {
+    return new Set();
+  }
+}
+function saveNotifSeen(set) {
+  try {
+    localStorage.setItem(notifSeenKey(), JSON.stringify(Array.from(set)));
+  } catch (e) { /* storage unavailable */ }
+}
+function refreshBellDot() {
+  const dot = getEl('notifDot');
+  if (!dot) return;
+  const seen = getNotifSeen();
+  const unseen = pendingNotifIds.filter(id => !seen.has(id)).length;
+  dot.textContent = unseen > 9 ? '9+' : unseen;
+  dot.classList.toggle('show', unseen > 0);
+}
+function markBellSeen() {
+  const seen = getNotifSeen();
+  pendingNotifIds.forEach(id => seen.add(id));
+  saveNotifSeen(seen);
+  refreshBellDot();
 }
 
 // ── Enrollment Module ────────────────────────────────────────────────
@@ -1565,7 +1608,23 @@ function printCorPage() {
   window.print();
 }
 
+window.addEventListener('beforeprint', () => {
+  const doc = document.querySelector('body.is-printing-cor .cor-doc');
+  if (!doc) return;
+  doc.style.zoom = ''; // reset any previous scale before re-measuring
+  const availW = ((210 - 20) / 25.4) * 96; // A4 - 10mm margins, px @96dpi
+  const availH = ((297 - 20) / 25.4) * 96;
+  const prevW = doc.style.width;
+  doc.style.width = availW + 'px'; // measure at printable width so height is accurate
+  const height = doc.offsetHeight;
+  doc.style.width = prevW;
+  const scale = Math.min(1, (availH / height) * 0.99); // fill the page, 1% safety margin
+  doc.style.zoom = scale.toFixed(4);
+});
+
 window.addEventListener('afterprint', () => {
+  const doc = document.querySelector('body.is-printing-cor .cor-doc');
+  if (doc) doc.style.zoom = '';
   document.body.classList.remove('is-printing-cor');
 });
 
@@ -1905,7 +1964,8 @@ async function loadSSOLinks() {
   const nav = getEl('ssoLinksNav');
   if (!nav) return;
   const role = state.studentProfile?.role || 'student';
-  const visible = (links || []).filter(l => (l.roles || '').split(',').map(r => r.trim()).includes(role));
+  const visible = (links || []).filter(l => (l.roles || '').split(',').map(r => r.trim()).includes(role))
+    .filter(l => (l.label || '').trim().toLowerCase() !== 'library');
   nav.innerHTML = visible.map(l => `
     <a href="${l.url}" target="_blank" class="nav-item" style="text-decoration:none;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>

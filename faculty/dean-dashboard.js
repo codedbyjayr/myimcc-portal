@@ -1342,7 +1342,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const nav = getEl('ssoLinksNav');
         if (!nav) return;
         const role = currentProfile?.role || 'dean';
-        const visible = (links || []).filter(l => (l.roles || '').split(',').map(r => r.trim()).includes(role));
+        const visible = (links || []).filter(l => (l.roles || '').split(',').map(r => r.trim()).includes(role))
+            .filter(l => (l.label || '').trim().toLowerCase() !== 'library');
         nav.innerHTML = visible.map(l => `
       <a href="${l.url}" target="_blank" class="nav-item" style="text-decoration:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>

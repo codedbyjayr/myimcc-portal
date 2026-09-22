@@ -29,17 +29,16 @@
 .imcc-preloader .pl-mark {
   width: 58px;
   height: 58px;
-  border-radius: 16px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, var(--pink-600, #E32B4F), var(--pink-700, #9D1F3A));
+  background: var(--pink-600, #E32B4F);
   color: #fff;
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-weight: 800;
   font-size: 22px;
   letter-spacing: .02em;
-  box-shadow: 0 10px 30px rgba(227, 43, 79, .35);
-  animation: plFloat 1.6s ease-in-out infinite;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .2);
 }
 
 .imcc-preloader .pl-ring {
@@ -62,11 +61,6 @@
 
 @keyframes plSpin {
   to { transform: rotate(360deg); }
-}
-
-@keyframes plFloat {
-  0%, 100% { transform: translateY(0); box-shadow: 0 10px 30px rgba(227,43,79,.35); }
-  50% { transform: translateY(-6px); box-shadow: 0 16px 40px rgba(227,43,79,.45); }
 }
 
 /* ── Branded spinner (inline, for buttons/small areas) ─────────────── */

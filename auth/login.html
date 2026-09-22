@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#E7338A">
+  <meta name="theme-color" content="#E32B4F">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Single Sign-On (SSO) — MyIMCC Portal</title>
@@ -26,7 +26,7 @@
           <div class="brand-mark">MI</div>
           <div>
             <div class="brand-name">MyIMCC</div>
-            <div class="brand-sub">ELITE PORTAL</div>
+            <div class="brand-sub">MyIMCC: EduLink</div>
           </div>
         </div>
 
@@ -40,10 +40,8 @@
           <form id="ssoForm" novalidate>
             <div class="field">
               <label for="emailInput">Institutional School Email</label>
-              <input type="email" id="emailInput" placeholder="student@student.imcc.edu.ph or admin@imcc.edu.ph"
+              <input type="email" id="emailInput" placeholder="name@imcc.edu.ph"
                 autocomplete="email" required>
-              <small style="color:var(--ink-500);font-size:11px;margin-top:4px;display:block;">Allowed suffixes:
-                @student.imcc.edu.ph, @faculty.imcc.edu.ph, @admin.imcc.edu.ph, @imcc.edu.ph</small>
             </div>
 
             <div id="ssoError" class="form-error" hidden></div>
@@ -61,19 +59,19 @@
           <div class="demo-access-card" style="margin-top:22px;padding:16px;border-radius:12px;background:rgba(231,51,138,0.06);border:1.5px dashed rgba(231,51,138,0.35);">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
               <span style="font-size:11.5px;font-weight:700;color:var(--primary,#e7338a);text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;">
-                <span>⚡</span> Evaluator / Demo Access
+                Evaluator / Demo Access
               </span>
               <span style="font-size:10.5px;background:rgba(231,51,138,0.15);color:var(--primary,#e7338a);padding:2px 8px;border-radius:99px;font-weight:700;">Student Portal</span>
             </div>
-            <p style="font-size:12px;color:var(--ink-700,#334155);margin-bottom:10px;line-height:1.4;">
+            <p style="font-size:12px;color:var(--ink-700,#6E6680);margin-bottom:10px;line-height:1.4;">
               For testing &amp; demo purposes. Use one-click sign in below or log in with credentials:
             </p>
             <div style="font-size:11.5px;color:var(--ink-500,#64748b);margin-bottom:12px;background:#fff;padding:8px 10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);line-height:1.6;">
               <div><b>Email:</b> <code style="color:var(--primary,#e7338a);font-weight:600;">student.demo@imcc.edu.ph</code></div>
-              <div><b>Password:</b> <code style="color:var(--ink-900,#0f172a);font-weight:600;">DemoStudent2026!</code></div>
+              <div><b>Password:</b> <code style="color:var(--ink-900,#141019);font-weight:600;">DemoStudent2026!</code></div>
             </div>
-            <button type="button" id="demoStudentBtn" class="btn-login" style="background:#0f172a;color:#fff;font-weight:700;font-size:13px;padding:11px 16px;box-shadow:none;display:flex;align-items:center;justify-content:center;gap:8px;">
-              <span>🚀</span> One-Click Sign In as Demo Student
+            <button type="button" id="demoStudentBtn" class="btn-login" style="background:#1C1626;color:#fff;font-weight:700;font-size:13px;padding:11px 16px;box-shadow:none;display:flex;align-items:center;justify-content:center;gap:8px;">
+              One-Click Sign In as Demo Student
             </button>
             <div id="demoStatus" style="font-size:12px;color:var(--primary,#e7338a);text-align:center;margin-top:8px;display:none;font-weight:600;"></div>
           </div>
@@ -142,8 +140,13 @@
         <!-- UNAUTHORIZED ACCESS ERROR SCREEN -->
         <div id="stepUnauthorized" style="display:none;text-align:center;padding:20px 0;">
           <div
-            style="width:64px;height:64px;border-radius:50%;background:#fee2e2;color:#dc2626;display:inline-flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:16px;">
-            🛑</div>
+            style="width:64px;height:64px;border-radius:50%;background:#fee2e2;color:#dc2626;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+            <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="M12 8v4" />
+              <path d="M12 16h.01" />
+            </svg>
+          </div>
           <h2 style="color:#991b1b;font-size:20px;font-weight:800;margin-bottom:8px;">Unauthorized Access</h2>
           <p style="color:#7f1d1d;font-size:13px;line-height:1.6;margin-bottom:20px;">
             Institutional Email Required.<br>
@@ -163,14 +166,11 @@
 
     <!-- RIGHT: Brand Panel -->
     <section class="login-right">
-      <div class="blob blob-1"></div>
-      <div class="blob blob-2"></div>
-      <div class="blob blob-3"></div>
-
       <div class="right-content">
         <div class="right-text">
-          <h2>Welcome to the<br>MyIMCC Elite Portal</h2>
-          <p>Production Single Sign-On (SSO) &amp; Time-Based One-Time Password (TOTP) Authentication.</p>
+          <h2>Iligan Medical Center College<br>Student &amp; Employee Portal</h2>
+          <p>Central identity gateway for students, faculty, and staff. Sign in with your institutional account and
+            verify with the Google Authenticator (TOTP) app.</p>
         </div>
 
         <div class="card-stack">

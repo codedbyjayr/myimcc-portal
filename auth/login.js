@@ -8,9 +8,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // Domain Helper supporting student, faculty, admin, and general domains
+  // Domain Helper: only institutional school emails may sign in
   function isAllowedDomain(email) {
-    const allowed = ['@student.imcc.edu.ph', '@faculty.imcc.edu.ph', '@admin.imcc.edu.ph', '@imcc.edu.ph'];
+    const allowed = ['@imcc.edu.ph'];
     return allowed.some(domain => email.toLowerCase().endsWith(domain));
   }
 
@@ -334,7 +334,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (demoStatus) demoStatus.textContent = 'Error: ' + (err.message || 'Failed to sign in');
       if (demoStudentBtn) {
         demoStudentBtn.disabled = false;
-        demoStudentBtn.innerHTML = '<span>🚀</span> One-Click Sign In as Demo Student';
+        demoStudentBtn.innerHTML = 'One-Click Sign In as Demo Student';
       }
     }
   }

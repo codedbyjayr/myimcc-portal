@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -26,10 +26,11 @@
         <div class="brand-mark">MI</div>
         <div>
           <div class="brand-name">MyIMCC</div>
-          <div class="brand-sub">DEAN PORTAL</div>
+          <div class="brand-sub">Dean Portal</div>
         </div>
         <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close Navigation" type="button">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
@@ -105,7 +106,8 @@
       <div class="topbar">
         <div class="topbar-left">
           <button class="menu-toggle" id="menuToggle" aria-label="Open Navigation" type="button">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2"
+              stroke-linecap="round">
               <line x1="4" y1="6" x2="20" y2="6"></line>
               <line x1="4" y1="12" x2="20" y2="12"></line>
               <line x1="4" y1="18" x2="20" y2="18"></line>
@@ -136,7 +138,12 @@
               </svg>
             </button>
             <div class="dropdown" id="userDropdown">
-              <button class="ddi" type="button" data-goto="profile">👤 My Profile</button>
+              <button class="ddi" type="button" data-goto="profile">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" />
+                </svg>
+                My Profile</button>
               <button class="ddi" id="signOutBtn"
                 style="color:var(--red);border-top:1px solid var(--line);margin-top:4px;padding-top:10px;">Sign
                 Out</button>
@@ -151,7 +158,7 @@
         <section class="page active" id="page-dashboard">
           <div class="hero">
             <div>
-              <h2>Welcome! 👋</h2>
+              <h2>Welcome!</h2>
               <p>Enrollment, academic performance, and department health at a glance.</p>
             </div>
             <div class="hero-actions">
@@ -228,7 +235,8 @@
             <div class="card card-pad">
               <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;">
                 <h3>My Classes</h3>
-                <button class="btn btn-primary" id="deanAddClassBtn" style="padding:6px 12px;font-size:12px;">+ Add Subject</button>
+                <button class="btn btn-primary" id="deanAddClassBtn" style="padding:6px 12px;font-size:12px;">+ Add
+                  Subject</button>
               </div>
               <div id="myCourseList"></div>
               <div id="noMyCoursesMsg" class="empty-state" style="display:none;">No course offerings are assigned to you
@@ -299,7 +307,8 @@
                 <div class="sub">Manage subjects and assign instructors — saves instantly</div>
               </div>
               <div style="display:flex;gap:10px;align-items:center;">
-                <select id="assignSemesterFilter" class="field-input" style="width:auto;"></select>
+                <select id="assignSemesterFilter" class="field-input" style="width:auto;"
+                  aria-label="Filter by Semester" title="Filter by Semester"></select>
                 <button class="btn btn-primary" data-modal="courseOffering">+ Add Subject Offering</button>
               </div>
             </div>
@@ -410,8 +419,9 @@
                 <div class="sub">Final-year students below the expected earned-units threshold</div>
               </div>
               <div style="display:flex;align-items:center;gap:8px;">
-                <label style="font-size:12px;color:var(--ink-500);">Required units:</label>
-                <input type="number" id="requiredUnitsInput" class="field-input" value="144" style="width:80px;">
+                <label for="requiredUnitsInput" style="font-size:12px;color:var(--ink-500);">Required units:</label>
+                <input type="number" id="requiredUnitsInput" class="field-input" value="144" style="width:80px;"
+                  title="Required units" aria-label="Required units">
               </div>
             </div>
             <div class="table-responsive">

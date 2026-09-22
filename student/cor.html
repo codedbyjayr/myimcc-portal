@@ -245,7 +245,7 @@
       letter-spacing: 0.05em;
       padding: 10px 12px;
       text-align: left;
-      border-bottom: 2px solid var(--cor-accent-deep, #6B162A);
+      border-bottom: 2px solid var(--cor-accent-deep, #9D1F3A);
     }
 
     td {
@@ -305,7 +305,7 @@
       padding-top: 10px;
       font-weight: 800;
       font-size: 15px;
-      color: var(--cor-accent-deep, #6B162A);
+      color: var(--cor-accent-deep, #9D1F3A);
     }
 
     /* Signatures */
@@ -367,7 +367,7 @@
     @media print {
       @page {
         size: A4 portrait;
-        margin: 12mm;
+        margin: 10mm;
       }
 
       body {
@@ -383,9 +383,128 @@
       .cor-card {
         box-shadow: none !important;
         border: none !important;
-        padding: 24px !important;
+        padding: 26px 30px !important;
         width: 100% !important;
         border-radius: 0 !important;
+        page-break-inside: avoid;
+      }
+
+      .header {
+        padding-bottom: 14px;
+        margin-bottom: 18px;
+      }
+
+      .logo-img {
+        width: 60px;
+        height: 60px;
+      }
+
+      .brand-logo {
+        gap: 12px;
+      }
+
+      .school-info h1 {
+        font-size: 17px;
+      }
+
+      .school-info p {
+        font-size: 12px;
+      }
+
+      .school-info .registrar-label {
+        font-size: 11px;
+      }
+
+      .doc-title h2 {
+        font-size: 15px;
+      }
+
+      .doc-title span {
+        font-size: 12px;
+      }
+
+      .info-grid {
+        background: var(--white) !important;
+        border: 1px solid #94a3b8 !important;
+        padding: 14px 18px;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+
+      .info-item {
+        font-size: 13px;
+      }
+
+      .info-item span {
+        width: 108px;
+      }
+
+      .section-heading {
+        margin: 18px 0 8px;
+        padding-bottom: 6px;
+        font-size: 13px;
+      }
+
+      table {
+        margin-bottom: 12px;
+      }
+
+      th {
+        padding: 9px 10px;
+        font-size: 11px;
+      }
+
+      td {
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+
+      .financial-grid {
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      .summary-card {
+        background: var(--white) !important;
+        border: 1px solid #94a3b8 !important;
+        padding: 12px 14px;
+      }
+
+      .summary-card-header {
+        margin-bottom: 8px;
+        font-size: 11px;
+      }
+
+      .summary-row {
+        padding: 4px 0;
+        font-size: 13px;
+      }
+
+      .summary-row.total {
+        margin-top: 4px;
+        padding-top: 8px;
+        font-size: 14px;
+      }
+
+      .signatures {
+        margin-top: 30px;
+        padding-top: 14px;
+        gap: 30px;
+      }
+
+      .sig-line {
+        margin-top: 30px;
+        padding-top: 5px;
+      }
+
+      .sig-title {
+        font-size: 11px;
+      }
+
+      .cor-footer {
+        margin-top: 18px;
+        padding-top: 10px;
+        font-size: 10.5px;
       }
 
       .info-grid,
@@ -795,6 +914,34 @@
           statusEl.textContent = 'OFFICIALLY ENROLLED';
         }
       }
+    }
+
+    // ---------- Print: fit certificate onto a single A4 page ------------
+    const printFitMql = window.matchMedia ? window.matchMedia('print') : null;
+    function fitCorToPage() {
+      const card = document.querySelector('.cor-card');
+      if (!card) return;
+      card.style.zoom = ''; // reset any previous scale before re-measuring
+      const mmPer = 25.4, dpi = 96, margin = 10; // 10mm margins (matches @page)
+      const availW = ((210 - margin * 2) / mmPer) * dpi;
+      const availH = ((297 - margin * 2) / mmPer) * dpi;
+      const prevW = card.style.width;
+      card.style.width = availW + 'px'; // measure at printable width so height is accurate
+      const height = card.offsetHeight;
+      card.style.width = prevW;
+      const scale = Math.min(1, (availH / height) * 0.99); // fill the page, 1% safety margin
+      card.style.zoom = scale.toFixed(4);
+    }
+    function clearCorFit() {
+      const card = document.querySelector('.cor-card');
+      if (card) card.style.zoom = '';
+    }
+    window.addEventListener('beforeprint', fitCorToPage);
+    window.addEventListener('afterprint', clearCorFit);
+    if (printFitMql) {
+      printFitMql.addEventListener && printFitMql.addEventListener('change', function (e) {
+        if (e.matches) fitCorToPage(); else clearCorFit();
+      });
     }
 
     document.addEventListener('DOMContentLoaded', function () { (function waitForSupabase() { if (window.__myimcc_supabase_client__) { supabase = window.__myimcc_supabase_client__; loadCorData(); } else { window.addEventListener('supabase:ready', function onReady() { window.removeEventListener('supabase:ready', onReady); supabase = window.__myimcc_supabase_client__; loadCorData(); }); } })(); });

@@ -12,11 +12,11 @@
     <style>
         :root {
             --primary: #E7338A;
-            --bg-dark: #0f172a;
-            --surface: #1e293b;
-            --border: #334155;
-            --text: #f8fafc;
-            --text-muted: #94a3b8;
+            --bg-dark: #141019;
+            --surface: #1D1724;
+            --border: #312A3B;
+            --text: #F3EEF7;
+            --text-muted: #A79FB5;
         }
 
         * {
@@ -50,13 +50,12 @@
         .icon-badge {
             width: 64px;
             height: 64px;
-            background: rgba(245, 158, 11, 0.15);
-            color: #f59e0b;
+            background: rgba(199, 122, 8, 0.16);
+            color: #C77A08;
             border-radius: 50%;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 28px;
             margin-bottom: 20px;
         }
 
@@ -94,7 +93,12 @@
 <body>
 
     <div class="pending-card">
-        <div class="icon-badge">⏳</div>
+        <div class="icon-badge">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+          </div>
         <h1>Account Pending Approval</h1>
         <p>Your registration request has been submitted to the administrator. You will be able to access your dashboard
             once your account is reviewed and approved.</p>

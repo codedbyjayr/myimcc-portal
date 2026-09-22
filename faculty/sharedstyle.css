@@ -9,7 +9,6 @@
     --pink-500: #E7338A;
     --pink-600: #E32B4F;
     --pink-700: #9D1F3A;
-    --maroon-800: #6B162A;
     --pink-50: #FEF3F8;
     --pink-100: #FBDEEC;
     --pink-200: #F6B6D5;
@@ -29,8 +28,8 @@
     --red-bg: #FCE5EA;
     --blue: #2A64D6;
     --blue-bg: #E7EFFC;
-    --shadow: 0 1px 2px rgba(27, 20, 36, .04), 0 8px 24px rgba(27, 20, 36, .06);
-    --radius: 14px;
+    --shadow: 0 1px 2px rgba(23, 20, 31, .05);
+    --radius: 8px;
 }
 
 [data-theme="dark"] {
@@ -48,7 +47,7 @@
     --amber-bg: #2C2107;
     --red-bg: #2C1219;
     --blue-bg: #101E33;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .4);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .35);
 }
 
 * {
@@ -118,7 +117,7 @@ button {
 
 .sidebar.open {
     transform: translateX(0);
-    box-shadow: 0 0 35px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .25);
 }
 
 /* Mobile Drawer Overlay Backdrop */
@@ -126,7 +125,6 @@ button {
     position: fixed;
     inset: 0;
     background: rgba(15, 10, 22, 0.55);
-    backdrop-filter: blur(2px);
     z-index: 995;
     opacity: 0;
     pointer-events: none;
@@ -172,8 +170,8 @@ button {
 .brand-mark {
     width: 38px;
     height: 38px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, var(--pink-500), var(--maroon-800));
+    border-radius: 8px;
+    background: var(--pink-600);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -209,7 +207,7 @@ button {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--pink-500), var(--pink-700));
+    background: var(--pink-600);
     color: #fff;
     display: flex;
     align-items: center;
@@ -534,8 +532,8 @@ button {
 
 /* ---------- Hero ---------- */
 .hero {
-    background: linear-gradient(120deg, var(--pink-500), var(--pink-700) 60%, var(--maroon-800));
-    border-radius: 16px;
+    background: var(--pink-600);
+    border-radius: 10px;
     padding: 20px 18px;
     color: #fff;
     display: flex;
@@ -611,12 +609,12 @@ button {
 }
 
 .btn-primary {
-    background: linear-gradient(90deg, var(--pink-500), var(--pink-700));
+    background: var(--pink-600);
     color: #fff;
 }
 
 .btn-primary:hover {
-    filter: brightness(1.06);
+    background: var(--pink-700);
 }
 
 .btn-primary:disabled {
@@ -719,22 +717,9 @@ textarea.field-input {
 .stat {
     background: var(--card);
     border: 1px solid var(--line);
-    border-left: 4px solid var(--pink-500);
     border-radius: var(--radius);
     padding: 18px;
     box-shadow: var(--shadow);
-}
-
-.stat.c2 {
-    border-left-color: var(--pink-600);
-}
-
-.stat.c3 {
-    border-left-color: var(--maroon-800);
-}
-
-.stat.c4 {
-    border-left-color: var(--pink-700);
 }
 
 .stat-top {
