@@ -888,29 +888,46 @@ document.addEventListener('DOMContentLoaded', async () => {
         return 5.00;
     }
 
-    async function loadMyClasses(autoSelectId = null) {
-        // The dean may be assigned as instructor on some offerings even without
-        // logging in through the faculty portal — pull straight from state if
-        // already loaded, otherwise query directly.
-        myOfferings = state.offerings.filter(o =>
-            (o.instructor_id && o.instructor_id === currentUserId) ||
-            (o.instructor_name && currentProfile && o.instructor_name === currentProfile.full_name)
-        );
+    let deanCourseScope = 'my';
 
-        if (!myOfferings.length) {
-            // Fall back to teacher_assignments table
-            const { data: taRows } = await supabaseClient
-                .from('teacher_assignments')
-                .select('offering_id, course_offerings(*)')
-                .eq('teacher_id', currentUserId)
-                .eq('is_active', true);
-            if (taRows && taRows.length > 0) {
-                myOfferings = taRows.map(t => t.course_offerings).filter(Boolean);
+    getEl('deanScopeMyBtn')?.addEventListener('click', () => {
+        deanCourseScope = 'my';
+        if (getEl('deanScopeMyBtn')) getEl('deanScopeMyBtn').className = 'btn btn-primary';
+        if (getEl('deanScopeAllBtn')) getEl('deanScopeAllBtn').className = 'btn btn-ghost';
+        loadMyClasses();
+    });
+
+    getEl('deanScopeAllBtn')?.addEventListener('click', () => {
+        deanCourseScope = 'all';
+        if (getEl('deanScopeMyBtn')) getEl('deanScopeMyBtn').className = 'btn btn-ghost';
+        if (getEl('deanScopeAllBtn')) getEl('deanScopeAllBtn').className = 'btn btn-primary';
+        loadMyClasses();
+    });
+
+    async function loadMyClasses(autoSelectId = null) {
+        if (deanCourseScope === 'all') {
+            myOfferings = (state.offerings || []).slice();
+        } else {
+            myOfferings = (state.offerings || []).filter(o =>
+                (o.instructor_id && o.instructor_id === currentUserId) ||
+                (o.instructor_name && currentProfile && o.instructor_name === currentProfile.full_name)
+            );
+
+            if (!myOfferings.length) {
+                // Fall back to teacher_assignments table
+                const { data: taRows } = await supabaseClient
+                    .from('teacher_assignments')
+                    .select('offering_id, course_offerings(*)')
+                    .eq('teacher_id', currentUserId)
+                    .eq('is_active', true);
+                if (taRows && taRows.length > 0) {
+                    myOfferings = taRows.map(t => t.course_offerings).filter(Boolean);
+                }
             }
         }
 
         const notice = getEl('myClassesNotice');
-        if (notice) notice.style.display = myOfferings.length ? 'none' : 'block';
+        if (notice) notice.style.display = (deanCourseScope === 'my' && !myOfferings.length) ? 'block' : 'none';
 
         myOfferings.sort((a, b) => (b.school_year || '').localeCompare(a.school_year || ''));
         renderMyCourseList(autoSelectId);
@@ -925,10 +942,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (getEl('selectedMyCourseTitle')) getEl('selectedMyCourseTitle').textContent = 'Select a class';
             if (getEl('selectedMyCourseSub')) getEl('selectedMyCourseSub').textContent = '';
             if (getEl('saveMyGradesBtn')) getEl('saveMyGradesBtn').disabled = true;
+            if (getEl('deanClassAuditLogBtn')) getEl('deanClassAuditLogBtn').style.display = 'none';
             if (getEl('myRosterTable')) getEl('myRosterTable').style.display = 'none';
             if (getEl('noMyRosterMsg')) {
                 getEl('noMyRosterMsg').style.display = 'block';
-                getEl('noMyRosterMsg').textContent = 'No course offerings are assigned to you yet.';
+                getEl('noMyRosterMsg').textContent = deanCourseScope === 'my' ? 'No course offerings are assigned to you yet.' : 'No course offerings found.';
             }
             return;
         }
@@ -939,6 +957,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div style="font-weight:800;font-size:13.5px;">${escapeHtml(o.code || '—')}</div>
         <div style="font-size:12px;color:var(--ink-500);font-weight:500;">${escapeHtml(o.title || '—')}</div>
         <div style="font-size:11px;color:var(--ink-300);margin-top:4px;">${escapeHtml(o.schedule || 'Schedule TBA')} · ${escapeHtml(o.semester || '')} ${escapeHtml(o.school_year || '')}</div>
+        ${deanCourseScope === 'all' ? `<div style="font-size:11px;color:var(--pink-600);font-weight:600;margin-top:4px;">👨‍🏫 ${escapeHtml(o.instructor_name || 'Unassigned')}</div>` : ''}
       </button>
     `).join('');
 
@@ -962,7 +981,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!selectedMyOffering) return;
 
         getEl('selectedMyCourseTitle').textContent = `${selectedMyOffering.code} — ${selectedMyOffering.title}`;
-        getEl('selectedMyCourseSub').textContent = `${selectedMyOffering.semester || ''} ${selectedMyOffering.school_year || ''} · ${selectedMyOffering.schedule || 'Schedule TBA'}`;
+        getEl('selectedMyCourseSub').textContent = `${selectedMyOffering.semester || ''} ${selectedMyOffering.school_year || ''} · ${selectedMyOffering.schedule || 'Schedule TBA'}${selectedMyOffering.instructor_name ? ` · Instructor: ${selectedMyOffering.instructor_name}` : ''}`;
         getEl('saveMyGradesBtn').disabled = false;
 
         const [{ data: enrollments }, { data: existingGrades }] = await Promise.all([
@@ -986,6 +1005,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .sort((a, b) => (a.student.full_name || '').localeCompare(b.student.full_name || ''));
 
         renderMyRoster();
+        if (getEl('deanClassAuditLogBtn')) getEl('deanClassAuditLogBtn').style.display = myRoster.length > 0 ? 'inline-flex' : 'none';
     }
 
     function renderMyRoster() {
@@ -997,10 +1017,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             table.style.display = 'none';
             msg.style.display = 'block';
             msg.textContent = 'No students are enrolled in this class yet.';
+            if (getEl('deanClassAuditLogBtn')) getEl('deanClassAuditLogBtn').style.display = 'none';
             return;
         }
         msg.style.display = 'none';
         table.style.display = 'table';
+        if (getEl('deanClassAuditLogBtn')) getEl('deanClassAuditLogBtn').style.display = 'inline-flex';
 
         const periodInput = (r, idx, field, cls) =>
             `<input type="number" min="0" max="100" step="0.01" class="field-input ${cls}" style="width:72px;" data-idx="${idx}" value="${r[field] ?? ''}">`;
@@ -1015,6 +1037,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td>${periodInput(r, idx, 'final', 'my-final-input')}</td>
         <td class="my-equiv-cell" data-idx="${idx}">${previewMyEquivalent(r)}</td>
         <td class="my-remark-cell" data-idx="${idx}">${previewMyRemarkBadge(r)}</td>
+        <td style="text-align:center;white-space:nowrap;">
+          <button type="button" class="btn btn-ghost dean-grade-hist-btn" data-idx="${idx}" style="padding:4px 9px;font-size:12px;display:inline-flex;align-items:center;gap:4px;" title="View history & revert">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+            History
+          </button>
+        </td>
       </tr>
     `).join('');
 
@@ -1027,6 +1055,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 myRoster[idx][field] = val;
                 document.querySelector(`.my-equiv-cell[data-idx="${idx}"]`).textContent = previewMyEquivalent(myRoster[idx]);
                 document.querySelector(`.my-remark-cell[data-idx="${idx}"]`).innerHTML = previewMyRemarkBadge(myRoster[idx]);
+            });
+        });
+
+        document.querySelectorAll('.dean-grade-hist-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = Number(btn.dataset.idx);
+                if (myRoster[idx]) openDeanStudentGradeHistory(myRoster[idx]);
             });
         });
     }
@@ -1091,6 +1127,205 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderOverview();
         renderGradReadiness();
     });
+
+    // ── Dean Grade History & Revert System ───────────────────────────────
+    async function openDeanStudentGradeHistory(r) {
+        if (!selectedMyOffering || !r || !r.student) return;
+        const modal = getEl('gradeHistoryModal');
+        const title = getEl('gradeHistoryModalTitle');
+        const sub = getEl('gradeHistoryModalSub');
+        const currentBox = getEl('gradeHistoryCurrentBox');
+        const body = getEl('gradeHistoryBody');
+        const noMsg = getEl('noGradeHistoryMsg');
+
+        title.textContent = `Grade History — ${r.student.full_name || 'Student'}`;
+        sub.textContent = `${selectedMyOffering.code}: ${selectedMyOffering.title} · Student No: ${r.student.student_no || r.student.id_number || 'N/A'}`;
+
+        const eq = previewMyEquivalent(r);
+        const rem = previewMyRemarkBadge(r);
+
+        currentBox.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-weight:700;font-size:13px;color:var(--ink-700);">Current Active Grade</span>
+                <span style="font-size:11.5px;color:var(--ink-500);font-weight:500;">Saved in Portal</span>
+            </div>
+            <div class="current-grade-grid">
+                <div class="current-grade-item"><div class="current-grade-label">Prelim</div><div class="current-grade-val">${r.prelim != null ? r.prelim : '—'}</div></div>
+                <div class="current-grade-item"><div class="current-grade-label">Midterm</div><div class="current-grade-val">${r.midterm != null ? r.midterm : '—'}</div></div>
+                <div class="current-grade-item"><div class="current-grade-label">Semi-Final</div><div class="current-grade-val">${r.semifinal != null ? r.semifinal : '—'}</div></div>
+                <div class="current-grade-item"><div class="current-grade-label">Final</div><div class="current-grade-val">${r.final != null ? r.final : '—'}</div></div>
+                <div class="current-grade-item"><div class="current-grade-label">Equivalent</div><div class="current-grade-val">${eq}</div></div>
+                <div class="current-grade-item"><div class="current-grade-label">Remark</div><div class="current-grade-val" style="font-size:12px;">${rem}</div></div>
+            </div>
+        `;
+
+        body.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--ink-500);">Loading revision history…</td></tr>';
+        noMsg.style.display = 'none';
+        modal.classList.add('open');
+
+        const { data: historyRows, error } = await supabaseClient
+            .from('v_grade_history')
+            .select('*')
+            .eq('offering_id', selectedMyOffering.id)
+            .eq('student_id', r.student.id)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            body.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--red);">Failed to load history: ${escapeHtml(error.message)}</td></tr>`;
+            return;
+        }
+
+        renderDeanHistoryRows(historyRows || [], r);
+    }
+
+    async function openDeanClassGradeHistory() {
+        if (!selectedMyOffering) return;
+        const modal = getEl('gradeHistoryModal');
+        const title = getEl('gradeHistoryModalTitle');
+        const sub = getEl('gradeHistoryModalSub');
+        const currentBox = getEl('gradeHistoryCurrentBox');
+        const body = getEl('gradeHistoryBody');
+        const noMsg = getEl('noGradeHistoryMsg');
+
+        title.textContent = `Class Grade Audit Log — ${selectedMyOffering.code}`;
+        sub.textContent = `${selectedMyOffering.title} · ${selectedMyOffering.semester || ''} ${selectedMyOffering.school_year || ''}`;
+
+        currentBox.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-weight:700;font-size:13px;color:var(--ink-700);">Class Audit Trail & Revision History (Dean Oversight)</span>
+                <span style="font-size:12px;color:var(--ink-500);">${myRoster.length} students enrolled</span>
+            </div>
+            <div style="font-size:12px;color:var(--ink-500);margin-top:6px;">
+                Complete record of all grade entries, faculty updates, and reversions for this class. Reverting will restore prior grade values and append a new audit log.
+            </div>
+        `;
+
+        body.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--ink-500);">Loading class grade history…</td></tr>';
+        noMsg.style.display = 'none';
+        modal.classList.add('open');
+
+        const { data: historyRows, error } = await supabaseClient
+            .from('v_grade_history')
+            .select('*')
+            .eq('offering_id', selectedMyOffering.id)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            body.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--red);">Failed to load history: ${escapeHtml(error.message)}</td></tr>`;
+            return;
+        }
+
+        renderDeanHistoryRows(historyRows || [], null);
+    }
+
+    function renderDeanHistoryRows(rows, targetStudent) {
+        const body = getEl('gradeHistoryBody');
+        const noMsg = getEl('noGradeHistoryMsg');
+
+        if (!rows.length) {
+            body.innerHTML = '';
+            noMsg.style.display = 'block';
+            return;
+        }
+
+        noMsg.style.display = 'none';
+        body.innerHTML = rows.map((h) => {
+            const dt = new Date(h.created_at).toLocaleString('en-US', {
+                month: 'short', day: 'numeric', year: 'numeric',
+                hour: 'numeric', minute: '2-digit', hour12: true
+            });
+            const typeLabel = h.change_type === 'revert' ? 'Reverted' : (h.change_type === 'initial_entry' ? 'Initial' : 'Updated');
+            const typeClass = h.change_type || 'before_update';
+            const studentCol = targetStudent ? '' : `<td><b>${escapeHtml(h.student_name || 'N/A')}</b><br><small style="color:var(--ink-500);">${escapeHtml(h.student_no || '')}</small></td>`;
+
+            return `
+                <tr>
+                    <td style="white-space:nowrap;font-size:11.5px;">${escapeHtml(dt)}</td>
+                    ${studentCol}
+                    <td style="font-size:12px;">${escapeHtml(h.changed_by_name || 'Faculty / Dean')}</td>
+                    <td><span class="history-badge ${typeClass}">${typeLabel}</span></td>
+                    <td><span class="history-chip">${h.prelim != null ? Number(h.prelim).toFixed(2) : '—'}</span></td>
+                    <td><span class="history-chip">${h.midterm != null ? Number(h.midterm).toFixed(2) : '—'}</span></td>
+                    <td><span class="history-chip">${h.semifinal != null ? Number(h.semifinal).toFixed(2) : '—'}</span></td>
+                    <td><span class="history-chip">${h.final != null ? Number(h.final).toFixed(2) : '—'}</span></td>
+                    <td><b>${h.equivalent != null ? Number(h.equivalent).toFixed(2) : '—'}</b></td>
+                    <td>${h.remark ? `<span class="badge ${h.remark === 'Passed' ? 'badge-green' : (h.remark === 'Failed' ? 'badge-red' : 'badge-amber')}">${escapeHtml(h.remark)}</span>` : '—'}</td>
+                    <td style="text-align:center;white-space:nowrap;">
+                        <button type="button" class="btn btn-outline revert-btn" data-hist-id="${h.id}" data-student-id="${h.student_id}" style="padding:3px 8px;font-size:11.5px;color:var(--pink-600);border-color:var(--pink-200);" title="Revert to this past version">
+                            ⏪ Revert
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        body.querySelectorAll('.revert-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const histId = btn.dataset.histId;
+                const studentId = btn.dataset.studentId;
+                const histEntry = rows.find(x => x.id === histId);
+                executeDeanRevert(histEntry, targetStudent || myRoster.find(x => x.student.id === studentId));
+            });
+        });
+    }
+
+    async function executeDeanRevert(histEntry, studentRosterItem) {
+        if (!histEntry) return;
+        const studentName = histEntry.student_name || studentRosterItem?.student?.full_name || 'student';
+        const formattedDate = new Date(histEntry.created_at).toLocaleString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
+        });
+        
+        const reason = prompt(
+            `Confirm Reverting Grade for ${studentName} (Dean Oversight)\n\nThis will restore the previous scores recorded on ${formattedDate}:\n• Pre-Lim: ${histEntry.prelim ?? '—'}\n• Midterm: ${histEntry.midterm ?? '—'}\n• Semi-Final: ${histEntry.semifinal ?? '—'}\n• Final: ${histEntry.final ?? '—'}\n• Equivalent: ${histEntry.equivalent ?? '—'}\n• Remark: ${histEntry.remark ?? '—'}\n\nEnter reason / note for Dean audit log (optional):`,
+            `Dean revert to version from ${formattedDate}`
+        );
+        if (reason === null) return; // User cancelled prompt
+
+        showToast('Reverting grade…');
+
+        const { data, error } = await supabaseClient.rpc('revert_grade', {
+            p_history_id: histEntry.id,
+            p_reason: reason.trim() || 'Dean revert to previous version'
+        });
+
+        if (error) {
+            showToast('Failed to revert: ' + error.message, true);
+            return;
+        }
+
+        // Update in-memory roster if present
+        if (studentRosterItem) {
+            studentRosterItem.prelim = histEntry.prelim != null ? Number(histEntry.prelim) : null;
+            studentRosterItem.midterm = histEntry.midterm != null ? Number(histEntry.midterm) : null;
+            studentRosterItem.semifinal = histEntry.semifinal != null ? Number(histEntry.semifinal) : null;
+            studentRosterItem.final = histEntry.final != null ? Number(histEntry.final) : null;
+            studentRosterItem.equivalent = histEntry.equivalent != null ? Number(histEntry.equivalent) : null;
+            studentRosterItem.remark = histEntry.remark || 'Pending';
+            if (data && data.id) studentRosterItem.gradeId = data.id;
+
+            renderMyRoster();
+            // Refresh modal if open
+            if (getEl('gradeHistoryModal').classList.contains('open')) {
+                openDeanStudentGradeHistory(studentRosterItem);
+            }
+        } else {
+            // Refresh offering
+            if (selectedMyOffering) selectMyCourse(selectedMyOffering.id);
+        }
+
+        showToast(`Grade for ${studentName} successfully reverted!`);
+
+        // Refresh overview
+        const { data: gradeRows } = await supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)');
+        state.grades = gradeRows || [];
+        renderOverview();
+        renderGradReadiness();
+    }
+
+    getEl('gradeHistoryCloseBtn')?.addEventListener('click', () => getEl('gradeHistoryModal').classList.remove('open'));
+    getEl('gradeHistoryDoneBtn')?.addEventListener('click', () => getEl('gradeHistoryModal').classList.remove('open'));
+    getEl('deanClassAuditLogBtn')?.addEventListener('click', openDeanClassGradeHistory);
 
     getEl('deanAddClassBtn')?.addEventListener('click', () => {
         openModal('courseOffering', { instructor_id: currentUserId });

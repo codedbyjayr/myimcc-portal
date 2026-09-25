@@ -269,10 +269,15 @@
                   <h3 id="selectedCourseTitle">Select a class</h3>
                   <div class="sub" id="selectedCourseSub"></div>
                 </div>
-                <button class="btn btn-primary" id="saveGradesBtn" disabled>Save Grades</button>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <button type="button" class="btn btn-ghost" id="classAuditLogBtn" style="display:none;align-items:center;gap:6px;font-size:12px;padding:6px 12px;" title="View all grade changes for this class">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Class Grade History
+                  </button>
+                  <button class="btn btn-primary" id="saveGradesBtn" disabled>Save Grades</button>
+                </div>
               </div>
-              <div class="notice">Enter midterm and final scores on a 0–100 scale. The equivalent grade and remark are
-                computed automatically when you save.</div>
+              <div class="notice">Enter prelim, midterm, semifinal, and final scores on a 0–100 scale. Equivalent and remark are computed automatically. Use the History button on any student to view previous edits or revert mistakes.</div>
               <div style="overflow-x:auto;">
                 <table id="rosterTable" style="display:none;">
                   <thead>
@@ -285,6 +290,7 @@
                       <th>Final</th>
                       <th>Equivalent</th>
                       <th>Remark</th>
+                      <th style="text-align:center;">Action &amp; History</th>
                     </tr>
                   </thead>
                   <tbody id="rosterBody"></tbody>
@@ -301,8 +307,8 @@
             <div class="card-head">
               <h3>Take Attendance</h3>
               <div class="toolbar" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                <select id="attClassSelect" class="field-input" style="width:auto;min-width:220px;"></select>
-                <input type="date" id="attDateInput" class="field-input" style="width:auto;">
+                <select id="attClassSelect" class="field-input" style="width:auto;min-width:220px;" aria-label="Select Class" title="Select Class"></select>
+                <input type="date" id="attDateInput" class="field-input" style="width:auto;" aria-label="Attendance Date" title="Attendance Date">
                 <button class="btn btn-primary" id="saveAttendanceBtn" disabled>Save Attendance</button>
               </div>
             </div>
@@ -474,6 +480,52 @@
       <div class="modal-actions">
         <button type="button" class="btn-outline btn" id="cancelAddSubjectBtn">Cancel</button>
         <button type="button" class="btn btn-primary" id="saveAddSubjectBtn">Save Subject</button>
+      </div>
+    </div>
+  <!-- GRADE REVISION HISTORY & REVERT MODAL -->
+  <div class="modal-overlay" id="gradeHistoryModal">
+    <div class="modal-box" style="max-width:820px;width:95%;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+        <div>
+          <h3 id="gradeHistoryModalTitle" style="margin:0 0 4px 0;">Grade Revision History</h3>
+          <div class="sub" id="gradeHistoryModalSub" style="font-size:13px;color:var(--ink-500);">Student and course details</div>
+        </div>
+        <button type="button" class="btn btn-ghost" id="gradeHistoryCloseBtn" style="padding:4px 8px;font-size:20px;line-height:1;" aria-label="Close">&times;</button>
+      </div>
+
+      <!-- Current Grade Card -->
+      <div id="gradeHistoryCurrentBox" style="background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;">
+      </div>
+
+      <!-- History Table -->
+      <div class="table-responsive" style="max-height:360px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius);">
+        <table style="margin:0;font-size:12.5px;">
+          <thead style="position:sticky;top:0;background:var(--card);z-index:2;">
+            <tr>
+              <th>Date &amp; Time</th>
+              <th>Student</th>
+              <th>Changed By</th>
+              <th>Type</th>
+              <th>Prelim</th>
+              <th>Midterm</th>
+              <th>Semi</th>
+              <th>Final</th>
+              <th>Equiv</th>
+              <th>Remark</th>
+              <th style="text-align:center;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="gradeHistoryBody"></tbody>
+        </table>
+      </div>
+      <div id="noGradeHistoryMsg" class="empty-state" style="display:none;padding:24px 0;">No previous revisions found. When grades are edited or updated, previous entries are archived here automatically.</div>
+
+      <div class="modal-actions" style="margin-top:16px;justify-content:space-between;align-items:center;">
+        <div style="font-size:12px;color:var(--ink-500);display:flex;align-items:center;gap:6px;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          Clicking "Revert" restores that exact past version and preserves the current version in audit logs.
+        </div>
+        <button type="button" class="btn btn-primary" id="gradeHistoryDoneBtn">Done</button>
       </div>
     </div>
   </div>
