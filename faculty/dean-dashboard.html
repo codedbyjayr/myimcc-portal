@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -230,17 +230,20 @@
         <section class="page" id="page-classes">
           <div class="notice" id="myClassesNotice" style="display:none;">You aren't currently assigned as the instructor
             for any course offering, so there's nothing to grade here yet. Assign yourself a course under Faculty &amp;
-            Schedule to use this page.</div>
+            Schedule to use this page, or switch to "All Classes" to manage any class.</div>
           <div class="grid-2">
             <div class="card card-pad">
               <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;">
-                <h3>My Classes</h3>
+                <h3>Course Offerings</h3>
                 <button class="btn btn-primary" id="deanAddClassBtn" style="padding:6px 12px;font-size:12px;">+ Add
                   Subject</button>
               </div>
+              <div style="display:flex;gap:6px;margin-bottom:12px;">
+                <button type="button" class="btn btn-primary" id="deanScopeMyBtn" style="flex:1;font-size:12px;padding:6px;">My Classes</button>
+                <button type="button" class="btn btn-ghost" id="deanScopeAllBtn" style="flex:1;font-size:12px;padding:6px;">All Classes</button>
+              </div>
               <div id="myCourseList"></div>
-              <div id="noMyCoursesMsg" class="empty-state" style="display:none;">No course offerings are assigned to you
-                yet.</div>
+              <div id="noMyCoursesMsg" class="empty-state" style="display:none;">No course offerings found.</div>
             </div>
             <div class="card card-pad">
               <div class="card-head">
@@ -248,10 +251,15 @@
                   <h3 id="selectedMyCourseTitle">Select a class</h3>
                   <div class="sub" id="selectedMyCourseSub"></div>
                 </div>
-                <button class="btn btn-primary" id="saveMyGradesBtn" disabled>Save Grades</button>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <button type="button" class="btn btn-ghost" id="deanClassAuditLogBtn" style="display:none;align-items:center;gap:6px;font-size:12px;padding:6px 12px;" title="View all grade changes for this class">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Class Grade History
+                  </button>
+                  <button class="btn btn-primary" id="saveMyGradesBtn" disabled>Save Grades</button>
+                </div>
               </div>
-              <div class="notice">Enter midterm and final scores on a 0–100 scale. The equivalent grade and remark are
-                computed automatically when you save.</div>
+              <div class="notice">Enter prelim, midterm, semifinal, and final scores on a 0–100 scale. As Dean, you can input, update, and revert grades with full audit trail logging across all offerings. Use the History button on any student to revert mistakes.</div>
               <div class="table-responsive">
                 <table id="myRosterTable" style="display:none;">
                   <thead>
@@ -264,6 +272,7 @@
                       <th>Final</th>
                       <th>Equivalent</th>
                       <th>Remark</th>
+                      <th style="text-align:center;">Action &amp; History</th>
                     </tr>
                   </thead>
                   <tbody id="myRosterBody"></tbody>
@@ -515,6 +524,51 @@
       <div class="modal-actions">
         <button type="button" class="btn-outline btn" id="modalCancelBtn">Cancel</button>
         <button type="button" class="btn btn-primary" id="modalSaveBtn">Save</button>
+      </div>
+  <!-- GRADE REVISION HISTORY & REVERT MODAL -->
+  <div class="modal-overlay" id="gradeHistoryModal">
+    <div class="modal-box" style="max-width:820px;width:95%;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+        <div>
+          <h3 id="gradeHistoryModalTitle" style="margin:0 0 4px 0;">Grade Revision History</h3>
+          <div class="sub" id="gradeHistoryModalSub" style="font-size:13px;color:var(--ink-500);">Student and course details</div>
+        </div>
+        <button type="button" class="btn btn-ghost" id="gradeHistoryCloseBtn" style="padding:4px 8px;font-size:20px;line-height:1;" aria-label="Close">&times;</button>
+      </div>
+
+      <!-- Current Grade Card -->
+      <div id="gradeHistoryCurrentBox" style="background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;">
+      </div>
+
+      <!-- History Table -->
+      <div class="table-responsive" style="max-height:360px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius);">
+        <table style="margin:0;font-size:12.5px;">
+          <thead style="position:sticky;top:0;background:var(--card);z-index:2;">
+            <tr>
+              <th>Date &amp; Time</th>
+              <th>Student</th>
+              <th>Changed By</th>
+              <th>Type</th>
+              <th>Prelim</th>
+              <th>Midterm</th>
+              <th>Semi</th>
+              <th>Final</th>
+              <th>Equiv</th>
+              <th>Remark</th>
+              <th style="text-align:center;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="gradeHistoryBody"></tbody>
+        </table>
+      </div>
+      <div id="noGradeHistoryMsg" class="empty-state" style="display:none;padding:24px 0;">No previous revisions found. When grades are edited or updated, previous entries are archived here automatically.</div>
+
+      <div class="modal-actions" style="margin-top:16px;justify-content:space-between;align-items:center;">
+        <div style="font-size:12px;color:var(--ink-500);display:flex;align-items:center;gap:6px;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          Clicking "Revert" restores that exact past version and preserves the current version in audit logs.
+        </div>
+        <button type="button" class="btn btn-primary" id="gradeHistoryDoneBtn">Done</button>
       </div>
     </div>
   </div>

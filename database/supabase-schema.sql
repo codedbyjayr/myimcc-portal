@@ -376,9 +376,9 @@ INSERT INTO faq_articles (category, question, answer, keywords) VALUES
   ('General', 'How do I set up Two-Factor Authentication (2FA)?',
    'After signing in with your school email, you will be prompted to scan a QR code with Google Authenticator. Enter the 6-digit code to verify. You can also set up MFA from the user menu in the dashboard.',
    '2fa, mfa, authenticator, totp, qr, code, two-factor'),
-  ('General', 'What email domains are allowed?',
-   'Only institutional email domains are allowed: @student.imcc.edu.ph (students), @faculty.imcc.edu.ph (faculty), @admin.imcc.edu.ph (admins), and @imcc.edu.ph (staff).',
-   'email, domain, school, institutional, allowed')
+('General', 'What email domains are allowed?',
+    'Any valid Google account can sign in with your official institutional email. Your access level is determined by the profile and role assigned to you by the administration, not by your email domain.',
+    'email, domain, sign in, login, allowed')
 ON CONFLICT DO NOTHING;
 
 -- ── Seed Data: Sample Course Offerings ───────────────────────────────

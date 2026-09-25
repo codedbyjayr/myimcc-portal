@@ -292,6 +292,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         renderRoster();
         getEl('saveGradesBtn').disabled = roster.length === 0;
+        if (getEl('classAuditLogBtn')) getEl('classAuditLogBtn').style.display = roster.length > 0 ? 'inline-flex' : 'none';
     }
 
     function renderRoster() {
@@ -321,6 +322,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td>${periodInput(r, idx, 'final', 'final-input')}</td>
         <td class="equiv-cell" data-idx="${idx}">${previewEquivalent(r)}</td>
         <td class="remark-cell" data-idx="${idx}">${previewRemarkBadge(r)}</td>
+        <td style="text-align:center;white-space:nowrap;">
+          <button type="button" class="btn btn-ghost grade-hist-btn" data-idx="${idx}" style="padding:4px 9px;font-size:12px;display:inline-flex;align-items:center;gap:4px;" title="View history & revert">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+            History
+          </button>
+        </td>
       </tr>
     `).join('');
 
@@ -333,6 +340,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 roster[idx][field] = val;
                 document.querySelector(`.equiv-cell[data-idx="${idx}"]`).textContent = previewEquivalent(roster[idx]);
                 document.querySelector(`.remark-cell[data-idx="${idx}"]`).innerHTML = previewRemarkBadge(roster[idx]);
+            });
+        });
+
+        document.querySelectorAll('.grade-hist-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = Number(btn.dataset.idx);
+                if (roster[idx]) openStudentGradeHistory(roster[idx]);
             });
         });
     }
@@ -394,6 +409,201 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         await loadDashboardStats();
     });
+
+    // ── Grade History & Reversion System ──────────────────────────────────
+    async function openStudentGradeHistory(r) {
+        if (!selectedOffering || !r || !r.student) return;
+        const modal = getEl('gradeHistoryModal');
+        const title = getEl('gradeHistoryModalTitle');
+        const sub = getEl('gradeHistoryModalSub');
+        const currentBox = getEl('gradeHistoryCurrentBox');
+        const body = getEl('gradeHistoryBody');
+        const noMsg = getEl('noGradeHistoryMsg');
+
+        title.textContent = `Grade History — ${r.student.full_name || 'Student'}`;
+        sub.textContent = `${selectedOffering.code}: ${selectedOffering.title} · Student No: ${r.student.student_no || r.student.id_number || 'N/A'}`;
+
+        const eq = previewEquivalent(r);
+        const rem = previewRemarkBadge(r);
+
+        currentBox.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-weight:700;font-size:13px;color:var(--ink-700);">Current Active Grade</span>
+                <span style="font-size:11.5px;color:var(--ink-500);font-weight:500;">Saved in Portal</span>
+            </div>
+            <div class="current-grade-grid">
+                <div class="current-grade-item"><div class="current-grade-label">Prelim</div><div class="current-grade-val">${r.prelim != null ? r.prelim : '—'}</div></div>
+                <div class="current-grade-item"><div class="current-grade-label">Midterm</div><div class="current-grade-val">${r.midterm != null ? r.midterm : '—'}</div></div>
+                <div class="current-grade-item"><div class="current-grade-label">Semi-Final</div><div class="current-grade-val">${r.semifinal != null ? r.semifinal : '—'}</div></div>
+                <div class="current-grade-item"><div class="current-grade-label">Final</div><div class="current-grade-val">${r.final != null ? r.final : '—'}</div></div>
+                <div class="current-grade-item"><div class="current-grade-label">Equivalent</div><div class="current-grade-val">${eq}</div></div>
+                <div class="current-grade-item"><div class="current-grade-label">Remark</div><div class="current-grade-val" style="font-size:12px;">${rem}</div></div>
+            </div>
+        `;
+
+        body.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--ink-500);">Loading revision history…</td></tr>';
+        noMsg.style.display = 'none';
+        modal.classList.add('open');
+
+        const { data: historyRows, error } = await supabaseClient
+            .from('v_grade_history')
+            .select('*')
+            .eq('offering_id', selectedOffering.id)
+            .eq('student_id', r.student.id)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            body.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--red);">Failed to load history: ${escapeHtml(error.message)}</td></tr>`;
+            return;
+        }
+
+        renderHistoryRows(historyRows || [], r);
+    }
+
+    async function openClassGradeHistory() {
+        if (!selectedOffering) return;
+        const modal = getEl('gradeHistoryModal');
+        const title = getEl('gradeHistoryModalTitle');
+        const sub = getEl('gradeHistoryModalSub');
+        const currentBox = getEl('gradeHistoryCurrentBox');
+        const body = getEl('gradeHistoryBody');
+        const noMsg = getEl('noGradeHistoryMsg');
+
+        title.textContent = `Class Grade Audit Log — ${selectedOffering.code}`;
+        sub.textContent = `${selectedOffering.title} · ${selectedOffering.semester || ''} ${selectedOffering.school_year || ''}`;
+
+        currentBox.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-weight:700;font-size:13px;color:var(--ink-700);">Class Audit Trail & Revision History</span>
+                <span style="font-size:12px;color:var(--ink-500);">${roster.length} students enrolled</span>
+            </div>
+            <div style="font-size:12px;color:var(--ink-500);margin-top:6px;">
+                Shows every grade entry, update, and revert operation for this subject. Click "Revert" on any historical record to restore that student's prior grade.
+            </div>
+        `;
+
+        body.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--ink-500);">Loading class grade history…</td></tr>';
+        noMsg.style.display = 'none';
+        modal.classList.add('open');
+
+        const { data: historyRows, error } = await supabaseClient
+            .from('v_grade_history')
+            .select('*')
+            .eq('offering_id', selectedOffering.id)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            body.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--red);">Failed to load history: ${escapeHtml(error.message)}</td></tr>`;
+            return;
+        }
+
+        renderHistoryRows(historyRows || [], null);
+    }
+
+    function renderHistoryRows(rows, targetStudent) {
+        const body = getEl('gradeHistoryBody');
+        const noMsg = getEl('noGradeHistoryMsg');
+
+        if (!rows.length) {
+            body.innerHTML = '';
+            noMsg.style.display = 'block';
+            return;
+        }
+
+        noMsg.style.display = 'none';
+        body.innerHTML = rows.map((h) => {
+            const dt = new Date(h.created_at).toLocaleString('en-US', {
+                month: 'short', day: 'numeric', year: 'numeric',
+                hour: 'numeric', minute: '2-digit', hour12: true
+            });
+            const typeLabel = h.change_type === 'revert' ? 'Reverted' : (h.change_type === 'initial_entry' ? 'Initial' : 'Updated');
+            const typeClass = h.change_type || 'before_update';
+            const studentCol = targetStudent ? '' : `<td><b>${escapeHtml(h.student_name || 'N/A')}</b><br><small style="color:var(--ink-500);">${escapeHtml(h.student_no || '')}</small></td>`;
+
+            return `
+                <tr>
+                    <td style="white-space:nowrap;font-size:11.5px;">${escapeHtml(dt)}</td>
+                    ${studentCol}
+                    <td style="font-size:12px;">${escapeHtml(h.changed_by_name || 'Faculty / Dean')}</td>
+                    <td><span class="history-badge ${typeClass}">${typeLabel}</span></td>
+                    <td><span class="history-chip">${h.prelim != null ? Number(h.prelim).toFixed(2) : '—'}</span></td>
+                    <td><span class="history-chip">${h.midterm != null ? Number(h.midterm).toFixed(2) : '—'}</span></td>
+                    <td><span class="history-chip">${h.semifinal != null ? Number(h.semifinal).toFixed(2) : '—'}</span></td>
+                    <td><span class="history-chip">${h.final != null ? Number(h.final).toFixed(2) : '—'}</span></td>
+                    <td><b>${h.equivalent != null ? Number(h.equivalent).toFixed(2) : '—'}</b></td>
+                    <td>${h.remark ? `<span class="badge ${h.remark === 'Passed' ? 'badge-green' : (h.remark === 'Failed' ? 'badge-red' : 'badge-amber')}">${escapeHtml(h.remark)}</span>` : '—'}</td>
+                    <td style="text-align:center;white-space:nowrap;">
+                        <button type="button" class="btn btn-outline revert-btn" data-hist-id="${h.id}" data-student-id="${h.student_id}" style="padding:3px 8px;font-size:11.5px;color:var(--pink-600);border-color:var(--pink-200);" title="Revert to this past version">
+                            ⏪ Revert
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        body.querySelectorAll('.revert-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const histId = btn.dataset.histId;
+                const studentId = btn.dataset.studentId;
+                const histEntry = rows.find(x => x.id === histId);
+                executeRevert(histEntry, targetStudent || roster.find(x => x.student.id === studentId));
+            });
+        });
+    }
+
+    async function executeRevert(histEntry, studentRosterItem) {
+        if (!histEntry) return;
+        const studentName = histEntry.student_name || studentRosterItem?.student?.full_name || 'student';
+        const formattedDate = new Date(histEntry.created_at).toLocaleString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
+        });
+        
+        const reason = prompt(
+            `Confirm Reverting Grade for ${studentName}\n\nThis will restore the previous scores recorded on ${formattedDate}:\n• Pre-Lim: ${histEntry.prelim ?? '—'}\n• Midterm: ${histEntry.midterm ?? '—'}\n• Semi-Final: ${histEntry.semifinal ?? '—'}\n• Final: ${histEntry.final ?? '—'}\n• Equivalent: ${histEntry.equivalent ?? '—'}\n• Remark: ${histEntry.remark ?? '—'}\n\nEnter reason / note for this revision (optional):`,
+            `Reverted to version from ${formattedDate}`
+        );
+        if (reason === null) return; // User cancelled prompt
+
+        showToast('Reverting grade…');
+
+        const { data, error } = await supabaseClient.rpc('revert_grade', {
+            p_history_id: histEntry.id,
+            p_reason: reason.trim() || 'Reverted to previous version'
+        });
+
+        if (error) {
+            showToast('Failed to revert: ' + error.message, true);
+            return;
+        }
+
+        // Update in-memory roster if present
+        if (studentRosterItem) {
+            studentRosterItem.prelim = histEntry.prelim != null ? Number(histEntry.prelim) : null;
+            studentRosterItem.midterm = histEntry.midterm != null ? Number(histEntry.midterm) : null;
+            studentRosterItem.semifinal = histEntry.semifinal != null ? Number(histEntry.semifinal) : null;
+            studentRosterItem.final = histEntry.final != null ? Number(histEntry.final) : null;
+            studentRosterItem.equivalent = histEntry.equivalent != null ? Number(histEntry.equivalent) : null;
+            studentRosterItem.remark = histEntry.remark || 'Pending';
+            if (data && data.id) studentRosterItem.gradeId = data.id;
+
+            renderRoster();
+            // Refresh modal if open
+            if (getEl('gradeHistoryModal').classList.contains('open')) {
+                openStudentGradeHistory(studentRosterItem);
+            }
+        } else {
+            // Refresh offering
+            if (selectedOffering) selectCourse(selectedOffering.id);
+        }
+
+        showToast(`Grade for ${studentName} successfully reverted!`);
+        await loadDashboardStats();
+    }
+
+    getEl('gradeHistoryCloseBtn')?.addEventListener('click', () => getEl('gradeHistoryModal').classList.remove('open'));
+    getEl('gradeHistoryDoneBtn')?.addEventListener('click', () => getEl('gradeHistoryModal').classList.remove('open'));
+    getEl('classAuditLogBtn')?.addEventListener('click', openClassGradeHistory);
+
 
     // ══════════════════════════════════════════════════════════════════
     // ATTENDANCE
@@ -463,7 +673,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <tr>
         <td><b>${escapeHtml(r.student.full_name)}</b></td>
         <td>
-          <select class="field-input att-status" style="width:auto;" data-idx="${idx}">
+          <select class="field-input att-status" style="width:auto;" data-idx="${idx}" aria-label="Attendance Status for ${escapeHtml(r.student.full_name)}" title="Attendance Status">
             ${statuses.map(s => `<option value="${s.value}" ${r.status === s.value ? 'selected' : ''}>${s.label}</option>`).join('')}
           </select>
         </td>

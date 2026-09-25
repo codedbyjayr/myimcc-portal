@@ -84,7 +84,7 @@ INSERT INTO faq_articles (category, question, answer, keywords) VALUES
    'If you lost your phone or deleted Google Authenticator, you can reset your 2FA by clicking "Lost or deleted Authenticator code?" on the login page. You will need to re-scan a new QR code. If you cannot access your account at all, contact IT Support at support@imcc.edu.ph for manual 2FA reset.',
    '2fa, reset, authenticator, lost, deleted, new phone, qr, rescan, mfa, totp'),
   ('General', 'What email do I use to log in?',
-   'Use your official institutional school email. Students use @student.imcc.edu.ph, faculty use @faculty.imcc.edu.ph, admin use @admin.imcc.edu.ph, and staff use @imcc.edu.ph. Personal emails (Gmail, Yahoo, etc.) are not allowed. The system identifies your role based on your email domain.',
+   'Sign in with the official email issued to you by the institution. Any valid Google account can sign in; your portal role and access are assigned by the administration through your user profile.',
    'email, login, log in, sign in, institutional, school, domain, which, what'),
   ('General', 'Can I access the LMS and Career Hub from this portal?',
    'Yes, the portal has SSO (Single Sign-On) links to the LMS and Career Hub in the sidebar under Quick Links. Click the LMS link to access your courses, assignments, and grades. Click Career Hub to view job postings and career resources. You will be automatically logged in via SSO.',
