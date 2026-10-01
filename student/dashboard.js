@@ -1141,7 +1141,7 @@ function renderGradesHeader() {
 
   const setTitle = getEl('gradesTitle');
   if (setTitle) {
-    setTitle.innerHTML = `Grades — ${semester}, ${schoolYear}<br><span style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">${escapeHtml(program)} ${escapeHtml(yearLevel)}${section ? ' · Section ' + escapeHtml(section) : ''}</span>`;
+    setTitle.innerHTML = `Grades — ${escapeHtml(semester)}, ${escapeHtml(schoolYear)}<br><span style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">${escapeHtml(program)} ${escapeHtml(yearLevel)}${section ? ' · Section ' + escapeHtml(section) : ''}</span>`;
   }
   setText('gradesTermPill', `${semester} ${schoolYear}`);
 
