@@ -1,5 +1,7 @@
 name: Keep Supabase Alive
 
+permissions: {}
+
 on:
   schedule:
     - cron: '0 0 */3 * *' # Runs every 3 days automatically
