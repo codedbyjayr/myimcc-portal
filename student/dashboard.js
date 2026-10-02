@@ -10,15 +10,18 @@ const state = {
   page: 'dashboard',
   enrollStep: 1,
   darkMode: false,
-  adminView: false,
+  // state.adminView removed: it existed only to expose a self-clearance
+  // control inside the student portal.
+
   apiOnline: false,
   dashboard: null,
   courses: [],
   miscFees: [],
   selectedOfferingIds: new Set(),
   billing: { totalPaid: 0, installments: [], transactions: [] },
-  grades: [],
-  departments: [],
+        grades: [],
+        departments: [],
+        schedule: { subjects: [], slots: [], unscheduled: [], units: 0, teachers: {}, offerings: {} },
   activity: [],
   currentUser: null,
   studentProfile: null,
@@ -27,6 +30,11 @@ const state = {
 // ── Formatting Helpers ───────────────────────────────────────────────
 const peso = n => '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+// Appointments are the one place a wrong day would mislead somebody, so they
+// are rendered in Manila wall-clock time via the shared module rather than in
+// the browser's own zone. A student reading from outside the Philippines would
+// otherwise see a confirmed 9:00 AM slot as the previous evening.
+const fmtDateTime = iso => iso ? SCHOOLTIME.formatSchoolDateTime(iso) : '—';
 const getEl = id => document.getElementById(id);
 
 function setText(id, value) {
@@ -184,13 +192,52 @@ function goto(page) {
     grades: 'Grades & Evaluation',
     clearance: 'Online Clearance',
     cor: 'Certificate of Registration',
+    schedule: 'Class Schedule',
+    help: 'Help',
+    messages: 'Messages',
     attendance: 'Attendance History',
     evaluation: 'Faculty Evaluation',
     profile: 'My Profile'
   };
   const titleEl = getEl('pageTitle');
   if (titleEl) titleEl.textContent = titles[page] || 'Dashboard';
-  
+
+  // Lazy load: the schedule is not in the eager boot batch, so its four
+  // round-trips only happen if the student actually opens the page.
+  if (page === 'schedule' && !scheduleLoaded) {
+    loadSchedule().catch(err => {
+      console.warn('[schedule] load error:', err);
+      const body = getEl('schedBody');
+      if (body) {
+        body.innerHTML =
+          '<tr><td colspan="6" class="table-empty">Could not load your schedule. ' +
+          'Please refresh, or contact the Registrar if this continues.</td></tr>';
+      }
+      showToast('Could not load your schedule', true);
+    });
+  }
+
+  // Same for messages: nothing is fetched until the inbox is opened.
+  if (page === 'messages' && !messagesLoaded) {
+    loadMessages().catch(err => {
+      console.warn('[messages] load error:', err);
+      const body = getEl('msgThreadsBody');
+      if (body) {
+        body.innerHTML =
+          '<tr><td colspan="4" class="table-empty">Could not load your messages. ' +
+          'Please refresh, or contact the Registrar if this continues.</td></tr>';
+      }
+      showToast('Could not load your messages', true);
+    });
+  }
+
+  // The help page needs the student's own request history, but the assistant
+  // itself calls nothing until a question is typed, so opening the page is
+  // cheap.
+  if (page === 'help' && !appointmentsLoaded) {
+    loadHelp();
+  }
+
   closeMobileNav();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -796,16 +843,14 @@ async function loadBilling() {
   const totalPaid = Number(summaryRes.data?.total_paid || 0);
   const balance = Math.max(0, totalAssessment - totalPaid);
 
-  // Auto-generate installment schedule from assessment if DB has none
-  let installments = instRes.data || [];
-  if (!installments.length && totalAssessment > 0) {
-    installments = [
-      { id: 'auto-1', name: 'Downpayment / Prelim', amount: Math.round(totalAssessment * 0.32), due_date: null, status: 'pending', or_number: null },
-      { id: 'auto-2', name: 'Midterm Installment',  amount: Math.round(totalAssessment * 0.25), due_date: null, status: 'pending', or_number: null },
-      { id: 'auto-3', name: 'Semi-Final Installment', amount: Math.round(totalAssessment * 0.25), due_date: null, status: 'pending', or_number: null },
-      { id: 'auto-4', name: 'Final Balance',          amount: totalAssessment - Math.round(totalAssessment * 0.32) - Math.round(totalAssessment * 0.25) * 2, due_date: null, status: 'pending', or_number: null },
-    ];
-  }
+  // Installments come from the installments table only.
+  //
+  // This previously invented a 32/25/25/remainder schedule whenever the
+  // table was empty, which displayed fabricated amounts, due dates and
+  // "Pay Now" buttons for a payment plan the school had never issued. An
+  // empty schedule is now reported as "not published" instead.
+  const installments = instRes.data || [];
+  const schedulePublished = installments.length > 0;
 
   state.billing = {
     totalPaid,
@@ -814,6 +859,7 @@ async function loadBilling() {
     miscTotal,
     balance,
     installments,
+    schedulePublished,
     transactions: txnsRes.data || [],
     enrolledCourses,
     miscFeesList: miscRes.data || [],
@@ -922,9 +968,23 @@ function renderTxns() {
 function renderInstallments() {
   const target = getEl('instList');
   if (!target) return;
-  target.innerHTML = state.billing.installments.map(i => `
+
+  const list = state.billing.installments || [];
+
+  // An empty schedule means the school has not published one. It does not
+  // mean the balance is settled, and it must not be rendered as if it did.
+  if (!list.length) {
+    target.innerHTML = `
+      <div class="inst-empty" style="text-align:center;padding:22px 12px;color:var(--ink-500);font-size:13px;line-height:1.5;">
+        No installment schedule has been published yet.<br>
+        <span style="font-size:12px;">Your assessed balance is shown above. Please confirm payment terms with the Cashier's Office.</span>
+      </div>`;
+    return;
+  }
+
+  target.innerHTML = list.map(i => `
     <div class="inst-row" style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
-      <div><div class="n" style="font-size:13px;font-weight:600;">${escapeHtml(i.name)}</div><div class="dt" style="font-size:11px;color:var(--ink-500);">${fmtDate(i.due_date)}</div></div>
+      <div><div class="n" style="font-size:13px;font-weight:600;">${escapeHtml(i.name)}</div><div class="dt" style="font-size:11px;color:var(--ink-500);">${i.due_date ? 'Due ' + escapeHtml(fmtDate(i.due_date)) : 'No due date set'}</div></div>
       <div style="text-align:right;">
         <div class="${i.status === 'paid' ? 'amt-strike' : 'amt-pink'}" style="font-weight:700;">${peso(i.amount)}</div>
         <div style="font-size:10.5px;font-weight:800;color:${i.status === 'paid' ? 'var(--green)' : 'var(--red)'};">${i.status === 'paid' ? '✓ PAID' : 'PENDING'}</div>
@@ -935,37 +995,42 @@ function renderInstallments() {
 function renderUpay() {
   const target = getEl('upayList');
   if (!target) return;
-  const pending = state.billing.installments.filter(i => i.status === 'pending');
+
+  const list = state.billing.installments || [];
+
+  if (!list.length) {
+    target.innerHTML = `
+      <div class="upay" style="text-align:center;padding:18px 14px;color:var(--ink-500);font-size:13px;line-height:1.5;">
+        <b style="display:block;margin-bottom:6px;color:var(--ink-900);font-size:14px;">No payment schedule published</b>
+        Pay at the Cashier's Office or through your designated payment channel.<br>
+        <span style="font-size:12px;">A schedule appears here once the Cashier's Office issues it.</span>
+      </div>`;
+    return;
+  }
+
+  const pending = list.filter(i => i.status === 'pending');
+
   target.innerHTML = pending.length ? pending.map(i => `
     <div class="upay due" style="padding:12px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;">
       <div class="upay-top" style="display:flex;justify-content:space-between;align-items:center;">
         <span class="t" style="font-weight:600;font-size:13px;">${escapeHtml(i.name)}</span>
-        <span class="pill pill-urgent">DUE SOON</span>
+        <span class="pill pill-urgent">PENDING</span>
       </div>
       <div class="amt" style="color:var(--pink-600);font-size:18px;font-weight:800;margin:6px 0;">${peso(i.amount)}</div>
-      <div class="due-date" style="font-size:12px;color:var(--ink-500);">Due: ${fmtDate(i.due_date)}</div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:10px;" onclick="payInstallment('${i.id}')">Pay Now</button>
+      <div class="due-date" style="font-size:12px;color:var(--ink-500);">${i.due_date ? 'Due: ' + escapeHtml(fmtDate(i.due_date)) : 'Due date not set'}</div>
+      <div style="margin-top:10px;font-size:12px;color:var(--ink-500);line-height:1.5;">
+        Pay at the Cashier's Office. Payment status is recorded by cashier staff.
+      </div>
     </div>`).join('') : `
-    <div class="upay" style="text-align:center;color:var(--green);font-weight:700;padding:15px;">✓ All balances settled</div>`;
+    <div class="upay" style="text-align:center;color:var(--green);font-weight:700;padding:15px;">✓ All installments recorded as paid</div>`;
 }
 
-async function payInstallment(id) {
-  try {
-    const { data, error } = await supabaseClient
-      .from('installments')
-      .update({ status: 'paid', paid_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-
-    showToast(`Payment received — OR ${data.or_number || 'Processed'}`);
-    await Promise.all([loadBilling(), loadDashboard(), loadClearance()]);
-  } catch (err) {
-    showToast('Payment failed: ' + err.message, true);
-  }
-}
-window.payInstallment = payInstallment;
+// payInstallment() was removed. It was not a payment flow: it wrote
+// status='paid' straight to the installments table, which the RLS policy
+// "Students update own installments" allowed a student to do for their
+// own rows. A student could therefore settle their own tuition, and a
+// zero balance then cleared the cashier's hold on clearance. Recording a
+// payment is a cashier action; see database/security-hardening-phase0b.sql.
 
 getEl('exportBtn')?.addEventListener('click', () => {
   if (!state.billing.transactions.length) {
@@ -1609,6 +1674,14 @@ function printCorPage() {
 }
 
 window.addEventListener('beforeprint', () => {
+  // Ctrl+P and File > Print never went through printCorPage(), so
+  // is-printing-cor was absent and every COR-specific print rule was
+  // skipped. Set the class here when the student is already on the COR
+  // page, so both entry points produce the same document.
+  if (state.page === 'cor' && !document.body.classList.contains('is-printing-cor')) {
+    document.body.classList.add('is-printing-cor');
+  }
+
   const doc = document.querySelector('body.is-printing-cor .cor-doc');
   if (!doc) return;
   doc.style.zoom = ''; // reset any previous scale before re-measuring
@@ -1689,13 +1762,13 @@ function renderClearance() {
 
   grid.innerHTML = state.departments.map(d => {
     const m = statusMeta[d.status] || statusMeta.pending;
-    let actionBtn = '';
-    if (d.department_code === 'cashier' && d.status === 'action_required') {
-      actionBtn = `<button class="mini-btn" onclick="goto('billing')" style="margin-top:10px;background:var(--pink-600);color:#fff;border:none;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;">Pay Balance →</button>`;
-    }
-    if (state.adminView && d.status !== 'cleared') {
-      actionBtn += ` <button class="mini-btn" style="margin-top:10px;background:var(--pink-600);color:#fff;border:none;padding:6px 12px;border-radius:6px;font-weight:600;cursor:pointer;" onclick="adminClear('${d.department_code}')">Mark Cleared (Admin Simulation)</button>`;
-    }
+    // A student may only nudge themselves to the billing page. Marking a
+    // department cleared is a staff action; the previous "Toggle Admin
+    // View" control in this page let any student do it, and the database
+    // policy allowed the underlying UPDATE as well.
+    const actionBtn = (d.department_code === 'cashier' && d.status === 'action_required')
+      ? `<button class="mini-btn" type="button" data-goto="billing">Pay Balance →</button>`
+      : '';
     return `
     <div class="dept-card ${m.card}" style="padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:var(--shadow-sm);transition:all 0.2s;">
       <div class="dept-top" style="display:flex;justify-content:space-between;align-items:center;">
@@ -1718,29 +1791,18 @@ function renderClearance() {
   }).join('');
 }
 
-async function adminClear(code) {
-  const profile = state.studentProfile;
-  try {
-    const { error } = await supabaseClient
-      .from('clearances')
-      .update({ status: 'cleared', cleared_at: new Date().toISOString() })
-      .eq('student_id', profile.id)
-      .eq('department_code', code);
-    if (error) throw error;
+// NOTE: adminClear() and the #adminToggle "Admin View" control were
+// removed. A student could mark any department cleared, and the
+// clearances RLS policy permitted the underlying UPDATE. Clearance is now
+// a staff action; see database/security-hardening-phase0b.sql.
 
-    const dept = state.departments.find(d => d.department_code === code);
-    showToast(`${dept ? dept.department_name : code} marked as cleared`);
-    await Promise.all([loadClearance(), loadDashboard()]);
-  } catch (err) {
-    showToast('Could not update clearance: ' + err.message, true);
-  }
-}
-window.adminClear = adminClear;
-
-getEl('adminToggle')?.addEventListener('click', () => {
-  state.adminView = !state.adminView;
-  renderClearance();
-  showToast(state.adminView ? 'Admin view enabled — you can now simulate approvals' : 'Admin view disabled');
+// The "Pay Balance" button in the clearance grid routes rather than
+// calling a global, so it works without an inline handler.
+document.addEventListener('click', event => {
+  const target = event.target instanceof Element
+    ? event.target.closest('[data-goto]')
+    : null;
+  if (target && document.body.contains(target)) goto(target.dataset.goto);
 });
 
 // ── FAQ Chatbot Module ───────────────────────────────────────────────
@@ -1832,21 +1894,25 @@ async function sendChatMessage() {
   }
 }
 
+// Offline fallback used only when the FAQ edge function cannot be reached.
+// These are navigation hints, not policy, and they report no "source":
+// a category label on an unverified answer is exactly the fabricated
+// citation this is meant to avoid. Billing intentionally does not mention
+// a Pay Now button; payment is recorded by cashier staff.
 function getLocalFaqAnswer(q) {
   const lower = q.toLowerCase();
-  if (lower.includes('enroll')) return { text: 'Enrollment is open until the deadline shown in your dashboard. Settle balances first, then select courses under the Enrollment tab.', sources: [{ category: 'Enrollment' }] };
-  if (lower.includes('balance') || lower.includes('pay')) return { text: 'You can view your balance under Billing & History. Click Pay Now on any pending installment.', sources: [{ category: 'Billing' }] };
-  if (lower.includes('grade')) return { text: 'Grades are posted under Grades & Evaluation. AI predictions are estimates based on midterm performance.', sources: [{ category: 'Grades' }] };
-  if (lower.includes('clearance')) return { text: 'Clearance requires all departments to mark you as cleared. Pay any balances and complete required interviews.', sources: [{ category: 'Clearance' }] };
-  return { text: 'I can help with enrollment, billing, grades, and clearance. For specific concerns, email registrar@imcc.edu.ph.', sources: [] };
+  if (lower.includes('enroll')) return { text: 'Enrollment is open until the deadline shown in your dashboard. Settle balances first, then select courses under the Enrollment tab.', sources: [] };
+  if (lower.includes('balance') || lower.includes('pay')) return { text: 'You can view your assessed balance and any published installment schedule under Billing & History. Payments are recorded by Cashier staff; there is no online payment button on this page.', sources: [] };
+  if (lower.includes('grade')) return { text: 'Grades are posted under Grades & Evaluation. AI predictions are estimates based on midterm performance, not official grades.', sources: [] };
+  if (lower.includes('clearance')) return { text: 'Clearance requires all departments to mark you as cleared. Pay any balances with the Cashier and complete any outstanding requirements.', sources: [] };
+  return { text: 'I can help with enrollment, billing, grades, and clearance. For official answers, email registrar@imcc.edu.ph.', sources: [] };
 }
 
 chatSend?.addEventListener('click', sendChatMessage);
 chatInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChatMessage(); });
 
-// ── MFA Configuration Module ─────────────────────────────────────────
+// ── MFA Configuration Module (Built-in Supabase Auth TOTP) ─────────
 let currentMfaFactorId = null;
-let currentMfaSecret = null;
 const mfaSetupBtn = getEl('mfaSetupBtn');
 const mfaModal = getEl('mfaModal');
 const mfaCloseBtn = getEl('mfaCloseBtn');
@@ -1864,35 +1930,31 @@ if (mfaSetupBtn) {
       return;
     }
     try {
+      // Clean up any stale unverified factors
+      const { data: factorData } = await supabaseClient.auth.mfa.listFactors();
+      const unverifiedFactors = (factorData?.totp || []).filter(f => f.status === 'unverified');
+      for (const factor of unverifiedFactors) {
+        await supabaseClient.auth.mfa.unenroll({ factorId: factor.id });
+      }
+
       const { data: enrollData, error: enrollError } = await supabaseClient.auth.mfa.enroll({
         factorType: 'totp',
         issuer: 'MyIMCC Portal',
-        friendlyName: profile.email || profile.student_no
+        friendlyName: profile.email || profile.student_no || 'Student'
       });
 
-      if (!enrollError && enrollData) {
-        currentMfaFactorId = enrollData.id;
-        currentMfaSecret = enrollData.totp.secret;
-        if (mfaQrImg) mfaQrImg.src = enrollData.totp.qr_code;
-        if (mfaSecretText) mfaSecretText.textContent = `Secret: ${enrollData.totp.secret}`;
-        if (mfaCodeInput) mfaCodeInput.value = '';
-        if (mfaModal) mfaModal.style.display = 'flex';
-        return;
+      if (enrollError || !enrollData) {
+        throw enrollError || new Error('Could not initialize TOTP enrollment.');
       }
 
-      const { data, error } = await supabaseClient.functions.invoke('mfa-enroll', {
-        body: { user_id: profile.id },
-      });
-      if (error) throw error;
-      if (data && data.success && data.needsEnrollment) {
-        currentMfaSecret = data.secret;
-        if (mfaQrImg) mfaQrImg.src = data.qrUrl;
-        if (mfaSecretText) mfaSecretText.textContent = `Secret: ${data.secret}`;
-        if (mfaCodeInput) mfaCodeInput.value = '';
-        if (mfaModal) mfaModal.style.display = 'flex';
-      }
+      currentMfaFactorId = enrollData.id;
+      if (mfaQrImg) mfaQrImg.src = enrollData.totp.qr_code;
+      if (mfaSecretText) mfaSecretText.textContent = `Manual Key: ${enrollData.totp.secret}`;
+      if (mfaCodeInput) mfaCodeInput.value = '';
+      if (mfaModal) mfaModal.style.display = 'flex';
+      if (mfaCodeInput) mfaCodeInput.focus();
     } catch (err) {
-      showToast('MFA setup error: ' + err.message, true);
+      showToast('MFA setup error: ' + (err.message || err), true);
     }
   });
 }
@@ -1915,35 +1977,27 @@ if (mfaConfirmBtn) {
       showToast('Please log in again to verify MFA.', true);
       return;
     }
+    if (!currentMfaFactorId) {
+      showToast('Enrollment expired. Please click Setup Google MFA again.', true);
+      return;
+    }
     try {
-      if (currentMfaFactorId) {
-        const { data: challengeData, error: challengeErr } = await supabaseClient.auth.mfa.challenge({
-          factorId: currentMfaFactorId
-        });
-        if (challengeErr) throw challengeErr;
-
-        const { error: verifyErr } = await supabaseClient.auth.mfa.verify({
-          factorId: currentMfaFactorId,
-          challengeId: challengeData.id,
-          code: code
-        });
-        if (verifyErr) throw verifyErr;
-
-        showToast('MFA Google Authenticator enabled successfully!');
-        if (mfaModal) mfaModal.style.display = 'none';
-        return;
-      }
-
-      const { data, error } = await supabaseClient.functions.invoke('mfa-verify', {
-        body: { user_id: profile.id, secret: currentMfaSecret, code },
+      const { data: challengeData, error: challengeErr } = await supabaseClient.auth.mfa.challenge({
+        factorId: currentMfaFactorId
       });
-      if (error) throw error;
-      if (data && data.success) {
-        showToast('MFA Google Authenticator enabled successfully!');
-        if (mfaModal) mfaModal.style.display = 'none';
-      }
+      if (challengeErr) throw challengeErr;
+
+      const { error: verifyErr } = await supabaseClient.auth.mfa.verify({
+        factorId: currentMfaFactorId,
+        challengeId: challengeData.id,
+        code: code
+      });
+      if (verifyErr) throw verifyErr;
+
+      showToast('MFA Google Authenticator enabled successfully!');
+      if (mfaModal) mfaModal.style.display = 'none';
     } catch (err) {
-      showToast('MFA verification failed: ' + err.message, true);
+      showToast('MFA verification failed: ' + (err.message || err), true);
     }
   });
 }
@@ -2246,16 +2300,1137 @@ getEl('changePassBtn')?.addEventListener('click', async () => {
   }
 });
 
+// ── Messages ─────────────────────────────────────────────────────────
+// Reads the real messages table (database/supabase-schema-v2.sql:77).
+//
+// A student may read threads addressed to them, ask the help desk a
+// question, and reply. They cannot start a message to another student:
+// there is no recipient field in the UI, and the database rejects a
+// student-to-student message outright (see database/messaging-qa.sql).
+const MESSAGES_TABLE = 'messages';
+
+let messagesLoaded = false;
+let allMessages = [];
+let messageOffices = [];
+let openMsgPeerId = null;
+
+const MSG_TOPICS = {
+  enrollment:  'Enrollment',
+  grades:      'Grades & Evaluation',
+  billing:     'Billing & Payment',
+  clearance:   'Online Clearance',
+  schedule:    'Class Schedule',
+  registration:'Registration',
+  other:       'Other'
+};
+
+function topicLabel(topic) {
+  return MSG_TOPICS[topic] || null;
+}
+
+function fmtMsgStamp(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function myStudentId() {
+  return state.studentProfile ? state.studentProfile.id : null;
+}
+
+// The inbox used to stop at a hard 300 rows with nothing on screen saying so.
+// A student's oldest threads simply vanished past that point, which reads as
+// "the school never wrote to me" rather than "there is more, ask for it".
+//
+// So the limit grows on request instead. One extra row is fetched beyond the
+// current limit purely to answer "is there more?", and then discarded, so the
+// button never appears on a fully-loaded inbox.
+const MESSAGES_PAGE_SIZE = 100;
+let messagesLimit = MESSAGES_PAGE_SIZE;
+
+async function loadMessages() {
+  const me = myStudentId();
+  const body = getEl('msgThreadsBody');
+  if (!me || !body) return;
+
+  const { data, error } = await supabaseClient
+    .from(MESSAGES_TABLE)
+    .select('id, sender_id, recipient_id, subject, topic, body, is_read, read_at, created_at')
+    .or(`sender_id.eq.${me},recipient_id.eq.${me}`)
+    .order('created_at', { ascending: false })
+    .limit(messagesLimit + 1);
+
+  if (error) throw error;
+
+  const rows = data || [];
+  const hasMore = rows.length > messagesLimit;
+  allMessages = hasMore ? rows.slice(0, messagesLimit) : rows;
+
+  // Sender names. Only staff can appear as senders here, but resolve them
+  // generally so a thread never renders as "Unknown".
+  const senderIds = [...new Set(allMessages.map(m => m.sender_id).filter(Boolean))];
+  if (senderIds.length) {
+    const { data: people } = await supabaseClient
+      .from('profiles')
+      .select('id, full_name, role')
+      .in('id', senderIds);
+    messageOffices = people || [];
+  }
+
+  messagesLoaded = true;
+  renderMessageThreads();
+  updateMsgBadge();
+  renderMessagesPagination(hasMore);
+}
+
+function renderMessagesPagination(hasMore) {
+  const button = getEl('msgLoadMore');
+  const note = getEl('msgOlderNote');
+  if (button) {
+    button.hidden = !hasMore;
+    button.disabled = false;
+    button.textContent = 'Load older messages';
+  }
+  if (note) {
+    if (hasMore) {
+      note.textContent = `Showing the ${messagesLimit} most recent messages. `
+        + 'Older conversations are still available.';
+      note.hidden = false;
+    } else if (messagesLimit > MESSAGES_PAGE_SIZE) {
+      note.textContent = 'That is the whole conversation history.';
+      note.hidden = false;
+    } else {
+      note.hidden = true;
+    }
+  }
+}
+
+getEl('msgLoadMore')?.addEventListener('click', async () => {
+  const button = getEl('msgLoadMore');
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Loading…';
+  }
+  messagesLimit += MESSAGES_PAGE_SIZE;
+  try {
+    await loadMessages();
+  } catch (err) {
+    // Put the limit back so a failed page does not leave the count lying about
+    // how much has been loaded. messagesLoaded stays true: the inbox really is
+    // loaded, only the extra page is missing, and clearing it would drop the
+    // list back to its loading state.
+    messagesLimit -= MESSAGES_PAGE_SIZE;
+    renderMessagesPagination(false);
+    console.warn('[messages] could not load older messages:', err);
+    showToast('Could not load older messages. Please try again.', true);
+  }
+});
+
+function officeName(id) {
+  const person = messageOffices.find(p => p.id === id);
+  if (person) return person.full_name || 'School office';
+  // Fall back to the thread's own subject line rather than inventing a name.
+  return 'School office';
+}
+
+function updateMsgBadge() {
+  const me = myStudentId();
+  const unread = allMessages.filter(m => m.recipient_id === me && !m.is_read).length;
+  const badge = getEl('msgUnreadBadge');
+  if (!badge) return;
+  badge.textContent = String(unread);
+  badge.hidden = unread === 0;
+}
+
+function renderMessageThreads() {
+  const body = getEl('msgThreadsBody');
+  const empty = getEl('msgEmpty');
+  const greeting = getEl('msgGreeting');
+  if (!body) return;
+
+  const me = myStudentId();
+  const groups = new Map();
+
+  allMessages.forEach(message => {
+    const otherId = message.sender_id === me ? message.recipient_id : message.sender_id;
+    if (!otherId) return;
+    if (!groups.has(otherId)) groups.set(otherId, []);
+    groups.get(otherId).push(message);
+  });
+
+  const threads = [...groups.entries()]
+    .map(([peerId, items]) => {
+      const sorted = [...items].sort((a, b) =>
+        String(b.created_at).localeCompare(String(a.created_at)));
+      const unread = sorted.filter(m => m.recipient_id === me && !m.is_read).length;
+      // `sorted` is newest first, so the first entry with a topic is the most
+      // recent one. Taken from anywhere in the thread rather than from the
+      // last message, because a reply carries no topic: labelling a thread from
+      // its newest message made an enrollment request read as a generic
+      // "Question asked" the moment anybody replied to it.
+      const topicSource = sorted.find(m => m.topic) || sorted[0];
+      return { peerId, last: sorted[0], topicSource, unread };
+    })
+    .sort((a, b) => String(b.last.created_at).localeCompare(String(a.last.created_at)));
+
+  if (!threads.length) {
+    body.innerHTML = '';
+    if (empty) empty.hidden = false;
+    if (greeting) greeting.hidden = false;
+    return;
+  }
+
+  if (empty) empty.hidden = true;
+  if (greeting) greeting.hidden = true;
+
+  body.innerHTML = threads.map(thread => {
+    // The subject comes from the most recent message that has one, so a reply
+    // in the middle of a thread does not erase what the thread is about.
+    const labelled = thread.topicSource;
+    const topic = topicLabel(labelled.topic);
+    const subject = topic
+      || (labelled.subject
+            || (thread.last.sender_id === me
+                  ? 'Your message'
+                  : 'Reply from the Registrar\'s Office'));
+    const preview = (thread.last.body || '').replace(/\s+/g, ' ').slice(0, 90);
+    const status = thread.unread > 0
+      ? '<span class="pill-unread">New</span>'
+      : '<span class="pill-read">Read</span>';
+
+    return `
+      <tr class="${thread.unread > 0 ? 'msg-row-unread' : ''}">
+        <td>
+          <button type="button" class="msg-thread-open" data-msg-peer="${escapeHtml(thread.peerId)}">
+            ${escapeHtml(officeName(thread.peerId))}
+          </button>
+        </td>
+        <td>${escapeHtml(subject)}</td>
+        <td>
+          <span class="msg-preview">${escapeHtml(preview)}</span>
+          <div class="msg-stamp">${escapeHtml(fmtMsgStamp(thread.last.created_at))}</div>
+        </td>
+        <td>${status}</td>
+      </tr>`;
+  }).join('');
+}
+
+function openMsgThread(peerId) {
+  const me = myStudentId();
+  openMsgPeerId = peerId;
+
+  const panel = getEl('msgThreadPanel');
+  if (panel) panel.classList.remove('hidden');
+
+  const office = messageOffices.find(p => p.id === peerId);
+  const displayName = office ? (office.full_name || 'School office') : 'Registrar Help Desk';
+  const nameEl = getEl('msgPeerName');
+  if (nameEl) nameEl.textContent = displayName;
+
+  const items = allMessages
+    .filter(m => (m.sender_id === me && m.recipient_id === peerId)
+               || (m.sender_id === peerId && m.recipient_id === me))
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+
+  const history = getEl('msgHistory');
+  if (history) {
+    // The greeting is rendered, not stored. RLS only lets a user insert a
+    // message whose sender_id is their own id, so a bot-authored row could not
+    // be created by the student, and hardcoding one into the seed would put
+    // fake correspondence in the help desk queue.
+    const greeting = items.length ? '' : `
+      <article class="msg-item msg-item-bot">
+        <div class="msg-item-head">
+          <span>Registrar Help Desk</span>
+        </div>
+        <div class="msg-item-body">
+          Your question has been sent to the Registrar's Office. A member of staff
+          will reply here. You can add more detail at any time.
+        </div>
+      </article>`;
+
+    history.innerHTML = greeting + items.map(m => {
+      const mine = m.sender_id === me;
+      const topic = topicLabel(m.topic);
+      return `
+        <article class="msg-item ${mine ? 'mine' : ''}">
+          <div class="msg-item-head">
+            <span>${escapeHtml(mine ? 'You' : displayName)}</span>
+            <span>${escapeHtml(fmtMsgStamp(m.created_at))}</span>
+          </div>
+          ${topic ? `<div class="msg-item-subject">${escapeHtml(topic)}</div>` : ''}
+          <div class="msg-item-body">${escapeHtml(m.body || '')}</div>
+        </article>`;
+    }).join('');
+  }
+
+  markMsgThreadRead(peerId);
+}
+
+async function markMsgThreadRead(peerId) {
+  const me = myStudentId();
+  const unread = allMessages.filter(m =>
+    m.sender_id === peerId && m.recipient_id === me && !m.is_read);
+  if (!unread.length) return;
+
+  const stamp = new Date().toISOString();
+  // Only is_read / read_at are writable. Phase 0b narrows the column
+  // grant so a recipient cannot rewrite the sender's message text.
+  const { error } = await supabaseClient
+    .from(MESSAGES_TABLE)
+    .update({ is_read: true, read_at: stamp })
+    .in('id', unread.map(m => m.id));
+
+  if (error) {
+    console.warn('[messages] could not mark read:', error);
+    return;
+  }
+
+  unread.forEach(m => { m.is_read = true; m.read_at = stamp; });
+  renderMessageThreads();
+  updateMsgBadge();
+}
+
+async function sendStudentMessage(recipientId, subject, body, topic) {
+  const me = myStudentId();
+  if (!me) throw new Error('Not signed in');
+
+  const { data, error } = await supabaseClient
+    .from(MESSAGES_TABLE)
+    .insert({
+      sender_id: me,
+      recipient_id: recipientId,
+      subject: subject || null,
+      topic: topic || null,
+      body
+    })
+    .select('id, sender_id, recipient_id, subject, topic, body, is_read, read_at, created_at')
+    .single();
+
+  if (error) throw error;
+  allMessages.unshift(data);
+  renderMessageThreads();
+  return data;
+}
+
+function wireMessaging() {
+  document.addEventListener('click', event => {
+    const opener = event.target instanceof Element
+      ? event.target.closest('[data-msg-peer]')
+      : null;
+    if (opener) openMsgThread(opener.dataset.msgPeer);
+  });
+
+  getEl('btnCloseThread')?.addEventListener('click', () => {
+    openMsgPeerId = null;
+    getEl('msgThreadPanel')?.classList.add('hidden');
+  });
+
+  getEl('msgReplyForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const field = getEl('msgReplyBody');
+    const body = field.value.trim();
+    if (!body || !openMsgPeerId) return;
+
+    const button = getEl('btnSendReply');
+    button.disabled = true;
+    const originalLabel = button.textContent;
+    button.textContent = 'Sending…';
+    try {
+      await sendStudentMessage(openMsgPeerId, null, body, null);
+      field.value = '';
+      openMsgThread(openMsgPeerId);
+      showToast('Reply sent');
+    } catch (err) {
+      showToast('Could not send your reply: ' + err.message, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  });
+
+  // Empty-state signposts. Without these the page reads as a dead end: a
+  // student with no threads would see a heading and a table and no way to
+  // start anything.
+  getEl('btnGotoHelp')?.addEventListener('click', () => {
+    goto('help');
+  });
+
+  getEl('btnGotoBooking')?.addEventListener('click', () => {
+    goto('help');
+    // The form is lower down the same page, so bring it into view rather than
+    // dropping the student at the top of a long assistant thread.
+    requestAnimationFrame(() => {
+      const field = getEl('bookTopic');
+      field?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      field?.focus?.();
+    });
+  });
+}
+
+// ── Help assistant + consultation booking ──────────────────────────────
+// The assistant answers portal and school how-to questions from published
+// articles and shows which article it used. It is deliberately not a channel
+// to a person: when it cannot help, the answer is to book a consultation,
+// which is the thing staff are actually notified about.
+const FAQ_FUNCTION = 'faq-assistant';
+const BOOK_TOPICS = {
+  enrollment: 'Enrollment',
+  grades: 'Grades & Evaluation',
+  billing: 'Billing & Payment',
+  clearance: 'Online Clearance',
+  schedule: 'Class Schedule',
+  registration: 'Registration',
+  other: 'Other'
+};
+
+let helpHistory = [];
+let helpBusy = false;
+let appointmentsLoaded = false;
+let myAppointments = [];
+let lastUnansweredQuestion = '';
+
+function setHelpBusy(busy) {
+  helpBusy = busy;
+  const button = getEl('helpSend');
+  if (button) {
+    button.disabled = busy;
+    button.textContent = busy ? 'Thinking…' : 'Ask';
+  }
+}
+
+// The assistant is markdown-ish. Only a small, known set of inline marks is
+// converted, and everything is escaped first, so a model response cannot
+// inject markup into the page.
+function renderHelpText(text) {
+  return escapeHtml(String(text || ''))
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\n{2,}/g, '<br><br>')
+    .replace(/\n/g, '<br>');
+}
+
+function appendHelpTurn(role, html) {
+  const log = getEl('helpLog');
+  if (!log) return;
+  const article = document.createElement('article');
+  article.className = role === 'user' ? 'msg-item mine' : 'msg-item msg-item-bot';
+  const who = role === 'user' ? 'You' : 'Portal Assistant';
+  article.innerHTML =
+    `<div class="msg-item-head"><span>${escapeHtml(who)}</span></div>` +
+    `<div class="msg-item-body">${html}</div>`;
+  log.appendChild(article);
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderHelpSources(sources) {
+  if (!Array.isArray(sources) || !sources.length) return '';
+  const items = sources.map(source => `
+    <li>
+      <span class="help-src-cat">${escapeHtml(source.category || 'Article')}</span>
+      <span class="help-src-q">${escapeHtml(source.question || '')}</span>
+    </li>`).join('');
+  return `<details class="help-sources">
+    <summary>Sources (${sources.length})</summary>
+    <ul>${items}</ul>
+    <p class="help-src-note">
+      Answers are drawn only from these published articles. If something here
+      looks wrong, book a consultation.
+    </p>
+  </details>`;
+}
+
+async function askHelpAssistant(question) {
+  const trimmed = (question || '').trim();
+  if (!trimmed || helpBusy) return;
+
+  appendHelpTurn('user', renderHelpText(trimmed));
+  setHelpBusy(true);
+
+  try {
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    const response = await supabaseClient.functions.invoke(FAQ_FUNCTION, {
+      body: { message: trimmed, history: helpHistory },
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined
+    });
+
+    if (response.error) throw new Error(response.error.message);
+
+    const answer = response.data?.answer;
+    const sources = response.data?.sources;
+    const resolved = response.data?.resolved !== false;
+
+    if (!answer) throw new Error('The assistant returned nothing.');
+
+    appendHelpTurn('bot', renderHelpText(answer) + renderHelpSources(sources));
+
+    // Bounded so a long session cannot grow the request without limit.
+    helpHistory.push({ role: 'user', content: trimmed });
+    helpHistory.push({ role: 'assistant', content: String(answer).slice(0, 1500) });
+    if (helpHistory.length > 10) helpHistory = helpHistory.slice(-10);
+
+    if (!resolved) {
+      lastUnansweredQuestion = trimmed;
+      revealBooking(trimmed);
+    }
+  } catch (err) {
+    console.error('[help] assistant failed:', err);
+    appendHelpTurn('bot',
+      'The assistant is not available right now. You can book a consultation and '
+      + 'staff will be notified instead.');
+    revealBooking(trimmed);
+  } finally {
+    setHelpBusy(false);
+  }
+}
+
+// ── Booking ───────────────────────────────────────────────────────────
+function revealBooking(question) {
+  const card = getEl('bookCard');
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  const notes = getEl('bookNotes');
+  if (notes && question && !notes.value.trim()) {
+    notes.value = question;
+    notes.focus();
+  }
+  const topic = getEl('bookTopic');
+  if (topic && !topic.value) topic.focus();
+}
+
+function bookStatusBadge(status) {
+  const map = {
+    pending:   ['Awaiting confirmation', 'book-pill-pending'],
+    confirmed: ['Confirmed', 'book-pill-confirmed'],
+    declined:  ['Declined', 'book-pill-declined'],
+    completed: ['Completed', 'book-pill-done'],
+    cancelled: ['Cancelled', 'book-pill-cancelled'],
+    no_show:   ['No show', 'book-pill-done']
+  };
+  const [label, cls] = map[status] || ['Unknown', 'book-pill-cancelled'];
+  return `<span class="book-pill ${cls}">${escapeHtml(label)}</span>`;
+}
+
+function renderMyAppointments() {
+  const target = getEl('bookList');
+  const wrap = getEl('bookListWrap');
+  if (!target || !wrap) return;
+
+  if (!myAppointments.length) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+
+  target.innerHTML = myAppointments.map(appt => {
+    // One instant, not a date and a wall-clock string. A confirmed slot
+    // replaces the requested one; until then the student is looking at their
+    // own preference, which is not an arrangement, and saying so matters.
+    const when = appt.scheduled_at || appt.preferred_at;
+    const confirmed = appt.scheduled_at
+      ? `<div class="book-when-final">
+           Confirmed: ${escapeHtml(fmtDateTime(when))}
+         </div>`
+      : `<div class="book-when-final muted-note">
+           Requested: ${escapeHtml(fmtDateTime(when))}
+         </div>`;
+
+    const cancellable = appt.status === 'pending';
+
+    return `
+      <article class="book-item">
+        <div class="book-item-head">
+          <span class="book-item-topic">${escapeHtml(BOOK_TOPICS[appt.topic] || 'Other')}</span>
+          ${bookStatusBadge(appt.status)}
+        </div>
+        ${confirmed}
+        <div class="book-item-meta">${escapeHtml(appt.mode.replace('_', ' '))}</div>
+        ${appt.notes ? `<div class="book-item-notes">${escapeHtml(appt.notes)}</div>` : ''}
+        ${appt.staff_note ? `<div class="book-item-staff">Staff: ${escapeHtml(appt.staff_note)}</div>` : ''}
+        ${cancellable
+          ? `<button class="mini-btn book-cancel" type="button"
+                     data-book-cancel="${escapeHtml(appt.id)}">Cancel request</button>`
+          : ''}
+      </article>`;
+  }).join('');
+}
+
+async function loadAppointments() {
+  const me = myStudentId();
+  if (!me) return;
+
+  const { data, error } = await supabaseClient
+    .from('appointments')
+    .select('id, topic, preferred_at, scheduled_at, '
+          + 'mode, notes, staff_note, status, created_at')
+    .eq('student_id', me)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) throw error;
+
+  myAppointments = data || [];
+  appointmentsLoaded = true;
+  renderMyAppointments();
+}
+
+async function submitBooking(event) {
+  event.preventDefault();
+  const errorEl = getEl('bookError');
+  if (errorEl) errorEl.hidden = true;
+
+  const topic = getEl('bookTopic')?.value || '';
+  const date = getEl('bookDate')?.value || '';
+  const time = getEl('bookTime')?.value || '';
+  const mode = getEl('bookMode')?.value || 'in_person';
+  const notes = getEl('bookNotes')?.value.trim() || '';
+
+  if (!topic || !date || !time) {
+    if (errorEl) {
+      errorEl.textContent = 'Choose a topic, a date and a preferred time.';
+      errorEl.hidden = false;
+    }
+    return;
+  }
+
+  // The form collects Manila wall-clock time because that is what the student
+  // means, but the column is timestamptz, so it is converted to an absolute
+  // instant here. Sending the raw "2026-06-15" + "09:00" would leave the
+  // database to guess a zone, and staff would read it in their own.
+  const preferredAt = SCHOOLTIME.schoolLocalToIso(date, time);
+  if (!preferredAt) {
+    if (errorEl) {
+      errorEl.textContent = 'That date and time could not be read. '
+        + 'Pick a valid date and time.';
+      errorEl.hidden = false;
+    }
+    return;
+  }
+
+  if (SCHOOLTIME.isPast(preferredAt)) {
+    if (errorEl) {
+      errorEl.textContent = date === SCHOOLTIME.schoolToday()
+        ? 'That time has already passed today. Choose a later time.'
+        : 'That date has already passed. Choose an upcoming date.';
+      errorEl.hidden = false;
+    }
+    return;
+  }
+
+  const button = getEl('bookSubmit');
+  button.disabled = true;
+  const label = button.textContent;
+  button.textContent = 'Sending…';
+
+  try {
+    const { error } = await supabaseClient.from('appointments').insert({
+      topic,
+      preferred_at: preferredAt,
+      mode,
+      notes: notes || null,
+      // Copies the question the bot could not answer, so staff see the context
+      // the student already tried to get answered.
+      question: lastUnansweredQuestion || null
+    });
+
+    if (error) throw error;
+
+    getEl('bookForm')?.reset();
+    lastUnansweredQuestion = '';
+    showToast('Consultation requested. Staff will confirm the time in Messages.');
+    await loadAppointments();
+    // The trigger created a message to the help desk, so the inbox needs to
+    // pick it up rather than showing a stale thread list.
+    if (messagesLoaded) {
+      loadMessages().catch(err => console.warn('[messages] refresh failed:', err));
+    }
+  } catch (err) {
+    if (errorEl) {
+      errorEl.textContent = 'Could not send your request: ' + err.message;
+      errorEl.hidden = false;
+    }
+    console.error('[booking] insert failed:', err);
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
+  }
+}
+
+async function cancelBooking(id) {
+  const ok = window.confirm('Cancel this consultation request?');
+  if (!ok) return;
+
+  // RLS only permits a student to move their own pending request to
+  // cancelled, so a confirmed one is refused here rather than failing later.
+  const { error } = await supabaseClient
+    .from('appointments')
+    .update({ status: 'cancelled' })
+    .eq('id', id)
+    .eq('status', 'pending');
+
+  if (error) {
+    showToast('Could not cancel: ' + error.message, true);
+    return;
+  }
+  showToast('Request cancelled');
+  await loadAppointments();
+}
+
+function wireHelp() {
+  getEl('helpForm')?.addEventListener('submit', event => {
+    event.preventDefault();
+    const field = getEl('helpInput');
+    const question = field.value;
+    field.value = '';
+    askHelpAssistant(question);
+  });
+
+  // Suggested questions. data-ask is a fixed string from this file, but it is
+  // still escaped on the way into the textarea rather than trusted.
+  document.addEventListener('click', event => {
+    const chip = event.target instanceof Element
+      ? event.target.closest('[data-ask]')
+      : null;
+    if (!chip) return;
+    const question = chip.dataset.ask || '';
+    const field = getEl('helpInput');
+    if (field) field.value = question;
+    askHelpAssistant(question);
+  });
+
+  getEl('bookForm')?.addEventListener('submit', submitBooking);
+
+  getEl('bookList')?.addEventListener('click', event => {
+    const button = event.target instanceof Element
+      ? event.target.closest('[data-book-cancel]')
+      : null;
+    if (button) cancelBooking(button.dataset.bookCancel);
+  });
+
+  // Default the date to tomorrow. Not today: a request made this afternoon
+  // for "this afternoon" is not something staff can act on.
+  //
+  // Computed on the Manila calendar, not the browser's. Using
+  // `toISOString().slice(0, 10)` here would take the UTC date, which is a
+  // different day for eight hours every evening, and would hand a student in
+  // another country a minimum date that has nothing to do with the school.
+  const dateField = getEl('bookDate');
+  if (dateField) {
+    const p = SCHOOLTIME.schoolNowParts();
+    // Date.UTC is used only as a calendar calculator here: it normalises
+    // month lengths and leap years without involving any time zone.
+    const next = new Date(Date.UTC(p.year, p.month - 1, p.day + 1));
+    dateField.min = next.toISOString().slice(0, 10);
+  }
+
+  // Say which zone the time is in, rather than relying on the student noticing
+  // it, since the stored value is an instant but the student picks a wall
+  // clock. Telling them once here is cheaper than a missed appointment.
+  const manilaNote = getEl('bookManilaNote');
+  if (manilaNote) {
+    manilaNote.textContent =
+      'It is currently ' + SCHOOLTIME.formatSchoolDateTime(new Date())
+      + '. Times you enter are read as Manila time.';
+  }
+}
+
+/**
+ * Warn when a filed request could not actually reach anybody.
+ *
+ * The notification trigger raises a WARNING and returns instead of failing
+ * when no registrar or admin account is active, so the insert succeeds and the
+ * request sits in the staff queue unseen. From the student's side that is
+ * indistinguishable from being ignored, so the state is surfaced instead of
+ * left to be discovered. The request is still filed on purpose: staff may be
+ * back shortly, and losing the question would be worse than a late one.
+ *
+ * This has its own element rather than reusing `bookError`, which carries
+ * validation and load failures; overwriting one with the other would lose the
+ * more specific message.
+ */
+function showHelpDeskUnreachable() {
+  const el = getEl('bookDeskWarning');
+  if (!el) return false;
+  el.textContent =
+    'The Registrar\'s Office currently has no active staff account, so a request '
+    + 'would be saved without notifying anyone. Please contact the school in person, '
+    + 'or ask again later.';
+  el.hidden = false;
+  return false;
+}
+
+function clearHelpDeskUnreachable() {
+  const el = getEl('bookDeskWarning');
+  if (el) el.hidden = true;
+  return true;
+}
+
+/**
+ * Resolve the help desk once per page load, independently of the inbox.
+ *
+ * This deliberately does not reuse the recipient fetched while loading
+ * Messages. Both are loaded lazily on first visit to their page, so a student
+ * who opens Help before Messages would be told nobody can be notified when in
+ * fact the office is staffed.
+ */
+let helpDeskChecked = false;
+async function ensureHelpDeskChecked() {
+  if (helpDeskChecked) return;
+
+  const { data, error } = await supabaseClient.rpc('helpdesk_recipient_id');
+  helpDeskChecked = true;
+
+  if (error) {
+    // The RPC itself is missing or broken. That is a deployment problem, not a
+    // statement about the office being closed, so it is logged and the student
+    // is not alarmed.
+    console.warn('[booking] help desk check failed:', error);
+    clearHelpDeskUnreachable();
+    return;
+  }
+
+  if (data) clearHelpDeskUnreachable();
+  else showHelpDeskUnreachable();
+}
+
+function loadHelp() {
+  // The assistant and the booking form share one page, so this is where the
+  // help desk is checked: a student who cannot reach staff should find out
+  // before filling in a form, not after.
+  ensureHelpDeskChecked().catch(err =>
+    console.warn('[booking] help desk check failed:', err));
+
+  return loadAppointments().catch(err => {
+    console.warn('[booking] load error:', err);
+    const errorEl = getEl('bookError');
+    if (errorEl) {
+      errorEl.textContent =
+        'Your existing requests could not be loaded. You can still send a new one.';
+      errorEl.hidden = false;
+    }
+  });
+}
+
+// ── Class Schedule ────────────────────────────────────────────────────
+// Reads the real timetable. The tables were defined in
+// database/supabase-schema-v2.sql (timetable / rooms) but nothing in the
+// portal ever queried them, so this is the first reader.
+//
+// Chain: enrollments -> timetable -> course_offerings, plus rooms and the
+// teacher profile. Kept to three round-trips, and rooms/offerings are
+// embedded because timetable has exactly one FK to each.
+const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+let scheduleLoaded = false;
+
+function fmtTime(value) {
+  if (!value) return '—';
+  // TIME arrives as "HH:MM:SS"; show 12-hour without touching Date, which
+  // would re-interpret it in the viewer's timezone.
+  const match = String(value).match(/^(\d{2}):(\d{2})/);
+  if (!match) return String(value);
+  let h = Number(match[1]);
+  const m = match[2];
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${m} ${suffix}`;
+}
+
+async function loadSchedule() {
+  const profile = state.studentProfile;
+  const body = getEl('schedBody');
+  if (!profile || !body) return;
+
+  body.innerHTML = '<tr><td colspan="6" class="table-empty">Loading your schedule…</td></tr>';
+  const note = getEl('schedNote');
+  if (note) note.hidden = true;
+
+  // 1. Which offerings is this student actually enrolled in?
+  const { data: enrollments, error: enrErr } = await supabaseClient
+    .from('enrollments')
+    .select('offering_id')
+    .eq('student_id', profile.id)
+    .eq('status', 'enrolled');
+
+  if (enrErr) throw enrErr;
+
+  const offeringIds = [...new Set((enrollments || []).map(e => e.offering_id).filter(id => id !== null))];
+
+  state.schedule = { subjects: [], slots: [], unscheduled: [], units: 0 };
+
+  if (!offeringIds.length) {
+    // Latch the loaded flag here too. Without it the lazy-load guard above
+    // re-runs this whole function on every visit to the tab, so a student with
+    // no enrolments saw a "Loading your schedule…" flash and paid for the same
+    // query again on every click. Latching is only wrong on the error paths
+    // above, where retrying is the right behaviour, so keep those unlatched.
+    scheduleLoaded = true;
+    renderSchedule();
+    return;
+  }
+
+  // 2. Meeting times for those offerings.
+  const { data: slots, error: slotErr } = await supabaseClient
+    .from('timetable')
+    .select('id, offering_id, day_of_week, start_time, end_time, teacher_id, room:rooms(name, building, type), offering:course_offerings(code, title, units, instructor_name)')
+    .in('offering_id', offeringIds);
+
+  if (slotErr) throw slotErr;
+
+  // 3. Teacher names, keyed by id. Fetched separately rather than embedded:
+  // timetable has one FK to profiles, but the generated constraint name is
+  // an implementation detail and a wrong guess fails the whole query.
+  const teacherIds = [...new Set((slots || []).map(s => s.teacher_id).filter(Boolean))];
+  let teachers = {};
+  if (teacherIds.length) {
+    const { data: teacherRows } = await supabaseClient
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', teacherIds);
+    teachers = Object.fromEntries((teacherRows || []).map(t => [t.id, t.full_name]));
+  }
+
+  // Subjects enrolled but with no timetable row are reported, not hidden
+  // and not given an invented time.
+  const scheduledOfferingIds = new Set((slots || []).map(s => s.offering_id));
+  const unscheduled = offeringIds.filter(id => !scheduledOfferingIds.has(id));
+
+  // Units come from the offerings the student is enrolled in.
+  const { data: offeringRows } = await supabaseClient
+    .from('course_offerings')
+    .select('id, code, title, units, instructor_name')
+    .in('id', offeringIds);
+  const offerings = Object.fromEntries((offeringRows || []).map(o => [o.id, o]));
+
+  state.schedule = {
+    subjects: offeringRows || [],
+    slots: slots || [],
+    unscheduled,
+    units: (offeringRows || []).reduce((sum, o) => sum + Number(o.units || 0), 0),
+    teachers,
+    offerings,
+  };
+
+  scheduleLoaded = true;
+  renderSchedule();
+}
+
+function renderSchedule() {
+  const s = state.schedule || { subjects: [], slots: [], unscheduled: [], units: 0 };
+  const body = getEl('schedBody');
+  if (!body) return;
+
+  const setText = (id, value) => {
+    const el = getEl(id);
+    if (el) el.textContent = value;
+  };
+
+  setText('sched-subjects', String(s.subjects.length));
+  setText('sched-sessions', String(s.slots.length));
+  setText('sched-units', s.units ? String(s.units) : '0');
+  setText('sched-unscheduled', String(s.unscheduled.length));
+
+  const note = getEl('schedNote');
+  if (note) {
+    const notes = [];
+    if (s.unscheduled.length) {
+      notes.push(
+        `${s.unscheduled.length} enrolled subject${s.unscheduled.length === 1 ? ' has' : 's have'} ` +
+        `no meeting time published yet. Confirm with the Registrar.`
+      );
+    }
+    if (!s.slots.length && s.subjects.length) {
+      notes.push('The Registrar has not published meeting times for this term.');
+    }
+    if (notes.length) {
+      note.textContent = notes.join(' ');
+      note.hidden = false;
+    } else {
+      note.hidden = true;
+    }
+  }
+
+  if (!s.subjects.length) {
+    body.innerHTML = `
+      <tr>
+        <td colspan="6" class="table-empty">
+          You are not enrolled in any subjects this term.
+          <br><span class="table-empty-hint">Enrolled subjects and their meeting times appear here once enrollment is confirmed.</span>
+        </td>
+      </tr>`;
+    return;
+  }
+
+  if (!s.slots.length) {
+    // Enrolled, but nothing scheduled. Say exactly that.
+    const rows = s.subjects
+      .map(o => `
+        <tr>
+          <td><span class="chip chip-muted">Not set</span></td>
+          <td>—</td>
+          <td>
+            <div class="sched-subject">${escapeHtml(o.code)}</div>
+            <div class="sched-title">${escapeHtml(o.title)}</div>
+          </td>
+          <td>${escapeHtml(String(o.units ?? ''))}</td>
+          <td>—</td>
+          <td>${escapeHtml(o.instructor_name || '—')}</td>
+        </tr>`)
+      .join('');
+    body.innerHTML = rows;
+    return;
+  }
+
+  // Sort the data, not the rendered strings. Ordering by day then start
+  // time is the only useful order for a timetable; the order rows come
+  // back from Postgres is not meaningful.
+  const ordered = [...s.slots].sort((a, b) => {
+    const dayDiff = DAY_ORDER.indexOf(a.day_of_week) - DAY_ORDER.indexOf(b.day_of_week);
+    if (dayDiff !== 0) return dayDiff;
+    return String(a.start_time || '').localeCompare(String(b.start_time || ''));
+  });
+
+  // Which class is running right now, in Manila. Read once per render so every
+  // row is judged against the same instant instead of each row asking the clock
+  // separately and straddling a minute boundary.
+  const nowClock = SCHOOLTIME.schoolNowClock();
+
+  const rows = ordered
+    .map(slot => {
+      const offering = s.offerings?.[slot.offering_id] || slot.offering || {};
+      const room = slot.room;
+      const roomLabel = room
+        ? [room.name, room.building].filter(Boolean).join(' · ')
+        : '—';
+      const teacher = s.teachers?.[slot.teacher_id]
+        || offering.instructor_name
+        || '—';
+
+      // Half-open [start, end), judged in Manila. The predicate lives in
+      // shared/datetime.js so it can be unit-tested against a pinned clock
+      // instead of only ever running when a class happens to be live.
+      const isNow = SCHOOLTIME.isSlotNow(slot, nowClock);
+
+      return `
+        <tr${isNow ? ' class="sched-now"' : ''}>
+          <td><span class="chip">${escapeHtml(slot.day_of_week)}${isNow ? ' &middot; Now' : ''}</span></td>
+          <td class="sched-time">${escapeHtml(fmtTime(slot.start_time))} – ${escapeHtml(fmtTime(slot.end_time))}</td>
+          <td>
+            <div class="sched-subject">${escapeHtml(offering.code || '—')}</div>
+            <div class="sched-title">${escapeHtml(offering.title || '')}</div>
+          </td>
+          <td>${escapeHtml(String(offering.units ?? ''))}</td>
+          <td>${escapeHtml(roomLabel)}</td>
+          <td>${escapeHtml(teacher)}</td>
+        </tr>`;
+    })
+    .join('');
+
+  body.innerHTML = rows;
+}
+
+getEl('schedRefresh')?.addEventListener('click', async () => {
+  try {
+    await loadSchedule();
+    showToast('Schedule refreshed');
+  } catch (err) {
+    showToast('Could not load your schedule: ' + err.message, true);
+  }
+});
+
+// The "now" highlight is only true at the instant it was rendered, so a tab left
+// open across a class boundary would go stale and point at the wrong row.
+// Re-render on a timer, gated on the schedule page actually being on screen and
+// the document being visible: a background tab has nobody reading the highlight,
+// and re-rendering it there would be work for nothing.
+setInterval(() => {
+  if (state.page !== 'schedule') return;
+  if (document.hidden) return;
+  if (!scheduleLoaded) return;
+  if (!getEl('schedBody')) return;
+  renderSchedule();
+}, 60000);
+
+// ── Load failure reporting ───────────────────────────────────────────
+// A failed fetch used to be logged to the console and nothing else, so a
+// student whose billing query errored saw a permanent "—" and had no way
+// to tell that apart from "you have no balance". Silent failure reads as
+// "no data", which is exactly the wrong thing to show about money.
+const FAILED_SECTIONS = Object.freeze({
+  dashboard: 'Dashboard summary',
+  enrollment: 'Course selection',
+  billing: 'Billing & History',
+  grades: 'Grades & Evaluation',
+  clearance: 'Online Clearance',
+  cor: 'Certificate of Registration',
+  attendance: 'Attendance History',
+  evaluation: 'Faculty Evaluation',
+  profile: 'My Profile',
+  announcements: 'Announcements',
+  deadlines: 'Deadlines',
+  notifications: 'Notifications',
+  sso: 'Quick Links'
+});
+
+let loadFailureBanner = null;
+
+function showLoadFailures(failures) {
+  if (!failures.length || loadFailureBanner) return;
+
+  const host = getEl('pageTitle')?.closest('.topbar')?.parentElement
+    || getEl('page-dashboard')?.parentElement
+    || document.querySelector('.main');
+  if (!host) return;
+
+  const banner = document.createElement('div');
+  banner.className = 'load-failure-banner';
+  banner.setAttribute('role', 'alert');
+
+  const names = failures
+    .map(key => FAILED_SECTIONS[key] || key)
+    .join(', ');
+
+  banner.innerHTML = `
+    <div class="load-failure-inner">
+      <strong>Some sections could not be loaded.</strong>
+      <span>Affected: ${escapeHtml(names)}. The figures shown in these sections may be
+      incomplete. Refresh to try again, or contact the Registrar if it continues.</span>
+    </div>
+    <button type="button" class="load-failure-dismiss" aria-label="Dismiss this notice">&times;</button>`;
+
+  banner.querySelector('.load-failure-dismiss')?.addEventListener('click', () => {
+    banner.remove();
+    loadFailureBanner = null;
+  });
+
+  host.insertBefore(banner, host.firstChild);
+  loadFailureBanner = banner;
+}
+
 // ── Application Initialization ───────────────────────────────────────
 async function init() {
   const profile = await getCurrentStudent();
   if (!profile) return;
 
   setupAuthListener();
+  wireMessaging();
+  wireHelp();
   state.apiOnline = true;
 
   // Load all modules independently — a failure in one should not block the rest
-  const loadSafely = (name, fn) => fn().catch(err => console.warn(`[${name}] load error:`, err));
+  const failures = [];
+  const loadSafely = (name, fn) => fn().catch(err => {
+    console.warn(`[${name}] load error:`, err);
+    failures.push(name);
+  });
 
   await Promise.all([
     loadSafely('dashboard',    loadDashboard),
@@ -2272,6 +3447,12 @@ async function init() {
     loadSafely('evaluation',   loadFacultyEval),
     loadSafely('profile',      loadProfile),
   ]);
+
+  // A silent failure is indistinguishable from an empty account, so say so.
+  showLoadFailures(failures);
+  if (failures.length) {
+    showToast(`Could not load ${failures.length} section(s). See the notice at the top of the page.`, true);
+  }
 
   if (window.imccHidePreloader) window.imccHidePreloader();
 }
