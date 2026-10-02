@@ -1,0 +1,103 @@
+/* shared/ui.css
+   Primitives for shared/ui.js: toasts, screen-reader-only text, focus
+   rings, empty states. Loaded by any page that loads shared/ui.js.
+   Phase 1 will fold the palette here; these values are the interim
+   literals already used across the portals. */
+
+/* ── Screen-reader-only text ────────────────────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Focus visibility ─────────────────────────────────────────────────
+   A single visible ring for every interactive element. Restoring these
+   is what Phase 4 covers; defined centrally so portals do not each
+   invent their own. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #B81568;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Rows that behave as buttons need the same affordance. */
+[role="button"]:focus-visible,
+.student-row:focus-visible,
+tr:focus-visible {
+  outline: 2px solid #B81568;
+  outline-offset: -2px;
+}
+
+/* ── Toasts ─────────────────────────────────────────────────────────── */
+/* Layered above modals: shared/ui.js sets z-index 10000 on each toast,
+   which outranks the .overlay used by the dialogs. An overlay above the
+   toast means a failed save inside a dialog shows no feedback at all. */
+.toast-host {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  pointer-events: none;
+  max-width: min(420px, calc(100vw - 32px));
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #1C1626;
+  color: #FFFFFF;
+  font-size: 13.5px;
+  line-height: 1.45;
+  box-shadow: 0 10px 28px rgba(20, 16, 25, 0.28);
+  cursor: pointer;
+  animation: imcc-toast-in 180ms ease-out;
+}
+
+.toast svg { flex: 0 0 auto; margin-top: 1px; }
+.toast span { min-width: 0; overflow-wrap: anywhere; }
+
+.toast--success { background: #14663C; }
+.toast--error   { background: #8C1D18; }
+.toast--info    { background: #1C1626; }
+
+.toast--leaving {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+@keyframes imcc-toast-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; }
+  .toast--leaving { transition: none; }
+}
+
+/* ── Reduced-motion guard for the whole shell ───────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
