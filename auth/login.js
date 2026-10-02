@@ -8,11 +8,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // Domain Helper: only institutional school emails may sign in
-  function isAllowedDomain(email) {
-    const allowed = ['@imcc.edu.ph'];
-    return allowed.some(domain => email.toLowerCase().endsWith(domain));
+  // shared/identity.js owns address parsing and role routing. If it did
+  // not load, stop rather than guess at roles.
+  if (!window.IMCC) {
+    console.error("shared/identity.js failed to load; refusing to route on role.");
+    return;
   }
+
+  // Domain Helper: only institutional school emails may sign in.
+  const isAllowedDomain = window.IMCC.isAllowedDomain;
 
   const stepSso = document.getElementById('stepSso');
   const stepEnroll = document.getElementById('stepEnroll');
@@ -36,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const retrySsoBtn = document.getElementById('retrySsoBtn');
   const resetMfaBtn = document.getElementById('resetMfaBtn');
+  const skipEnrollBtn = document.getElementById('skipEnrollBtn');
 
   let activeEmail = '';
   let pendingFactorId = null;
@@ -63,58 +68,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Database-driven Router: Fetch status & role from 'profiles' table
+  // Database-driven Router: Fetch status & role from 'profiles' table.
+  // The destination is decided by IMCC.resolveRoute, which has no
+  // fallback to the student portal. An unrecognised role, a pending
+  // account, or a missing role all route to the approval screen.
   async function routeUserByProfile(user) {
     const { data: profile, error } = await supabaseClient
       .from('profiles')
-      .select('role, status')
+      .select('role, status, is_active')
       .eq('id', user.id)
       .single();
 
     if (error || !profile) {
       console.error("Profile fetch error:", error);
-      showError(ssoError, "Could not load user profile: " + (error?.message || "Profile not found. Please contact administration."));
+      showError(ssoError, "Could not load your account. Please contact the registrar's office.");
       showStep(stepSso);
       return;
     }
 
-    if (profile.status === 'onboarding') {
-      window.location.href = '../onboarding/select-role.html';
-      return;
-    }
+    const route = window.IMCC.resolveRoute(profile);
 
-    if (profile.status === 'pending') {
-      window.location.href = '../onboarding/awaiting-approval.html';
-      return;
-    }
+    switch (route.kind) {
+      case 'redirect':
+        window.location.href = route.url;
+        return;
 
-    if (profile.status === 'rejected') {
-      alert('Your account request was rejected by the administrator.');
-      await supabaseClient.auth.signOut();
-      showStep(stepSso);
-      return;
-    }
+      case 'rejected':
+        showError(ssoError, 'Your account request was not approved. Please contact the registrar\'s office.');
+        await supabaseClient.auth.signOut();
+        showStep(stepSso);
+        return;
 
-    const lowerRole = (profile.role || '').toLowerCase();
+      case 'suspended':
+        showError(ssoError, 'This account has been deactivated. Please contact the registrar\'s office.');
+        await supabaseClient.auth.signOut();
+        showStep(stepSso);
+        return;
 
-    switch (lowerRole) {
-      case 'teacher':
-      case 'faculty':
-        window.location.href = '../faculty/teacher-dashboard.html';
-        break;
-      case 'dean':
-        window.location.href = '../faculty/dean-dashboard.html';
-        break;
-      case 'admin':
-        window.location.href = '../admin/admin-dashboard.html';
-        break;
-      case 'staff':
-        window.location.href = '../staff/staff-dashboard.html';
-        break;
-      case 'student':
       default:
-        window.location.href = '../student/dashboard.html';
-        break;
+        // 'error' is already handled above; anything else must not fall
+        // through to a portal on a guess.
+        showError(ssoError, 'Could not determine your portal. Please contact the registrar\'s office.');
+        showStep(stepSso);
     }
   }
 
@@ -129,12 +124,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (session.user?.email && !isAllowedDomain(session.user.email)) {
       await supabaseClient.auth.signOut();
       showStep(stepUnauthorized);
-      return;
-    }
-
-    // Demo student bypasses MFA directly to student dashboard
-    if (session.user?.email === 'student.demo@imcc.edu.ph') {
-      window.location.href = '../student/dashboard.html';
       return;
     }
 
@@ -168,23 +157,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         .single();
 
       if (!profile) {
-        // Can't determine role — fall back to SSO step
+        // Can't determine role — return to the sign-in step rather than
+        // guessing a portal.
         showStep(stepSso);
         return;
       }
 
-      const role = (profile.role || '').toLowerCase();
+      const role = window.IMCC.normalizeRole(profile.role);
+
+      if (window.IMCC.requiresMfa(role)) {
+        // Staff, faculty, dean, registrar and admin must enrol in MFA.
+        // Previously these roles were routed straight through at AAL1,
+        // which is why the login page claimed MFA was required for
+        // faculty while the code never enforced it.
+        const unverifiedFactors = (factorData?.totp || []).filter(f => f.status === 'unverified');
+        for (const factor of unverifiedFactors) {
+          await supabaseClient.auth.mfa.unenroll({ factorId: factor.id });
+        }
+        await startEnrollment(false);
+        return;
+      }
 
       if (role === 'student') {
-        // Students are invited (not forced) to set up MFA for extra security
+        // Students are invited (opt-in) to set up MFA for extra security, but can skip
         // Clean up any unverified stale factors before starting new enrollment
         const unverifiedFactors = (factorData?.totp || []).filter(f => f.status === 'unverified');
         for (const factor of unverifiedFactors) {
           await supabaseClient.auth.mfa.unenroll({ factorId: factor.id });
         }
-        await startEnrollment();
+        await startEnrollment(true);
       } else {
-        // Admin / Dean / Teacher / Staff — route directly, MFA is optional for them
+        // Unrecognised role with no MFA requirement: let the router decide,
+        // which will send it to approval rather than to a portal.
         await routeUserByProfile(session.user);
       }
     }
@@ -273,7 +277,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      if (email.toLowerCase() === 'student.demo@imcc.edu.ph') {
+      if (window.IMCC.isDemoEmail(email) && window.IMCC.demoModeEnabled()) {
         await loginAsDemoStudent();
         return;
       }
@@ -311,27 +315,44 @@ document.addEventListener('DOMContentLoaded', async () => {
   const demoStatus = document.getElementById('demoStatus');
 
   async function loginAsDemoStudent() {
+    // Re-check at call time, not only at click time.
+    if (!window.IMCC.demoModeEnabled()) {
+      showError(ssoError, 'Demo access is not enabled on this deployment.');
+      return;
+    }
+
     if (demoStudentBtn) {
       demoStudentBtn.disabled = true;
       demoStudentBtn.innerHTML = '<span>⏳</span> Signing in as Demo Student...';
     }
     if (demoStatus) {
       demoStatus.style.display = 'block';
+      demoStatus.removeAttribute('data-state');
       demoStatus.textContent = 'Authenticating demo session...';
     }
 
     try {
-      const { data, error } = await supabaseClient.auth.signInWithPassword({
-        email: 'student.demo@imcc.edu.ph',
-        password: 'DemoStudent2026!'
+      const { error } = await supabaseClient.auth.signInWithPassword({
+        email: window.IMCC.DEMO_EMAIL,
+        password: window.IMCC.DEMO_PASSWORD
       });
       if (error) throw error;
 
       if (demoStatus) demoStatus.textContent = 'Redirecting to Student Dashboard...';
-      window.location.href = '../student/dashboard.html';
+      // Re-enter the normal flow so the demo account is routed by its own
+      // profile, rather than being hard-coded to the student portal.
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) {
+        await processAuthFlow(session);
+      } else {
+        window.location.href = window.IMCC.siteUrl('/student/dashboard.html');
+      }
     } catch (err) {
       console.error('Demo sign-in failed:', err);
-      if (demoStatus) demoStatus.textContent = 'Error: ' + (err.message || 'Failed to sign in');
+      if (demoStatus) {
+        demoStatus.setAttribute('data-state', 'error');
+        demoStatus.textContent = 'Error: demo sign-in failed.';
+      }
       if (demoStudentBtn) {
         demoStudentBtn.disabled = false;
         demoStudentBtn.innerHTML = 'One-Click Sign In as Demo Student';
@@ -339,10 +360,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // The demo card and its credentials are removed from the DOM unless
+  // demo mode is explicitly enabled, so the password is not shipped to
+  // end users in page source on a normal deployment.
+  const demoCard = document.querySelector('.demo-access-card');
+  const demoModeOn = window.IMCC.demoModeEnabled();
+
+  if (demoCard) {
+    if (demoModeOn) {
+      demoCard.removeAttribute('hidden');
+      // Filled from config rather than hard-coded in the markup, so the
+      // credentials exist in exactly one place.
+      const emailText = document.getElementById('demoEmailText');
+      const passwordText = document.getElementById('demoPasswordText');
+      if (emailText) emailText.textContent = window.IMCC.DEMO_EMAIL;
+      if (passwordText) passwordText.textContent = window.IMCC.DEMO_PASSWORD;
+    } else {
+      demoCard.remove();
+    }
+  }
+  if (!demoModeOn && demoStudentBtn) {
+    demoStudentBtn.remove();
+  }
+
   demoStudentBtn?.addEventListener('click', loginAsDemoStudent);
 
-  async function startEnrollment() {
+  async function startEnrollment(canSkip = false) {
     try {
+      if (skipEnrollBtn) {
+        skipEnrollBtn.style.display = canSkip ? 'inline-block' : 'none';
+      }
       const { data, error } = await supabaseClient.auth.mfa.enroll({ factorType: 'totp' });
       if (error) throw error;
 
@@ -448,6 +495,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         await startEnrollment();
       } catch (err) {
         showError(challengeError, err.message || 'Could not reset 2FA.');
+      }
+    });
+  }
+
+  if (skipEnrollBtn) {
+    skipEnrollBtn.addEventListener('click', async () => {
+      try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (user) {
+          await routeUserByProfile(user);
+        } else {
+          showStep(stepSso);
+        }
+      } catch (err) {
+        console.error('Skip MFA enrollment error:', err);
+        showStep(stepSso);
       }
     });
   }
