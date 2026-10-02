@@ -12,13 +12,35 @@ if (SUPABASE_URL) {
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error("Supabase environment variables missing.");
 } else {
+  // Safe storage adapter with in-memory fallback if localStorage is blocked by Tracking Prevention or Private Browsing
+  const getSafeStorage = () => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const testKey = '__sb_test__';
+        window.localStorage.setItem(testKey, testKey);
+        window.localStorage.removeItem(testKey);
+        return window.localStorage;
+      }
+    } catch (e) {
+      console.warn('localStorage is restricted by browser tracking prevention or privacy settings. Falling back to memory storage.', e);
+    }
+    const memStore = {};
+    return {
+      getItem: (key) => memStore[key] ?? null,
+      setItem: (key, value) => { memStore[key] = String(value); },
+      removeItem: (key) => { delete memStore[key]; }
+    };
+  };
+
   // Initialize Supabase client
   const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       flowType: 'pkce',
       detectSessionInUrl: true,
       persistSession: true,
-      autoRefreshToken: true
+      autoRefreshToken: true,
+      storage: getSafeStorage(),
+      storageKey: 'myimcc-auth-token'
     }
   });
 
