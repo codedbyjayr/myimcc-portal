@@ -96,6 +96,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const state = {
         profiles: [], offerings: [], grades: [], enrollments: [], facultyList: [],
         budgets: [], grants: [], notes: [], accreditation: [], appeals: [], courses: [],
+        // Instructor options loaded from the get_subject_instructor_options RPC.
+        // Each entry: { id, full_name, role }
+        instructorOptions: null,   // null = not yet loaded; [] = loaded but empty
+        instructorOptionsError: null,
     };
 
     // ── Mobile Navigation Drawer ────────────────────────────────────────
@@ -216,6 +220,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // ── Bulk data load ──────────────────────────────────────────────────
+
+    /**
+     * Load instructor options via the get_subject_instructor_options RPC.
+     * Returns approved, active profiles with role 'teacher' or 'faculty'.
+     * Results are cached in state.instructorOptions so repeated calls are cheap.
+     * @param {boolean} force - if true, bypasses the cache and re-fetches.
+     */
+    async function loadInstructorOptions(force = false) {
+        if (!force && state.instructorOptions !== null) return;
+
+        state.instructorOptions = null;  // mark as loading
+        state.instructorOptionsError = null;
+
+        const { data, error } = await supabaseClient.rpc('get_subject_instructor_options');
+
+        if (error) {
+            console.error('get_subject_instructor_options RPC error:', error);
+            state.instructorOptions = [];
+            state.instructorOptionsError = error.message || 'Unknown RPC error';
+        } else {
+            // Accept both teacher and faculty roles (existing instructors may carry 'teacher').
+            state.instructorOptions = (data || []).filter(r =>
+                r.role === 'teacher' || r.role === 'faculty'
+            );
+            state.instructorOptionsError = null;
+        }
+
+        // Also mirror into facultyList so the inline-assign dropdowns in the
+        // Faculty & Schedule tab stay in sync (they use state.facultyList).
+        if (state.instructorOptions.length) {
+            state.facultyList = state.instructorOptions.map(r => ({
+                id: r.id,
+                full_name: r.full_name,
+                role: r.role,
+                status: 'approved',
+            }));
+        }
+    }
+
     async function loadAllData() {
         const [{ data: profiles }, { data: offerings }, { data: gradeRows }, { data: enrollRows }, { data: courses }] = await Promise.all([
             supabaseClient.from('profiles').select('*'),
@@ -230,7 +273,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         state.grades = gradeRows || [];
         state.enrollments = enrollRows || [];
         state.courses = courses || [];
-        state.facultyList = state.profiles.filter(p => ['teacher', 'faculty', 'dean'].includes(p.role) && p.status === 'approved');
+
+        // Build an initial facultyList from profiles for cases where the RPC
+        // hasn't loaded yet. The RPC result will overwrite this once ready.
+        state.facultyList = state.profiles.filter(
+            p => ['teacher', 'faculty', 'dean'].includes(p.role) && p.status === 'approved'
+        );
+
+        // Kick off the RPC load in parallel; don't block the rest of the UI.
+        loadInstructorOptions();
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -539,9 +590,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!offerings.length) { body.innerHTML = ''; msg.style.display = 'block'; return; }
         msg.style.display = 'none';
 
-        const facultyOptions = state.facultyList
-            .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
-            .map(f => `<option value="${f.id}">${escapeHtml(f.full_name)} ${f.role === 'dean' ? '(Dean)' : ''}</option>`).join('');
+        // Use RPC-based instructor list when available; fall back to profiles-derived facultyList.
+        const instructorSource = (state.instructorOptions && state.instructorOptions.length)
+            ? state.instructorOptions
+            : state.facultyList.filter(f => f.role === 'teacher' || f.role === 'faculty');
+        const facultyOptions = instructorSource
+            .slice().sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
+            .map(f => `<option value="${f.id}">${escapeHtml(f.full_name)}</option>`).join('');
 
         body.innerHTML = offerings.map(o => `
       <tr>
@@ -569,7 +624,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (offering?.instructor_id) {
                 sel.value = offering.instructor_id;
             } else if (offering?.instructor_name) {
-                const match = state.facultyList.find(f => f.full_name === offering.instructor_name);
+                // Try RPC-based list first, then fall back to profiles-derived list.
+                const sourceList = (state.instructorOptions && state.instructorOptions.length)
+                    ? state.instructorOptions
+                    : state.facultyList;
+                const match = sourceList.find(f => f.full_name === offering.instructor_name);
                 if (match) sel.value = match.id;
             }
             sel.addEventListener('change', () => assignFaculty(sel));
@@ -1328,7 +1387,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     getEl('deanClassAuditLogBtn')?.addEventListener('click', openDeanClassGradeHistory);
 
     getEl('deanAddClassBtn')?.addEventListener('click', () => {
-        openModal('courseOffering', { instructor_id: currentUserId });
+        // Do NOT pre-select the dean as the instructor; require an explicit selection.
+        openModal('courseOffering');
     });
 
     // ══════════════════════════════════════════════════════════════════
@@ -1399,10 +1459,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 { name: 'school_year', label: 'School Year', type: 'text', required: true, placeholder: '2026–2027', default: '2026–2027' },
                 { name: 'units', label: 'Total Units', type: 'number', required: true, placeholder: '3.0', default: '3.0' },
                 { name: 'schedule', label: 'Schedule', type: 'text', required: false, placeholder: 'e.g. MWF 08:00–09:30 or TTH 13:00–14:30' },
-                { name: 'instructor_id', label: 'Assigned Faculty', type: 'select', required: false, optionsFn: () => [{ value: '', label: '— Unassigned —' }, ...state.facultyList.map(f => ({ value: f.id, label: `${f.full_name} ${f.role === 'dean' ? '(Dean)' : ''}` }))] },
+                // instructor_id uses a dedicated async-populated dropdown (type: 'instructor_select').
+                // openModal handles the RPC load and renders the <select> itself.
+                { name: 'instructor_id', label: 'Assigned Instructor', type: 'instructor_select', required: false },
             ],
             transform: (values) => {
-                const faculty = state.facultyList.find(f => f.id === values.instructor_id);
+                // Resolve full_name from whichever instructor list is available.
+                const instructorSource = (state.instructorOptions && state.instructorOptions.length)
+                    ? state.instructorOptions
+                    : state.facultyList;
+                const instructor = instructorSource.find(f => f.id === values.instructor_id);
                 return {
                     code: values.code,
                     title: values.title,
@@ -1412,8 +1478,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     school_year: values.school_year || '2026–2027',
                     units: Number(values.units) || 3.0,
                     schedule: values.schedule || null,
+                    // Set instructor_id to the selected profile's id (null if unselected).
                     instructor_id: values.instructor_id || null,
-                    instructor_name: faculty ? faculty.full_name : null,
+                    // Set instructor_name to the selected profile's full_name (null if unselected).
+                    instructor_name: instructor ? instructor.full_name : null,
                 };
             },
             onSaved: async (savedRow) => {
@@ -1443,6 +1511,72 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.querySelectorAll('[data-modal]').forEach(btn => btn.addEventListener('click', () => openModal(btn.dataset.modal)));
 
+    /**
+     * Render (or re-render) the instructor <select> inside the course-offering modal.
+     * Called synchronously with whatever data is already in state, and again after
+     * the RPC resolves so the dropdown is always up-to-date.
+     * @param {string|null} currentInstructorId - the instructor_id to pre-select (Edit mode)
+     */
+    function renderInstructorDropdown(currentInstructorId) {
+        const wrapper = getEl('instructorSelectWrapper');
+        if (!wrapper) return;
+
+        const selId = 'field_instructor_id';
+
+        if (state.instructorOptions === null) {
+            // Still loading from the RPC
+            wrapper.innerHTML = `
+              <label for="${selId}">Assigned Instructor</label>
+              <select id="${selId}" class="field-input" disabled>
+                <option value="">⏳ Loading instructors…</option>
+              </select>`;
+            return;
+        }
+
+        if (state.instructorOptionsError) {
+            // RPC failed — show the error so the dean isn't left with a silent empty list
+            wrapper.innerHTML = `
+              <label for="${selId}">Assigned Instructor</label>
+              <select id="${selId}" class="field-input" disabled>
+                <option value="">⚠ Could not load instructors</option>
+              </select>
+              <p style="color:var(--red,#dc2626);font-size:12px;margin-top:4px;">
+                RPC error: ${escapeHtml(state.instructorOptionsError)}<br>
+                <button type="button" id="retryInstructorLoad" style="font-size:12px;color:var(--blue,#0284c7);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;">Retry</button>
+              </p>`;
+            getEl('retryInstructorLoad')?.addEventListener('click', async () => {
+                await loadInstructorOptions(true);
+                renderInstructorDropdown(getEl(selId)?.value || currentInstructorId);
+            });
+            return;
+        }
+
+        if (!state.instructorOptions.length) {
+            wrapper.innerHTML = `
+              <label for="${selId}">Assigned Instructor</label>
+              <select id="${selId}" class="field-input">
+                <option value="">— No active instructors found —</option>
+              </select>
+              <p style="color:var(--amber-700,#b45309);font-size:12px;margin-top:4px;">No approved, active teachers or faculty members are currently on file.</p>`;
+            return;
+        }
+
+        const sorted = state.instructorOptions
+            .slice()
+            .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+
+        const optionsHtml = sorted
+            .map(f => `<option value="${escapeHtml(f.id)}" ${String(f.id) === String(currentInstructorId || '') ? 'selected' : ''}>${escapeHtml(f.full_name)}</option>`)
+            .join('');
+
+        wrapper.innerHTML = `
+          <label for="${selId}">Assigned Instructor</label>
+          <select id="${selId}" class="field-input">
+            <option value="">— Unassigned —</option>
+            ${optionsHtml}
+          </select>`;
+    }
+
     function openModal(key, initialValues = null) {
         const cfg = modalConfigs[key];
         if (!cfg) return;
@@ -1454,6 +1588,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         form.innerHTML = cfg.fields.map(f => {
             const id = `field_${f.name}`;
             const initialVal = (initialValues && initialValues[f.name] !== undefined) ? initialValues[f.name] : (f.default ?? '');
+
+            // instructor_select: rendered asynchronously by renderInstructorDropdown().
+            // We emit a wrapper div here; the actual <select> is injected after the RPC.
+            if (f.type === 'instructor_select') {
+                return `<div class="form-row" id="instructorSelectWrapper"></div>`;
+            }
 
             if (f.type === 'select') {
                 const options = f.options || (f.optionsFn ? f.optionsFn() : []);
@@ -1480,10 +1620,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>`;
         }).join('');
 
-        // If courseOffering, bind catalog course auto-fill
+        // If courseOffering, bind catalog course auto-fill and populate instructor dropdown.
         if (key === 'courseOffering') {
             const codeInput = getEl('field_code');
             const catalogSelect = getEl('field_catalog_course');
+
+            // Pre-select instructor for Edit mode; never default to the dean for Add mode.
+            const existingInstructorId = (initialValues && initialValues.instructor_id) ? initialValues.instructor_id : null;
+
+            // Show whatever we have immediately (may be loading state or cached).
+            renderInstructorDropdown(existingInstructorId);
+
+            // If the RPC hasn't resolved yet, kick off the load and refresh the dropdown when done.
+            if (state.instructorOptions === null) {
+                loadInstructorOptions().then(() => renderInstructorDropdown(existingInstructorId));
+            } else if (!state.instructorOptions.length && !state.instructorOptionsError) {
+                // We have a stale empty result — re-fetch once to be sure.
+                loadInstructorOptions(true).then(() => renderInstructorDropdown(existingInstructorId));
+            }
 
             // Add datalist for codeInput
             if (codeInput && state.courses && state.courses.length) {
@@ -1542,7 +1696,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const values = {};
         for (const f of cfg.fields) {
+            // Skip the catalog auto-fill helper and the instructor_select placeholder
+            // (instructor_select is read directly from field_instructor_id below).
             if (f.name === 'catalog_course') continue;
+            if (f.type === 'instructor_select') {
+                // The real <select> for instructor_id is injected as field_instructor_id.
+                const el = getEl('field_instructor_id');
+                values['instructor_id'] = el ? (el.value.trim() || null) : null;
+                continue;
+            }
             const el = getEl(`field_${f.name}`);
             if (!el) continue;
             const val = el.value.trim();
