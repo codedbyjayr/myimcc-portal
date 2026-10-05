@@ -12,9 +12,10 @@ backups/
 *.sql.gz
 *.dump
 
-# Local-only SQL scripts (not for version control)
-database/assign-faculty-and-enroll.sql
-database/master-fix-migration.sql
+# Local-only SQL scripts (pushed directly to Supabase, not for version control)
+database/*.sql
+database/**/*.sql
+database/run-local-tests.ps1
 
 # Dependencies and build artifacts
 node_modules/
