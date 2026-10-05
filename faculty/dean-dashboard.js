@@ -1461,7 +1461,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 { name: 'schedule', label: 'Schedule', type: 'text', required: false, placeholder: 'e.g. MWF 08:00–09:30 or TTH 13:00–14:30' },
                 // instructor_id uses a dedicated async-populated dropdown (type: 'instructor_select').
                 // openModal handles the RPC load and renders the <select> itself.
-                { name: 'instructor_id', label: 'Assigned Instructor', type: 'instructor_select', required: false },
+                { name: 'instructor_id', label: 'Assigned Instructor', type: 'instructor_select', required: true },
             ],
             transform: (values) => {
                 // Resolve full_name from whichever instructor list is available.
@@ -1513,11 +1513,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     /**
      * Render (or re-render) the instructor <select> inside the course-offering modal.
-     * Called synchronously with whatever data is already in state, and again after
-     * the RPC resolves so the dropdown is always up-to-date.
-     * @param {string|null} currentInstructorId - the instructor_id to pre-select (Edit mode)
+     * Handles:
+     * - Loading state (while get_subject_instructor_options RPC runs)
+     * - Error state (with retry button)
+     * - Empty state (no eligible instructors found)
+     * - Add mode (requires explicit selection, no preselection)
+     * - Edit mode:
+     *   * If current instructor is eligible: preselects them
+     *   * If current instructor is legacy/ineligible (e.g. dean or deactivated):
+     *     shows a prominent legacy warning and requires explicit selection of a replacement before saving
      */
-    function renderInstructorDropdown(currentInstructorId) {
+    function renderInstructorDropdown(existingInstructorId = null, existingInstructorName = null, isEdit = false) {
         const wrapper = getEl('instructorSelectWrapper');
         if (!wrapper) return;
 
@@ -1526,7 +1532,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (state.instructorOptions === null) {
             // Still loading from the RPC
             wrapper.innerHTML = `
-              <label for="${selId}">Assigned Instructor</label>
+              <label for="${selId}">Assigned Instructor <span style="color:var(--red,#dc2626)">*</span></label>
               <select id="${selId}" class="field-input" disabled>
                 <option value="">⏳ Loading instructors…</option>
               </select>`;
@@ -1536,7 +1542,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (state.instructorOptionsError) {
             // RPC failed — show the error so the dean isn't left with a silent empty list
             wrapper.innerHTML = `
-              <label for="${selId}">Assigned Instructor</label>
+              <label for="${selId}">Assigned Instructor <span style="color:var(--red,#dc2626)">*</span></label>
               <select id="${selId}" class="field-input" disabled>
                 <option value="">⚠ Could not load instructors</option>
               </select>
@@ -1546,15 +1552,15 @@ document.addEventListener('DOMContentLoaded', async () => {
               </p>`;
             getEl('retryInstructorLoad')?.addEventListener('click', async () => {
                 await loadInstructorOptions(true);
-                renderInstructorDropdown(getEl(selId)?.value || currentInstructorId);
+                renderInstructorDropdown(existingInstructorId, existingInstructorName, isEdit);
             });
             return;
         }
 
         if (!state.instructorOptions.length) {
             wrapper.innerHTML = `
-              <label for="${selId}">Assigned Instructor</label>
-              <select id="${selId}" class="field-input">
+              <label for="${selId}">Assigned Instructor <span style="color:var(--red,#dc2626)">*</span></label>
+              <select id="${selId}" class="field-input" disabled>
                 <option value="">— No active instructors found —</option>
               </select>
               <p style="color:var(--amber-700,#b45309);font-size:12px;margin-top:4px;">No approved, active teachers or faculty members are currently on file.</p>`;
@@ -1565,16 +1571,46 @@ document.addEventListener('DOMContentLoaded', async () => {
             .slice()
             .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
 
+        // Check if existing instructor is eligible
+        const isEligible = Boolean(
+            existingInstructorId && sorted.some(f => String(f.id) === String(existingInstructorId))
+        );
+
+        let placeholderOption = '';
+        let warningHtml = '';
+
+        if (isEdit) {
+            if (isEligible) {
+                placeholderOption = `<option value="" disabled>— Select Instructor —</option>`;
+            } else {
+                // Legacy or ineligible assignment (e.g. dean or unassigned)
+                const legacyDisplay = existingInstructorName || (existingInstructorId ? 'Ineligible Profile' : 'Unassigned');
+                placeholderOption = `<option value="" disabled selected>⚠ Legacy assignment: ${escapeHtml(legacyDisplay)} (Choose replacement)</option>`;
+                warningHtml = `
+                  <div class="legacy-assignment-alert" style="margin-top:6px;padding:8px 10px;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;font-size:12px;color:#92400e;line-height:1.4;">
+                    <strong>⚠ Legacy Assignment:</strong> Currently assigned to <strong>${escapeHtml(legacyDisplay)}</strong>. Existing offerings assigned to a dean or ineligible profile cannot be saved as-is. You must explicitly select an eligible teacher or faculty member before saving.
+                  </div>`;
+            }
+        } else {
+            // Add mode: explicit selection required
+            placeholderOption = `<option value="" disabled selected>— Select Eligible Instructor —</option>`;
+        }
+
         const optionsHtml = sorted
-            .map(f => `<option value="${escapeHtml(f.id)}" ${String(f.id) === String(currentInstructorId || '') ? 'selected' : ''}>${escapeHtml(f.full_name)}</option>`)
+            .map(f => {
+                const selected = isEligible && String(f.id) === String(existingInstructorId);
+                const roleBadge = f.role ? ` (${f.role})` : '';
+                return `<option value="${escapeHtml(f.id)}" ${selected ? 'selected' : ''}>${escapeHtml(f.full_name)}${escapeHtml(roleBadge)}</option>`;
+            })
             .join('');
 
         wrapper.innerHTML = `
-          <label for="${selId}">Assigned Instructor</label>
-          <select id="${selId}" class="field-input">
-            <option value="">— Unassigned —</option>
+          <label for="${selId}">Assigned Instructor <span style="color:var(--red,#dc2626)">*</span></label>
+          <select id="${selId}" class="field-input" required>
+            ${placeholderOption}
             ${optionsHtml}
-          </select>`;
+          </select>
+          ${warningHtml}`;
     }
 
     function openModal(key, initialValues = null) {
@@ -1625,18 +1661,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             const codeInput = getEl('field_code');
             const catalogSelect = getEl('field_catalog_course');
 
-            // Pre-select instructor for Edit mode; never default to the dean for Add mode.
+            const isEdit = Boolean(editingOfferingId);
             const existingInstructorId = (initialValues && initialValues.instructor_id) ? initialValues.instructor_id : null;
+            const existingInstructorName = (initialValues && initialValues.instructor_name) ? initialValues.instructor_name : null;
 
-            // Show whatever we have immediately (may be loading state or cached).
-            renderInstructorDropdown(existingInstructorId);
+            // Show whatever we have immediately (may be loading state, legacy state, or eligible).
+            renderInstructorDropdown(existingInstructorId, existingInstructorName, isEdit);
 
             // If the RPC hasn't resolved yet, kick off the load and refresh the dropdown when done.
             if (state.instructorOptions === null) {
-                loadInstructorOptions().then(() => renderInstructorDropdown(existingInstructorId));
+                loadInstructorOptions().then(() => renderInstructorDropdown(existingInstructorId, existingInstructorName, isEdit));
             } else if (!state.instructorOptions.length && !state.instructorOptionsError) {
                 // We have a stale empty result — re-fetch once to be sure.
-                loadInstructorOptions(true).then(() => renderInstructorDropdown(existingInstructorId));
+                loadInstructorOptions(true).then(() => renderInstructorDropdown(existingInstructorId, existingInstructorName, isEdit));
             }
 
             // Add datalist for codeInput
@@ -1697,14 +1734,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const values = {};
         for (const f of cfg.fields) {
             // Skip the catalog auto-fill helper and the instructor_select placeholder
-            // (instructor_select is read directly from field_instructor_id below).
+            // (instructor_select is validated and read specifically below).
             if (f.name === 'catalog_course') continue;
-            if (f.type === 'instructor_select') {
-                // The real <select> for instructor_id is injected as field_instructor_id.
-                const el = getEl('field_instructor_id');
-                values['instructor_id'] = el ? (el.value.trim() || null) : null;
-                continue;
-            }
+            if (f.type === 'instructor_select') continue;
+
             const el = getEl(`field_${f.name}`);
             if (!el) continue;
             const val = el.value.trim();
@@ -1712,6 +1745,148 @@ document.addEventListener('DOMContentLoaded', async () => {
             values[f.name] = f.type === 'number' ? (val === '' ? null : Number(val)) : (val || null);
         }
 
+        // Special handling for courseOffering: instructor assignment validation & atomic save
+        if (activeModalKey === 'courseOffering') {
+            if (state.instructorOptions === null) {
+                showToast('Instructor options are still loading. Please wait a moment.', true);
+                return;
+            }
+            if (state.instructorOptionsError) {
+                showToast('Cannot save: instructor list failed to load. Please click retry.', true);
+                return;
+            }
+            if (!state.instructorOptions.length) {
+                showToast('Cannot save: no approved active instructors are available to assign.', true);
+                return;
+            }
+
+            const instructorEl = getEl('field_instructor_id');
+            const selectedInstructorId = instructorEl ? instructorEl.value.trim() : '';
+            if (!selectedInstructorId) {
+                showToast('Please select an eligible instructor.', true);
+                instructorEl?.focus();
+                return;
+            }
+
+            const selectedInstructor = state.instructorOptions.find(o => String(o.id) === String(selectedInstructorId));
+            if (!selectedInstructor) {
+                showToast('Selected instructor is not eligible. Please choose from the list.', true);
+                instructorEl?.focus();
+                return;
+            }
+
+            values.instructor_id = selectedInstructor.id;
+            values.instructor_name = selectedInstructor.full_name;
+
+            const saveBtn = getEl('modalSaveBtn');
+            const originalBtnText = saveBtn.textContent;
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving…';
+
+            try {
+                // Attempt atomic write via Postgres RPC
+                const rpcPayload = {
+                    p_offering_id: editingOfferingId ? Number(editingOfferingId) : null,
+                    p_code: values.code,
+                    p_title: values.title,
+                    p_units: Number(values.units) || 3.0,
+                    p_program: values.program,
+                    p_year: Number(values.year) || 1,
+                    p_semester: values.semester,
+                    p_school_year: values.school_year || '2026–2027',
+                    p_schedule: values.schedule || null,
+                    p_instructor_id: selectedInstructor.id,
+                };
+
+                let savedRow = null;
+                let saveErr = null;
+
+                const { data: rpcData, error: rpcErr } = await supabaseClient.rpc(
+                    'save_course_offering_with_instructor',
+                    rpcPayload
+                );
+
+                if (!rpcErr) {
+                    savedRow = rpcData;
+                } else {
+                    // Check if RPC is missing / not deployed; if so, execute client-side synchronized write
+                    const isRpcMissing = rpcErr.code === 'PGRST202' ||
+                        (rpcErr.message && rpcErr.message.includes('function') && rpcErr.message.includes('does not exist'));
+
+                    if (isRpcMissing) {
+                        console.warn('save_course_offering_with_instructor RPC not found, falling back to synchronized write:', rpcErr.message);
+                        const directPayload = {
+                            code: values.code,
+                            title: values.title,
+                            program: values.program,
+                            year: Number(values.year) || 1,
+                            semester: values.semester,
+                            school_year: values.school_year || '2026–2027',
+                            units: Number(values.units) || 3.0,
+                            schedule: values.schedule || null,
+                            instructor_id: selectedInstructor.id,
+                            instructor_name: selectedInstructor.full_name,
+                        };
+
+                        if (editingOfferingId) {
+                            const { data, error } = await supabaseClient.from('course_offerings')
+                                .update(directPayload).eq('id', editingOfferingId).select().single();
+                            if (error) {
+                                saveErr = error;
+                            } else {
+                                savedRow = data;
+                                // Deactivate old assignments for this offering
+                                await supabaseClient.from('teacher_assignments')
+                                    .update({ is_active: false }).eq('offering_id', editingOfferingId);
+
+                                // Upsert active assignment for selected instructor
+                                await supabaseClient.from('teacher_assignments').upsert({
+                                    teacher_id: selectedInstructor.id,
+                                    offering_id: Number(editingOfferingId),
+                                    academic_year: directPayload.school_year,
+                                    semester: directPayload.semester,
+                                    is_active: true,
+                                    assigned_by: currentUserId,
+                                }, { onConflict: 'teacher_id,offering_id,academic_year,semester' });
+                            }
+                        } else {
+                            const { data, error } = await supabaseClient.from('course_offerings')
+                                .insert(directPayload).select().single();
+                            if (error) {
+                                saveErr = error;
+                            } else {
+                                savedRow = data;
+                                await supabaseClient.from('teacher_assignments').insert({
+                                    teacher_id: selectedInstructor.id,
+                                    offering_id: Number(savedRow.id),
+                                    academic_year: directPayload.school_year,
+                                    semester: directPayload.semester,
+                                    is_active: true,
+                                    assigned_by: currentUserId,
+                                });
+                            }
+                        }
+                    } else {
+                        saveErr = rpcErr;
+                    }
+                }
+
+                if (saveErr) {
+                    showToast('Failed to save offering: ' + (saveErr.message || 'Database error'), true);
+                    return;
+                }
+
+                showToast(editingOfferingId ? 'Updated successfully.' : 'Saved successfully.');
+                closeModal();
+                if (cfg.onSaved) cfg.onSaved(savedRow);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = originalBtnText;
+            }
+            return;
+        }
+
+        // Standard save logic for other modals (budget, grant, appeal)
         const payload = cfg.transform ? cfg.transform(values) : values;
         let saveRes;
         if (editingOfferingId) {

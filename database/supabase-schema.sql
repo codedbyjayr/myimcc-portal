@@ -237,10 +237,58 @@ ALTER TABLE cor_signatories ENABLE ROW LEVEL SECURITY;
 -- Profiles: users can read their own profile; admins can read all
 CREATE POLICY "Users read own profile" ON profiles
   FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Admins read all profiles" ON profiles
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
-  );
+  -- The admin check has to live in a SECURITY DEFINER function, not inline.
+  --
+  -- A policy on a table cannot query that same table: Postgres detects the
+  -- re-entry and refuses with 'infinite recursion detected in policy for
+  -- relation "profiles"'. Written inline, this policy made EVERY read of
+  -- profiles by an authenticated user fail that way, because RLS evaluates
+  -- the admin policy for rows the caller is not entitled to see. The portal
+  -- depends on reading profiles everywhere -- the signed-in user's own record,
+  -- message recipient lists, staff names next to messages -- so this took out
+  -- sign-in itself.
+  --
+  -- SECURITY DEFINER makes the inner query run as the function owner, which
+  -- bypasses RLS for that query only. The search_path is pinned so the
+  -- function cannot be hijacked by a shadowing table in another schema.
+  --
+  -- Only role is checked here, which is exactly what the inline check this
+  -- replaces did. profiles has no status or is_active column until
+  -- security-hardening-phase0a.sql adds them, and this file runs first.
+  -- security-hardening-phase0a.sql redefines this function to also require an
+  -- approved, active account.
+  CREATE OR REPLACE FUNCTION public.is_admin()
+  RETURNS BOOLEAN
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public
+  AS $$
+    SELECT EXISTS (
+      SELECT 1 FROM public.profiles
+       WHERE id = (SELECT auth.uid())
+         AND role = 'admin'
+    );
+  $$;
+
+  GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+
+  -- The staff-class counterpart of is_admin(), for the clearance policies.
+  -- Same SECURITY DEFINER and pinned search_path reasoning.
+  CREATE OR REPLACE FUNCTION public.is_staff_class()
+  RETURNS BOOLEAN
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public
+  AS $$
+    SELECT EXISTS (
+      SELECT 1 FROM public.profiles
+       WHERE id = (SELECT auth.uid())
+         AND role IN ('faculty','teacher','staff','dean','registrar','admin')
+    );
+  $$;
+
+  GRANT EXECUTE ON FUNCTION public.is_staff_class() TO authenticated;
+
+  CREATE POLICY "Admins read all profiles" ON profiles
+    FOR SELECT USING (public.is_admin());
 
 -- Course offerings: everyone authenticated can read
 CREATE POLICY "Authenticated read offerings" ON course_offerings
@@ -291,14 +339,21 @@ CREATE POLICY "Students read own billing" ON billing_summary
 -- Clearance: students read their own; staff/admin can read all
 CREATE POLICY "Students read own clearance" ON clearances
   FOR SELECT USING (student_id = auth.uid());
+-- The staff test lives in a SECURITY DEFINER function rather than inline for
+-- the same reason public.is_admin() does: these are policies on clearances
+-- querying profiles, which is legal, but repeating the role list inline
+-- everywhere is how the two variants drifted apart and left one of them
+-- missing the status check. One definition, one place to harden.
+--
+-- Only role is checked here because profiles has no status or is_active column
+-- until security-hardening-phase0a.sql adds them, and this file runs first.
+-- security-hardening-phase0a.sql redefines it to require an approved, active
+-- account, and security-hardening-phase0b.sql drops the older role-only
+-- policies outright.
 CREATE POLICY "Staff read all clearances" ON clearances
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('staff','admin'))
-  );
+  FOR SELECT USING (public.is_staff_class());
 CREATE POLICY "Staff update clearances" ON clearances
-  FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('staff','admin'))
-  );
+  FOR UPDATE USING (public.is_staff_class());
 
 -- Public read tables (announcements, deadlines, misc_fees, faq_articles, cor_signatories)
 CREATE POLICY "Anyone can read announcements" ON announcements
@@ -356,7 +411,7 @@ INSERT INTO faq_articles (category, question, answer, keywords) VALUES
    'Yes, you can drop a course by going to the Enrollment tab and unchecking the course you wish to drop. Note that dropping courses after the add/drop deadline may have academic and financial implications.',
    'drop, unenroll, remove, withdraw, cancel'),
   ('Billing', 'How do I pay my tuition?',
-   'Go to Billing & History. Under Upcoming Payments, click Pay Now on any pending installment. You can also visit the Cashier''s Office for in-person payments.',
+   'Tuition is settled through the Cashier''s Office or your designated payment channel. Open Billing & History to see your assessed balance and any installment schedule the Cashier''s Office has issued. Payment status is recorded by cashier staff, so there is no online payment button in the portal.',
    'pay, payment, tuition, fee, cash, install'),
   ('Billing', 'What payment methods are accepted?',
    'Currently, payments are processed through the Cashier''s Office. Online payment integration is coming soon.',

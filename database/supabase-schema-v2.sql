@@ -226,10 +226,12 @@ CREATE POLICY "Admins write sso_links" ON sso_links FOR ALL USING (
 );
 
 -- Update profiles policy to allow admin write (for user management)
-CREATE POLICY "Admins update profiles" ON profiles FOR UPDATE USING (
-  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
-);
-CREATE POLICY "Users update own profile" ON profiles FOR UPDATE USING (id = auth.uid());
+  -- Calls public.is_admin() rather than repeating the check inline: a policy on
+  -- profiles cannot query profiles without tripping Postgres's infinite
+  -- recursion guard, which would fail every authenticated read of the table.
+  -- Defined in supabase-schema.sql, which runs first.
+  CREATE POLICY "Admins update profiles" ON profiles FOR UPDATE USING (public.is_admin());
+  CREATE POLICY "Users update own profile" ON profiles FOR UPDATE USING (id = auth.uid());
 
 -- ── Seed Data: Departments ───────────────────────────────────────────
 INSERT INTO departments (code, name, head_name) VALUES
@@ -270,8 +272,17 @@ INSERT INTO system_settings (key, value, category, description) VALUES
   ('groq_max_tokens', '500', 'ai', 'Max tokens for Groq responses'),
   ('portal_name', 'MyIMCC Portal', 'general', 'Display name of the portal'),
   ('school_name', 'Iligan Medical Center College', 'general', 'Full school name'),
-  ('support_email', 'support@imcc.edu.ph', 'general', 'IT support email'),
-  ('registrar_email', 'registrar@imcc.edu.ph', 'general', 'Registrar email'),
+  -- Placeholders, not verified addresses. Replace both with the real office
+  -- mailboxes before deploying; nothing in the portal renders them, so they
+  -- are inert either way.
+  --
+  -- 'registrar_email' is not inert in one place: helpdesk_recipient_id()
+  -- reads it to pick a preferred recipient for consultation requests. If no
+  -- approved, active profile matches this address it falls through to the
+  -- registrar role and then to admin, so a wrong value degrades to the role
+  -- lookup rather than routing a student's request nowhere.
+  ('support_email', 'support@imcc.edu.ph', 'general', 'IT support email (placeholder - set the real mailbox)'),
+  ('registrar_email', 'registrar@imcc.edu.ph', 'general', 'Registrar email (placeholder - preferred recipient for consultation requests)'),
   ('max_login_attempts', '5', 'security', 'Max failed login attempts before lockout'),
   ('session_timeout_minutes', '60', 'security', 'Session idle timeout in minutes')
 ON CONFLICT DO NOTHING;

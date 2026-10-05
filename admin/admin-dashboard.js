@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         teacher: 'Faculty',
         faculty: 'Faculty',
         staff: 'Staff',
+        registrar: 'Registrar',
         admin: 'Admin',
         dean: 'Dean',
     };
@@ -122,8 +123,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           <select class="role-select pending-role-select" data-id="${user.id}">
             <option value="student" ${(user.requested_role || 'student') === 'student' ? 'selected' : ''}>Student</option>
             <option value="teacher" ${user.requested_role === 'teacher' || user.requested_role === 'faculty' ? 'selected' : ''}>Faculty</option>
-            <option value="staff" ${user.requested_role === 'staff' ? 'selected' : ''}>Staff</option>
-            <option value="admin" ${user.requested_role === 'admin' ? 'selected' : ''}>Admin</option>
+              <option value="staff" ${user.requested_role === 'staff' ? 'selected' : ''}>Staff</option>
+              <option value="registrar" ${user.requested_role === 'registrar' ? 'selected' : ''}>Registrar</option>
+              <option value="admin" ${user.requested_role === 'admin' ? 'selected' : ''}>Admin</option>
             <option value="dean" ${user.requested_role === 'dean' ? 'selected' : ''}>Dean</option>
           </select>
         </td>
@@ -165,8 +167,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           <select class="role-select" data-id="${user.id}" ${isSelf ? 'disabled' : ''}>
             <option value="student" ${currentRole === 'student' ? 'selected' : ''}>Student</option>
             <option value="teacher" ${currentRole === 'teacher' || currentRole === 'faculty' ? 'selected' : ''}>Faculty</option>
-            <option value="staff" ${currentRole === 'staff' ? 'selected' : ''}>Staff</option>
-            <option value="admin" ${currentRole === 'admin' ? 'selected' : ''}>Admin</option>
+              <option value="staff" ${currentRole === 'staff' ? 'selected' : ''}>Staff</option>
+              <option value="registrar" ${currentRole === 'registrar' ? 'selected' : ''}>Registrar</option>
+              <option value="admin" ${currentRole === 'admin' ? 'selected' : ''}>Admin</option>
             <option value="dean" ${currentRole === 'dean' ? 'selected' : ''}>Dean</option>
           </select>
         </td>
@@ -246,6 +249,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 4. Attach Listeners for Pending Approvals / Rejections
+    //
+    // These used to write { status, role } straight to the profiles table.
+    // Phase 0a made those columns admin-managed and removed the
+    // "Users update own profile" policy, so a direct UPDATE no longer
+    // carries the authority check with it. Each action now goes through
+    // the SECURITY DEFINER RPC, which re-verifies that the caller is an
+    // active approved admin before it writes.
+    async function callRpc(name, args) {
+        const { error } = await supabaseClient.rpc(name, args);
+        return error;
+    }
+
     function attachPendingListeners() {
         pendingTableBody.querySelectorAll('.btn-approve').forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -253,10 +268,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const roleSelect = pendingTableBody.querySelector(`.pending-role-select[data-id="${userId}"]`);
                 const targetRole = roleSelect ? roleSelect.value : 'student';
 
-                const { error } = await supabaseClient
-                    .from('profiles')
-                    .update({ status: 'approved', role: targetRole })
-                    .eq('id', userId);
+                btn.disabled = true;
+                const error = await callRpc('set_user_approval', {
+                    target_id: userId,
+                    approved: true,
+                    approved_role: targetRole,
+                });
 
                 if (error) {
                     alert('Failed to approve user: ' + error.message);
@@ -264,6 +281,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     loadPendingUsers();
                     loadApprovedUsers();
                 }
+                btn.disabled = false;
             });
         });
 
@@ -272,16 +290,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (!confirm('Reject this registration request?')) return;
                 const userId = e.target.getAttribute('data-id');
 
-                const { error } = await supabaseClient
-                    .from('profiles')
-                    .update({ status: 'rejected' })
-                    .eq('id', userId);
+                btn.disabled = true;
+                const error = await callRpc('set_user_approval', {
+                    target_id: userId,
+                    approved: false,
+                });
 
                 if (error) {
                     alert('Failed to reject user: ' + error.message);
                 } else {
                     loadPendingUsers();
                 }
+                btn.disabled = false;
             });
         });
     }
@@ -294,10 +314,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const userId = e.target.getAttribute('data-id');
                 const newRole = e.target.value;
 
-                const { error } = await supabaseClient
-                    .from('profiles')
-                    .update({ role: newRole })
-                    .eq('id', userId);
+                const error = await callRpc('set_user_role', {
+                    target_id: userId,
+                    new_role: newRole,
+                });
 
                 if (error) {
                     alert('Failed to update role: ' + error.message);
@@ -314,22 +334,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         // Revoke Access Listener — scoped to approvedTableBody only
+        //
+        // This previously wrote { status: 'pending', role: 'student' }, which
+        // did two wrong things at once: it silently demoted the person to a
+        // student, and it dropped them back into the approval queue as if
+        // they had just registered. Revoking access should lock the account
+        // and preserve the role it had, so set_user_active() is the correct
+        // call; a deliberate demotion is a separate, explicit action.
         approvedTableBody.querySelectorAll('.btn-revoke').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                if (!confirm('Revoke access for this user? They will be locked out of the portal until approved again.')) return;
+                if (!confirm('Revoke access for this user? Their portal access will be suspended. They keep their role and can be reactivated without re-approval.')) return;
                 const userId = e.target.getAttribute('data-id');
 
-                const { error } = await supabaseClient
-                    .from('profiles')
-                    .update({ status: 'pending', role: 'student' })
-                    .eq('id', userId);
+                btn.disabled = true;
+                const error = await callRpc('set_user_active', {
+                    target_id: userId,
+                    active: false,
+                });
 
                 if (error) {
                     alert('Failed to revoke access: ' + error.message);
                 } else {
                     loadApprovedUsers();
-                    loadPendingUsers();
                 }
+                btn.disabled = false;
             });
         });
     }

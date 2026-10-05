@@ -2690,3 +2690,804 @@ tr:last-child td {
     margin: 10mm;
   }
 }
+
+/* ═════════════════════════════════════════════════════════════════════
+   Class Schedule
+   ═════════════════════════════════════════════════════════════════════ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Replaces the inline-styled empty rows that were scattered through the
+   render functions. */
+.table-empty {
+  text-align: center;
+  color: var(--ink-300, #8a8a94);
+  padding: 28px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.table-empty-hint {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ink-500, #6b6b74);
+}
+
+.sched-note {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--amber, #f59e0b);
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 12.5px;
+  line-height: 1.5;
+  border-radius: 0 6px 6px 0;
+}
+
+.sched-table td {
+  vertical-align: top;
+}
+
+.sched-time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  color: var(--ink-500, #5c5c66);
+}
+
+.sched-subject {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.sched-title {
+  font-size: 11.5px;
+  color: var(--ink-500, #6b6b74);
+  margin-top: 2px;
+}
+
+.chip {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #fce7f3;
+  color: var(--pink-700, #9d174d);
+  border: 1px solid #fbcfe8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.chip-muted {
+  background: #f3f4f6;
+  color: #6b7280;
+  border-color: #e5e7eb;
+}
+
+/* Highlight the class happening now, so the table is scannable. */
+.sched-table tr.sched-now {
+  background: #fff1f7;
+}
+
+.sched-table tr.sched-now .chip {
+  background: var(--pink-600, #e7248a);
+  color: #fff;
+  border-color: var(--pink-600, #e7248a);
+}
+
+@media print {
+  .sched-note {
+    border: 1px solid #999;
+    background: none;
+    color: #000;
+  }
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+   Baseline print behaviour
+
+   The COR block above is scoped to body.is-printing-cor, a class that only
+   the in-app Print button set. A plain Ctrl+P therefore fell through every
+   rule and printed the whole dashboard: sidebar, banner, and all nine
+   stacked pages. These ungated rules give every page a sane print.
+
+   The COR refinements still apply on Ctrl+P because beforeprint now sets
+   is-printing-cor when the student is already on the COR page.
+   ═════════════════════════════════════════════════════════════════════ */
+@media print {
+
+  :root {
+    color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  .sidebar,
+  .banner,
+  .topbar,
+  .no-print,
+  .chat-fab,
+  .chat-panel,
+  .toast {
+    display: none !important;
+  }
+
+  .main,
+  .content {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Print the page the student is actually on, not all of them. */
+  .page {
+    display: none !important;
+  }
+
+  .page.active {
+    display: block !important;
+  }
+
+  .card,
+  .panel,
+  .cor-doc,
+  table {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  th,
+  td {
+    border-color: #c8c8c8 !important;
+  }
+
+  /* Do not append URL text after printed links. */
+  a[href]::after {
+    content: "" !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+}
+/* =====================================================================
+   Messages
+   ===================================================================== */
+.nav-badge {
+  display: inline-block;
+  margin-left: auto;
+  min-width: 19px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--pink-600, #e7248a);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.msg-note {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-500, #6b6b74);
+}
+
+.msg-load-more {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.msg-load-more .msg-note {
+  margin: 0;
+}
+
+
+.msg-stamp {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--ink-300, #8a8a94);
+}
+
+.msg-thread-open {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--pink-700, #9d174d);
+  cursor: pointer;
+  text-align: left;
+}
+
+.msg-thread-open:hover,
+.msg-thread-open:focus-visible {
+  text-decoration: underline;
+}
+
+.msg-preview {
+  display: block;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--ink-500, #6b6b74);
+}
+
+.msg-row-unread {
+  font-weight: 700;
+}
+
+.pill-unread {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--pink-600, #e7248a);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.pill-read {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: var(--ink-500, #6b6b74);
+  border: 1px solid var(--line);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.msg-thread {
+  margin-top: 16px;
+}
+
+.msg-thread-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.msg-peer {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-900, #1f2430);
+}
+
+.msg-thread-head .msg-note {
+  margin: 2px 0 0;
+}
+
+.msg-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 4px 2px 10px;
+}
+
+.msg-item {
+  max-width: 80%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f6f5f8;
+  border: 1px solid var(--line);
+}
+
+.msg-item.mine {
+  align-self: flex-end;
+  background: #fdecf2;
+  border-color: #f5b6cf;
+}
+
+.msg-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-500, #6b6b74);
+  margin-bottom: 4px;
+}
+
+.msg-item-subject {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-900, #1f2430);
+  margin-bottom: 4px;
+}
+
+.msg-item-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-900, #1f2430);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.msg-reply textarea,
+#msgBody {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-900, #1f2430);
+  background: #fff;
+  resize: vertical;
+}
+
+.msg-reply textarea:focus,
+#msgBody:focus,
+#msgSubject:focus,
+#msgOffice:focus {
+  outline: 2px solid var(--pink-600, #e7248a);
+  outline-offset: 1px;
+  border-color: var(--pink-600, #e7248a);
+}
+
+.msg-reply .btn {
+  align-self: flex-end;
+}
+
+.field {
+  margin-bottom: 14px;
+}
+
+.field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: var(--ink-900, #1f2430);
+}
+
+/* Small print under an input. Sits inside .field, so it needs the negative
+   top margin to undo the field's bottom spacing. */
+.field-hint {
+  margin: 5px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-500, #5b6474);
+}
+
+
+#msgSubject,
+#msgOffice {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  background: #fff;
+  color: var(--ink-900, #1f2430);
+}
+
+.msg-error {
+  margin: 0 0 12px;
+  padding: 9px 11px;
+  border-left: 3px solid #c0392b;
+  background: #fdf2f0;
+  color: #7d241a;
+  font-size: 12.5px;
+  border-radius: 0 6px 6px 0;
+}
+
+.msg-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .msg-item {
+    max-width: 94%;
+  }
+
+  .msg-preview {
+    max-width: 170px;
+  }
+}
+
+@media print {
+  .msg-reply,
+  .nav-badge {
+    display: none !important;
+  }
+}
+
+/* =====================================================================
+   Load failure notice
+   ===================================================================== */
+.load-failure-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid #fcd34d;
+  border-left: 4px solid #d97706;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #78350f;
+}
+
+.load-failure-inner {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.load-failure-inner strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.load-failure-dismiss {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #92400e;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.load-failure-dismiss:hover {
+  background: #fef3c7;
+}
+
+.load-failure-dismiss:focus-visible {
+  outline: 2px solid #d97706;
+  outline-offset: 1px;
+}
+
+@media print {
+  .load-failure-banner {
+    display: none !important;
+  }
+}
+
+/* =====================================================================
+   Help desk greeting
+   The greeting is rendered by the client, not stored. RLS only allows a
+   user to insert a message whose sender_id is their own id, so there is
+   no bot account row and no seeded fake correspondence.
+   ===================================================================== */
+.msg-greeting {
+  display: flex;
+  gap: 14px;
+  padding: 16px;
+  margin-bottom: 18px;
+  border: 1px solid #f5d0e3;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fdf2f8 0%, #ffffff 100%);
+}
+
+.msg-greeting-avatar {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--brand, #E7248A);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.msg-greeting-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.msg-greeting-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand-deep, #B81568);
+  margin-bottom: 6px;
+}
+
+.msg-greeting-body p {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-700, #374151);
+}
+
+.msg-greeting-body p:last-child {
+  margin-bottom: 0;
+}
+
+.msg-greeting-meta {
+  font-size: 12.5px;
+  color: var(--ink-500, #6b7280);
+}
+
+.msg-item-bot .msg-item-head {
+  color: var(--brand-deep, #B81568);
+  font-weight: 600;
+}
+
+.msg-item-bot .msg-item-body {
+  background: #fdf2f8;
+  border-color: #f5d0e3;
+}
+
+@media print {
+  .msg-greeting,
+  .msg-ask {
+    display: none !important;
+  }
+}
+
+/* =====================================================================
+   Help assistant + consultation booking
+   ===================================================================== */
+.help-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line, #e5e7eb);
+}
+
+.help-suggest-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-500, #6b7280);
+  margin-right: 2px;
+}
+
+.help-chip {
+  padding: 6px 13px;
+  border: 1px solid #f5d0e3;
+  border-radius: 999px;
+  background: #fdf2f8;
+  color: var(--brand-deep, #B81568);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.help-chip:hover {
+  background: #fbe6f1;
+  border-color: var(--brand, #E7248A);
+}
+
+.help-chip:focus-visible {
+  outline: 2px solid var(--brand, #E7248A);
+  outline-offset: 2px;
+}
+
+.help-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.help-log {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 460px;
+  overflow-y: auto;
+  padding: 4px 2px 12px;
+}
+
+.help-log .msg-item-body code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  font-size: 12px;
+}
+
+.help-sources {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+  font-size: 12.5px;
+}
+
+.help-sources summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink-700, #374151);
+}
+
+.help-sources summary:focus-visible {
+  outline: 2px solid var(--brand, #E7248A);
+  outline-offset: 1px;
+}
+
+.help-sources ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--ink-700, #374151);
+}
+
+.help-sources li {
+  margin-bottom: 6px;
+}
+
+.help-src-cat {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #f3e8ff;
+  color: #6b21a8;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.help-src-note {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-500, #6b7280);
+}
+
+.help-footnote {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--ink-500, #6b7280);
+}
+
+.book-when {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.book-when .field {
+  margin-bottom: 14px;
+}
+
+.book-list-wrap {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line, #e5e7eb);
+}
+
+.book-list-title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-700, #374151);
+}
+
+.book-item {
+  padding: 13px 14px;
+  margin-bottom: 10px;
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid var(--brand, #E7248A);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.book-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.book-item-topic {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-900, #111827);
+}
+
+.book-when-final {
+  font-size: 13px;
+  color: var(--ink-700, #374151);
+  margin-bottom: 4px;
+}
+
+.book-item-meta {
+  font-size: 12px;
+  color: var(--ink-500, #6b7280);
+  text-transform: capitalize;
+}
+
+.book-item-notes {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--ink-700, #374151);
+  line-height: 1.5;
+}
+
+.book-item-staff {
+  margin-top: 6px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 12.5px;
+}
+
+.book-cancel {
+  margin-top: 9px;
+}
+
+.book-pill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.book-pill-pending   { background: #fffbeb; color: #92400e; }
+.book-pill-confirmed { background: #dcfce7; color: #166534; }
+.book-pill-declined  { background: #fee2e2; color: #991b1b; }
+.book-pill-done      { background: #e0e7ff; color: #3730a3; }
+.book-pill-cancelled { background: #f3f4f6; color: #4b5563; }
+
+@media (max-width: 640px) {
+  .book-when {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
+@media print {
+  .help-suggest,
+  .help-log,
+  .help-footnote,
+  .book-when,
+  .msg-actions {
+    display: none !important;
+  }
+}

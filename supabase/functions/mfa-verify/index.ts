@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import * as OTPAuth from 'https://esm.sh/otpauth@9.1.4';
 import { corsHeaders } from '../_shared/cors.ts';
+import { errorMessage } from '../_shared/errors.ts';
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
@@ -41,7 +42,7 @@ serve(async (req) => {
         );
     } catch (error) {
         return new Response(
-            JSON.stringify({ error: error.message }),
+            JSON.stringify({ error: errorMessage(error) }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }
