@@ -429,6 +429,7 @@ ${buildContext(rows)}`;
     // sources are the retrieved articles, never the model.
     return json({ answer, sources, resolved: !gaveUp });
   } catch (error) {
-    return json({ error: errorMessage(error) }, 500);
+    console.error('faq-assistant request failed:', errorMessage(error));
+    return json({ error: 'Internal server error' }, 500);
   }
 });
