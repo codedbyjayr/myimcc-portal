@@ -27,7 +27,7 @@ const NAV = new RegExp(
 );
 
 const rules = [...block[0].matchAll(
-  /name:\s*'([^']+)'\s*,\s*re:\s*(\/(?:\\.|[^/])+\/[a-z]*)\s*(?:,\s*exemptNavigation:\s*true)?/g
+  /name:\s*'([^']+)'\s*,\s*re:\s*(\/(?:\\.|[^\\/])+\/[a-z]*)\s*(?:,\s*exemptNavigation:\s*true)?/g
 )].map(m => ({
   name: m[1],
   re: new RegExp(m[2].slice(1, m[2].lastIndexOf('/')), m[2].slice(m[2].lastIndexOf('/') + 1)),
