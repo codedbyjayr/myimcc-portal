@@ -109,12 +109,52 @@
             opacity: 0.9;
         }
 
-        .form-error {
-            color: #ef4444;
-            font-size: 13px;
-            margin-bottom: 12px;
-        }
-    </style>
+      .form-error {
+      color: #ef4444;
+      font-size: 13px;
+      margin-bottom: 12px;
+      }
+      
+      .field-hint {
+      margin: 8px 0 0;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #6b7280;
+      }
+
+      /* Shown instead of the form when the account cannot proceed: rejected,
+         suspended, or otherwise blocked. Reuses the card surface so it does
+         not read as a second, unrelated dialog. */
+      .onboard-blocked {
+        display: none;
+        border: 1px solid var(--border);
+        border-left: 3px solid #ef4444;
+        border-radius: 10px;
+        background: rgba(239, 68, 68, 0.06);
+        padding: 16px 18px;
+      }
+
+      .onboard-blocked.visible {
+        display: block;
+      }
+
+      .onboard-blocked h2 {
+        margin: 0 0 8px;
+        font-size: 16px;
+        color: var(--text);
+      }
+
+      .onboard-blocked p {
+        margin: 0 0 10px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--text-muted);
+      }
+
+      .onboard-blocked .btn-submit {
+        margin-top: 4px;
+      }
+      </style>
 </head>
 
 <body>
@@ -138,20 +178,36 @@
                 <label for="requestedRole">I am requesting access as a:</label>
                 <select id="requestedRole" required>
                     <option value="student">Student</option>
-                    <option value="teacher">Faculty / Instructor</option>
+                    <option value="faculty">Faculty / Instructor</option>
                     <option value="staff">Administrative Staff</option>
+                    <option value="dean">Dean</option>
+                    <option value="registrar">Registrar</option>
                 </select>
+                <p class="field-hint">
+                    Only student accounts with an institutional student address are
+                    confirmed automatically. Faculty, staff, dean and registrar
+                    requests are reviewed by an administrator before access is granted.
+                </p>
             </div>
 
             <div id="formError" class="form-error" hidden></div>
 
             <button type="submit" class="btn-submit" id="submitBtn">Submit for Approval</button>
         </form>
+
+        <!-- Replaces the form when resolveRoute says this account cannot
+             onboard. Populated by select-role.js; empty and hidden otherwise. -->
+        <div class="onboard-blocked" id="onboardBlocked" role="alert" aria-live="polite">
+            <h2 id="onboardBlockedTitle">Access not available</h2>
+            <p id="onboardBlockedMessage"></p>
+            <button type="button" class="btn-submit" id="onboardSignOut">Sign out</button>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../env-config.js"></script>
     <script src="../shared/supabase-config.js"></script>
+<script src="../shared/identity.js"></script>
     <script src="select-role.js"></script>
 </body>
 

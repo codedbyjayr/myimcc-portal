@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyIMCC — Registrar Portal</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../env-config.js"></script>
+    <script src="../shared/supabase-config.js"></script>
+<script src="../shared/identity.js"></script>
+<script src="../shared/datetime.js"></script>
+<script src="../shared/authGuard.js"></script>
+    <script src="../shared/loading.js"></script>
+    <script src="../shared/ui.js"></script>
+
+    <link rel="stylesheet" href="registrar-dashboard.css">
+    <link rel="stylesheet" href="../shared/ui.css">
+    <link rel="stylesheet" href="../shared/loading.css">
+    <link rel="stylesheet" href="../shared/rwd.css">
+</head>
+
+<body>
+
+    <div class="app">
+
+        <!-- Mobile Drawer Overlay -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <!-- ============ SIDEBAR ============ -->
+        <aside class="sidebar" id="sidebar">
+            <div class="brand">
+                <div class="logo">MI</div>
+                <div>
+                    <div class="name">MyIMCC</div>
+                    <div class="tag">REGISTRAR PORTAL</div>
+                </div>
+                <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close Navigation" type="button">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="who">
+                <div class="avatar" aria-hidden="true"></div>
+                <div class="meta">
+                    <div id="userName">Registrar</div>
+                    <div>Registrar's Office</div>
+                </div>
+            </div>
+
+            <nav aria-label="Registrar sections">
+                <div class="nav-label">Main Menu</div>
+                <button class="nav-item active" data-view="dashboard" type="button" aria-current="page">
+                    <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10l9-7 9 7v10a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg></span>
+                    Dashboard
+                </button>
+                <button class="nav-item" data-view="prospectus" type="button">
+                    <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20M9 9v11"/></svg></span>
+                    Prospectus
+                </button>
+                <button class="nav-item" data-view="offers" type="button">
+                    <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 10v6"/></svg></span>
+                    Student Offers
+                </button>
+                <button class="nav-item" data-view="appointments" type="button">
+                    <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M9 15l2 2 4-4"/></svg></span>
+                    Appointments
+                    <span class="nav-badge" id="apptPendingBadge" hidden>0</span>
+                </button>
+                <button class="nav-item" data-view="messages" type="button">
+                    <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v12H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg></span>
+                    Messages
+                    <span class="nav-badge" id="msgUnreadBadge" hidden>0</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-foot">
+                MyIMCC Portal<br>Registrar Access
+            </div>
+        </aside>
+
+        <!-- ============ MAIN ============ -->
+        <main class="main">
+
+            <div class="topbar">
+                <div class="topbar-left">
+                    <button class="menu-toggle" id="menuToggle" aria-label="Open Navigation" aria-expanded="false" aria-controls="sidebar" type="button">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                            <line x1="4" y1="6" x2="20" y2="6"></line>
+                            <line x1="4" y1="12" x2="20" y2="12"></line>
+                            <line x1="4" y1="18" x2="20" y2="18"></line>
+                        </svg>
+                    </button>
+                    <h1 id="pageTitle">Dashboard</h1>
+                </div>
+            </div>
+
+            <!-- Live region for load and action results -->
+            <p id="registrarStatus" class="sr-only" role="status" aria-live="polite"></p>
+
+            <!-- -------- DASHBOARD VIEW -------- -->
+            <section id="view-dashboard" aria-labelledby="pageTitle">
+                <div class="hero">
+                    <div>
+                        <h2>Welcome, <span id="welcomeName">Registrar</span></h2>
+                        <p>Manage the prospectus, subject offerings, and student loads.</p>
+                    </div>
+                    <button type="button" data-goto="offers">Manage Offers</button>
+                </div>
+
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="head">Total Students <span class="ic-pill" aria-hidden="true"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg></span></div>
+                        <div class="num" id="statStudents">&ndash;</div>
+                        <div class="sub">Across all majors</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="head">Subjects in Prospectus <span class="ic-pill" aria-hidden="true"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20M9 9v11"/></svg></span></div>
+                        <div class="num" id="statSubjects">&ndash;</div>
+                        <div class="sub">Major + General Education</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="head">Pending Offers <span class="ic-pill" aria-hidden="true"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span></div>
+                        <div class="num" id="statPending">&ndash;</div>
+                        <div class="sub">Awaiting confirmation</div>
+                    </div>
+                </div>
+
+                <div class="quick">
+                    <button type="button" class="quick-card" data-goto="prospectus">
+                        <span class="ic-pill" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20M9 9v11"/></svg></span>
+                        <b>View Prospectus</b>
+                        <span>Browse all subjects</span>
+                    </button>
+                    <button type="button" class="quick-card" data-goto="prospectus" data-cat="MAJOR">
+                        <span class="ic-pill" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8M12 18v4"/></svg></span>
+                        <b>Major Subjects</b>
+                        <span>Filter major curriculum</span>
+                    </button>
+                    <button type="button" class="quick-card" data-goto="prospectus" data-cat="GE">
+                        <span class="ic-pill" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M9 9v11M2 9h20M22 8v6a2 2 0 01-2 2h-3"/></svg></span>
+                        <b>GE Subjects</b>
+                        <span>Filter General Education</span>
+                    </button>
+                    <button type="button" class="quick-card" data-goto="offers">
+                        <span class="ic-pill" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg></span>
+                        <b>Offer a Subject</b>
+                        <span>Assign to a student</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- -------- PROSPECTUS VIEW -------- -->
+            <section id="view-prospectus" class="hidden" aria-labelledby="pageTitle">
+                <div class="panel">
+                    <div class="panel-head">
+                        <h3>Prospectus</h3>
+                        <div class="filters" id="prospectusFilters" role="group" aria-label="Filter subjects by category">
+                            <button type="button" class="chip active" data-cat="ALL">All</button>
+                            <button type="button" class="chip" data-cat="MAJOR">Major</button>
+                            <button type="button" class="chip" data-cat="GE">GE</button>
+                        </div>
+                        <label class="sr-only" for="prospectusSearch">Search subjects</label>
+                        <input type="search" id="prospectusSearch" placeholder="Search code or title&hellip;">
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <caption class="sr-only">Course offerings in the prospectus</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Code</th>
+                                    <th scope="col">Title</th>
+                                    <th scope="col">Units</th>
+                                    <th scope="col">Category</th>
+                                    <th scope="col">Year / Sem</th>
+                                </tr>
+                            </thead>
+                            <tbody id="prospectusBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="prospectusEmpty" class="empty hidden">No subjects match this filter.</div>
+                </div>
+            </section>
+
+            <!-- -------- STUDENT OFFERS VIEW -------- -->
+            <section id="view-offers" class="hidden" aria-labelledby="pageTitle">
+                <div class="panel panel-spaced">
+                    <div class="panel-head">
+                        <h3>Students</h3>
+                        <label class="sr-only" for="studentSearch">Search students</label>
+                        <input type="search" id="studentSearch" placeholder="Search student name or ID&hellip;">
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <caption class="sr-only">Approved students. Select a student to manage their subjects.</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Student No.</th>
+                                    <th scope="col">Name</th>
+                                    <th scope="col">Major</th>
+                                    <th scope="col">Year</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="studentEmpty" class="empty hidden">No students match this search.</div>
+                </div>
+
+                <div class="panel" id="studentDetailPanel" hidden>
+                    <div class="panel-head">
+                        <h3 id="studentDetailName">Student</h3>
+                        <button class="btn btn-primary" id="btnAddOffer" type="button">+ Offer Subject</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <caption class="sr-only">Subjects offered to the selected student</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Code</th>
+                                    <th scope="col">Title</th>
+                                    <th scope="col">Units</th>
+                                    <th scope="col">Category</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col"><span class="sr-only">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="offersBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="offersEmpty" class="empty hidden">No subjects offered yet.</div>
+                </div>
+            </section>
+
+            <section id="view-messages" class="hidden" aria-labelledby="pageTitle">
+                <div class="card">
+                    <div class="card-head">
+                        <h2>Messages</h2>
+                        <button class="btn btn-primary" type="button" id="btnNewMessage">New message</button>
+                    </div>
+                    <p class="muted-note">
+                        Direct messages between you and students. Sent messages are part of the
+                        student's record and cannot be edited after sending.
+                    </p>
+
+                    <div class="msg-layout">
+                        <div class="msg-list-wrap">
+                            <div class="table-responsive">
+                                <table>
+                                    <caption class="sr-only">Message threads with students</caption>
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Student</th>
+                                            <th scope="col">Subject</th>
+                                            <th scope="col">Last message</th>
+                                            <th scope="col">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="msgThreadsBody"></tbody>
+                                </table>
+                            </div>
+                            <div id="msgThreadsEmpty" class="empty hidden">
+                                No messages yet. Use “New message” to contact a student.
+                            </div>
+                        </div>
+
+                        <div class="msg-thread hidden" id="msgThreadPanel" aria-live="polite">
+                            <div class="msg-thread-head">
+                                <div>
+                                    <div class="msg-peer" id="msgPeerName">&nbsp;</div>
+                                    <div class="muted-note" id="msgPeerMeta">&nbsp;</div>
+                                </div>
+                                <button class="btn" type="button" id="btnCloseThread">Close</button>
+                            </div>
+                            <div class="msg-history" id="msgHistory"></div>
+                            <form class="msg-reply" id="msgReplyForm">
+                                <label class="sr-only" for="msgReplyBody">Reply</label>
+                                <textarea id="msgReplyBody" rows="3" required
+                                    placeholder="Write a reply to this student…"></textarea>
+                                <button class="btn btn-primary" type="submit" id="btnSendReply">Send reply</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card modal hidden" id="msgComposeModal" role="dialog" aria-modal="true"
+                    aria-labelledby="msgComposeTitle">
+                    <div class="card-head">
+                        <h2 id="msgComposeTitle">New message</h2>
+                    </div>
+                    <form id="msgComposeForm">
+                        <div class="field">
+                            <!-- Points at the visible search box, not the hidden
+                                 id holder. Labelling the hidden input left the
+                                 field a screen reader sees with no name at all. -->
+                            <label for="msgRecipientSearch">Student</label>
+                            <input type="text" id="msgRecipientSearch" autocomplete="off"
+                                placeholder="Search by name, ID number or email…"
+                                role="combobox" aria-expanded="false" aria-controls="msgRecipientList"
+                                aria-autocomplete="list">
+                            <input type="hidden" id="msgRecipient">
+                            <div class="msg-suggest hidden" id="msgRecipientList" role="listbox"
+                                aria-label="Matching students"></div>
+                        </div>
+                        <div class="field">
+                            <label for="msgSubject">Subject</label>
+                            <input type="text" id="msgSubject" required maxlength="150">
+                        </div>
+                        <div class="field">
+                            <label for="msgBody">Message</label>
+                            <textarea id="msgBody" rows="5" required></textarea>
+                        </div>
+                        <div id="msgComposeError" class="form-error" hidden></div>
+                        <div class="modal-actions">
+                            <button class="btn" type="button" id="btnCancelCompose">Cancel</button>
+                            <button class="btn btn-primary" type="submit" id="btnSendMessage">Send</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section id="view-appointments" class="hidden" aria-labelledby="pageTitle">
+                <div class="card">
+                    <div class="card-head">
+                        <h2>Appointments</h2>
+                        <button class="btn" type="button" id="btnRefreshAppt">Refresh</button>
+                    </div>
+                    <p class="muted-note">
+                        Consultation requests from students. Confirming a time does not
+                        notify the student automatically: reply in Messages so they see
+                        it, which is also their copy of the arrangement.
+                    </p>
+
+                    <div class="table-wrap">
+                        <table>
+                            <caption class="sr-only">Consultation requests</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Student</th>
+                                    <th scope="col">Topic</th>
+                                    <th scope="col">Preferred</th>
+                                    <th scope="col">Mode</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="apptBody">
+                                <tr><td colspan="6" class="empty-cell">Loading requests&hellip;</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="apptEmpty" class="empty-cell" hidden>
+                        No consultation requests.
+                    </div>
+                </div>
+
+                <div class="card hidden" id="apptDetailCard">
+                    <div class="card-head">
+                        <h2 id="apptDetailTitle">Request</h2>
+                        <button class="btn" type="button" id="btnCloseApptDetail">Close</button>
+                    </div>
+
+                    <dl class="appt-detail" id="apptDetail"></dl>
+
+                    <form id="apptActionForm">
+                        <div class="appt-when">
+                            <div class="field">
+                                <label for="apptStatus">Status</label>
+                                <select id="apptStatus">
+                                    <option value="pending">Pending</option>
+                                    <option value="confirmed">Confirmed</option>
+                                    <option value="declined">Declined</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="no_show">No show</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="apptDate">Confirmed date</label>
+                                <input type="date" id="apptDate">
+                            </div>
+                            <div class="field">
+                                <label for="apptTime">Confirmed time</label>
+                                <input type="time" id="apptTime" step="300">
+                                <p class="field-hint">Manila time (UTC+8).</p>
+                            </div>
+                        </div>
+                        <p class="muted-note" id="apptTimeNote"></p>
+                        <div class="field">
+                            <label for="apptNote">Note to the student</label>
+                            <textarea id="apptNote" rows="2" maxlength="500"
+                                placeholder="Shown in the student's portal, e.g. bring your registration form."></textarea>
+                        </div>
+                        <div class="appt-actions">
+                            <button class="btn" type="button" id="btnApptMessage">Message student</button>
+                            <button class="btn btn-primary" type="submit" id="btnApptSave">Save</button>
+                        </div>
+                        <p class="muted-note" id="apptSaveNote"></p>
+                    </form>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- ============ ADD OFFER MODAL ============ -->
+    <div class="overlay hidden" id="offerModal">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="offerModalTitle">
+            <h3 id="offerModalTitle">Offer a Subject</h3>
+            <p class="sub" id="offerModalSub">Assign a prospectus subject to this student.</p>
+
+            <div class="field">
+                <label for="offerCategory">Category</label>
+                <select id="offerCategory">
+                    <option value="ALL">All</option>
+                    <option value="MAJOR">Major</option>
+                    <option value="GE">GE</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="offerSubject">Subject</label>
+                <select id="offerSubject"></select>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-ghost" id="btnCancelOffer" type="button">Cancel</button>
+                <button class="btn btn-primary" id="btnConfirmOffer" type="button">Confirm Offer</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastHost" class="toast-host" role="status" aria-live="polite"></div>
+
+    <script src="registrar-dashboard.js"></script>
+</body>
+
+</html>

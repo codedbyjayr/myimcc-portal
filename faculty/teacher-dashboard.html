@@ -82,6 +82,12 @@
         </svg>
         Teaching Schedule
       </button>
+      <button class="nav-item" data-page="evaluations">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+        Student Feedback
+      </button>
       <button class="nav-item soon" title="Coming soon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 11.5a8.5 8.5 0 01-11.5 8L3 21l1.5-6.5A8.5 8.5 0 1121 11.5z" />
@@ -403,6 +409,39 @@
           </div>
         </section>
 
+        <!-- ================= STUDENT FEEDBACK / EVALUATIONS ================= -->
+        <section class="page" id="page-evaluations">
+          <div class="card card-pad">
+            <div class="card-head">
+              <div>
+                <h3>Student Evaluation Summary</h3>
+                <div class="sub">Anonymous aggregate feedback submitted by students for your classes</div>
+              </div>
+            </div>
+
+            <div id="evalSummaryCards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;"></div>
+
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Term</th>
+                    <th>Total Evals</th>
+                    <th>Clarity</th>
+                    <th>Knowledge</th>
+                    <th>Availability</th>
+                    <th>Fairness</th>
+                    <th>Punctuality</th>
+                    <th>Overall Rating</th>
+                  </tr>
+                </thead>
+                <tbody id="evalHistoryBody"></tbody>
+              </table>
+            </div>
+            <div id="noEvalMsg" class="empty-state" style="display:none;">No student evaluations recorded yet.</div>
+          </div>
+        </section>
+
         <!-- ================= PROFILE ================= -->
         <section class="page" id="page-profile">
           <div class="card card-pad" style="max-width:520px;">
@@ -482,6 +521,8 @@
         <button type="button" class="btn btn-primary" id="saveAddSubjectBtn">Save Subject</button>
       </div>
     </div>
+  </div>
+
   <!-- GRADE REVISION HISTORY & REVERT MODAL -->
   <div class="modal-overlay" id="gradeHistoryModal">
     <div class="modal-box" style="max-width:820px;width:95%;">
@@ -535,7 +576,10 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../env-config.js"></script>
   <script src="../shared/supabase-config.js"></script>
+<script src="../shared/identity.js"></script>
   <script src="../shared/loading.js"></script>
+  <script src="../shared/grading.js"></script>
+  <script src="../shared/faculty-chrome.js"></script>
   <script src="teacher-dashboard.js"></script>
 </body>
 

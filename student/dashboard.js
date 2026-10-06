@@ -588,51 +588,9 @@ async function loadEnrollment() {
   renderBillingSummary();
 }
 
-function parseSchedule(scheduleStr) {
-  if (!scheduleStr) return null;
-  const s = scheduleStr.trim().toUpperCase();
-
-  const match = s.match(/^([A-Z]{1,4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?\s*[-–]\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-  if (!match) return null;
-
-  const dayStr = match[1];
-  let startH = parseInt(match[2], 10);
-  const startM = parseInt(match[3], 10);
-  let startMeridiem = match[4];
-
-  let endH = parseInt(match[5], 10);
-  const endM = parseInt(match[6], 10);
-  const endMeridiem = match[7];
-
-  if (!startMeridiem && endMeridiem) {
-    startMeridiem = (startH < endH || startH === 12) ? endMeridiem : (endMeridiem === 'PM' ? 'AM' : 'PM');
-  }
-
-  if (startMeridiem === 'PM' && startH < 12) startH += 12;
-  if (startMeridiem === 'AM' && startH === 12) startH = 0;
-  if (endMeridiem === 'PM' && endH < 12) endH += 12;
-  if (endMeridiem === 'AM' && endH === 12) endH = 0;
-
-  let days = [];
-  if (dayStr === 'TTH' || dayStr === 'TH') {
-    days = dayStr === 'TTH' ? ['T', 'TH'] : ['TH'];
-  } else if (dayStr === 'MWF') {
-    days = ['M', 'W', 'F'];
-  } else if (dayStr === 'MW') {
-    days = ['M', 'W'];
-  } else {
-    days = dayStr.split('');
-  }
-
-  return { days, startMin: startH * 60 + startM, endMin: endH * 60 + endM };
-}
-
-function schedulesConflict(a, b) {
-  if (!a || !b) return false;
-  const sharedDays = a.days.some(d => b.days.includes(d));
-  if (!sharedDays) return false;
-  return a.startMin < b.endMin && b.startMin < a.endMin;
-}
+// Schedule parser & conflict detection — delegated to shared/datetime.js (SCHOOLTIME)
+const parseSchedule = SCHOOLTIME.parseSchedule;
+const schedulesConflict = SCHOOLTIME.schedulesConflict;
 
 function checkScheduleConflict(courseId) {
   const newCourse = state.courses.find(c => c.offering_id === courseId);
@@ -1543,11 +1501,15 @@ async function loadCor() {
       .eq('student_id', profile.id)
       .single();
 
-    const { data: sigs } = await supabaseClient
-      .from('cor_signatories')
-      .select('*')
-      .limit(1)
-      .single();
+    // ponytail: cor_signatories table consolidated into system_settings
+    const { data: sigRows } = await supabaseClient
+      .from('system_settings')
+      .select('key, value')
+      .in('key', ['cor_cashier_name', 'cor_registrar_name']);
+    const sigs = {
+      cashier_name: sigRows?.find(r => r.key === 'cor_cashier_name')?.value || '—',
+      registrar_name: sigRows?.find(r => r.key === 'cor_registrar_name')?.value || '—'
+    };
 
     renderCorPage({ profile, user, activeSchoolYear, activeSemester, courses, miscFees, billing, sigs });
   } catch (err) {

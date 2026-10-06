@@ -99,8 +99,8 @@
               <path d="M12 7v5l3 2" />
             </svg>
           </div>
-        <h1>Account Pending Approval</h1>
-        <p>Your registration request has been submitted to the administrator. You will be able to access your dashboard
+        <h1 id="pendingTitle">Account Pending Approval</h1>
+        <p id="pendingMessage">Your registration request has been submitted to the administrator. You will be able to access your dashboard
             once your account is reviewed and approved.</p>
         <button id="signOutBtn" class="btn-signout">Sign Out</button>
     </div>
@@ -108,6 +108,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../env-config.js"></script>
     <script src="../shared/supabase-config.js"></script>
+<script src="../shared/identity.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             let client;
@@ -117,6 +118,74 @@
                 await client.auth.signOut();
                 window.location.href = '../auth/login.html';
             });
+
+            const title = document.getElementById('pendingTitle');
+            const message = document.getElementById('pendingMessage');
+
+            // This page used to state "Pending Approval" unconditionally and
+            // never look at the account again. Two things went wrong: a user
+            // approved while sitting here kept reading "Pending Approval" until
+            // they navigated away by hand, and a user whose request had been
+            // rejected was told to wait for an approval that would never come.
+            // Both are worse than showing nothing, because they are confidently
+            // wrong.
+            //
+            // So re-read the profile on a timer and let resolveRoute decide.
+            // resolveRoute is the same function the auth guard and both portals
+            // use, so this page cannot drift from the routing they enforce.
+            async function refresh() {
+                const { data: { user } } = await client.auth.getUser();
+                if (!user) {
+                    window.location.href = '../auth/login.html';
+                    return;
+                }
+
+                const { data: profile, error } = await client
+                    .from('profiles')
+                    .select('status, role, is_active')
+                    .eq('id', user.id)
+                    .single();
+
+                // A transient read failure must not overwrite the page or trap
+                // the user. Leave the last known copy alone and try again.
+                if (error || !profile) return;
+
+                const route = window.IMCC && window.IMCC.resolveRoute
+                    ? window.IMCC.resolveRoute(profile)
+                    : null;
+                if (!route) return;
+
+                // IMCC.isCurrentPage stops a still-pending account, which
+                // resolves to this very page, from being redirected to itself
+                // and reloading the document on every tick below.
+                if (route.kind === 'redirect'
+                    && !(window.IMCC && window.IMCC.isCurrentPage
+                         && window.IMCC.isCurrentPage(route.url))) {
+                    window.location.href = route.url;
+                    return;
+                }
+
+                if (route.kind === 'rejected') {
+                    title.textContent = 'Access Request Not Approved';
+                    message.textContent =
+                        'An administrator reviewed your account and declined it. '
+                        + 'Waiting here will not change that. If you believe this is a '
+                        + 'mistake, contact the Registrar or your department administrator.';
+                    return;
+                }
+
+                if (route.kind === 'suspended') {
+                    title.textContent = 'Account Suspended';
+                    message.textContent =
+                        'Your portal access has been suspended. Please contact the '
+                        + 'Registrar or your department administrator to have it restored.';
+                }
+            }
+
+            await refresh();
+            // A waiting room that never re-checks is not a waiting room. 20s is
+            // often enough to feel live and rare enough to stay cheap.
+            setInterval(refresh, 20000);
         });
     </script>
 </body>

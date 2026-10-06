@@ -94,7 +94,14 @@
       <div class="nav-label">Quick Links</div>
       <div id="ssoLinksNav"></div>
 
-      <div class="nav-label">Account</div>
+      <div class="nav-label">Academics</div>
+      <button class="nav-item" data-page="schedule">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="17" rx="2" />
+          <path d="M3 9h18M8 2v4M16 2v4M8 14h3M8 17h6" />
+        </svg>
+        Class Schedule
+      </button>
       <button class="nav-item" data-page="attendance">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -107,6 +114,24 @@
           <path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" />
         </svg>
         Faculty Evaluation
+      </button>
+
+      <div class="nav-label">Account</div>
+      <button class="nav-item" data-page="help">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M9.2 9a2.8 2.8 0 015.6 0c0 1.9-2.8 2.4-2.8 2.4" />
+          <path d="M12 17h.01" />
+        </svg>
+        Help
+      </button>
+      <button class="nav-item" data-page="messages">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 4h16v12H8l-4 4z" />
+          <path d="M8 9h8M8 12h5" />
+        </svg>
+        Messages
+        <span class="nav-badge" id="msgUnreadBadge" hidden>0</span>
       </button>
       <button class="nav-item" data-page="profile">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -565,9 +590,8 @@
               <div class="legend-item"><span class="sdot" style="background:var(--amber);"></span>Pending</div>
               <div class="legend-item"><span class="sdot" style="background:var(--red);"></span>Action Required</div>
             </div>
-            <button class="btn-ghost" id="adminToggle">Toggle Admin View to simulate faculty approval</button>
           </div>
-        </section>
+          </section>
 
         <!-- ================= CERTIFICATE OF REGISTRATION ================= -->
         <section class="page" id="page-cor">
@@ -590,7 +614,269 @@
           </div>
         </section>
 
+        <!-- ================= HELP ================= -->
+        <section class="page" id="page-help">
+          <div class="card card-pad">
+            <div class="card-head">
+              <h3>Help</h3>
+            </div>
+            <p class="msg-note">
+              Ask how something works in the portal or at school. Answers come only
+              from the school's published articles, with the article shown so you can
+              check it. If the assistant cannot help, you can book a consultation and
+              a member of staff will be notified.
+            </p>
+
+            <div class="help-suggest" aria-label="Common questions">
+              <span class="help-suggest-label">Common questions:</span>
+              <button class="help-chip" type="button" data-ask="How do I enroll in a subject?">How do I enroll?</button>
+              <button class="help-chip" type="button" data-ask="How do I check my grades?">How do I check my grades?</button>
+              <button class="help-chip" type="button" data-ask="How do I get my online clearance?">Online clearance</button>
+              <button class="help-chip" type="button" data-ask="How do I view my class schedule?">Class schedule</button>
+              <button class="help-chip" type="button" data-ask="How do I see my balance and payment history?">Balance &amp; payments</button>
+              <button class="help-chip" type="button" data-ask="How do I get my Certificate of Registration?">Certificate of Registration</button>
+            </div>
+
+            <div class="help-log" id="helpLog" role="log" aria-live="polite"
+              aria-label="Conversation with the help assistant">
+              <article class="msg-item msg-item-bot">
+                <div class="msg-item-head"><span>Portal Assistant</span></div>
+                <div class="msg-item-body">
+                  Ask me a question about the portal or school processes, for example
+                  how to enroll or how to request your Certificate of Registration. I
+                  answer from published articles and show you which one I used.
+                </div>
+              </article>
+            </div>
+
+            <form class="msg-reply" id="helpForm">
+              <label class="sr-only" for="helpInput">Your question</label>
+              <textarea id="helpInput" rows="3" required maxlength="1000"
+                placeholder="Ask a question…"></textarea>
+              <button class="btn btn-primary" type="submit" id="helpSend">Ask</button>
+            </form>
+            <p class="help-footnote">
+              The assistant cannot read your grades, balances or medical information,
+              and cannot change anything on your account.
+            </p>
+          </div>
+
+          <!-- Booking. Shown once the assistant says it could not help, and
+               always available so a student is never forced to ask the bot
+               first. -->
+          <div class="card card-pad" id="bookCard">
+            <div class="card-head">
+              <h3>Book a consultation</h3>
+            </div>
+            <p class="msg-note">
+              Choose a date and a time that suits you. This is a request, not a fixed
+              booking: a member of the Registrar's Office confirms the time and replies
+              in Messages.
+            </p>
+
+            <form id="bookForm">
+              <div class="field">
+                <label for="bookTopic">What is it about?</label>
+                <select id="bookTopic" required>
+                  <option value="">Choose a topic…</option>
+                  <option value="enrollment">Enrollment</option>
+                  <option value="grades">Grades &amp; Evaluation</option>
+                  <option value="billing">Billing &amp; Payment</option>
+                  <option value="clearance">Online Clearance</option>
+                  <option value="schedule">Class Schedule</option>
+                  <option value="registration">Registration</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div class="book-when">
+                <div class="field">
+                  <label for="bookDate">Preferred date</label>
+                  <input type="date" id="bookDate" required>
+                </div>
+                <div class="field">
+                  <label for="bookTime">Preferred time</label>
+                  <input type="time" id="bookTime" required step="300">
+                  <p class="field-hint">Manila time (UTC+8).</p>
+                </div>
+              </div>
+              <p class="muted-note" id="bookManilaNote"></p>
+              <div class="field">
+                <label for="bookMode">How would you like to meet?</label>
+                <select id="bookMode" required>
+                  <option value="in_person">In person at the Registrar's Office</option>
+                  <option value="online">Online</option>
+                  <option value="phone">Phone call</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="bookNotes">Anything staff should know?</label>
+                <textarea id="bookNotes" rows="3" maxlength="1000"
+                  placeholder="Briefly describe the problem so staff can prepare."></textarea>
+              </div>
+              <div id="bookDeskWarning" class="msg-error" hidden></div>
+              <div id="bookError" class="msg-error" hidden></div>
+              <div class="msg-actions">
+                <button class="btn btn-primary" type="submit" id="bookSubmit">Request consultation</button>
+              </div>
+            </form>
+
+            <div id="bookListWrap" class="book-list-wrap" hidden>
+              <h4 class="book-list-title">Your requests</h4>
+              <div id="bookList"></div>
+            </div>
+          </div>
+        </section>
+
         <!-- ================= ATTENDANCE ================= -->
+          <section class="page" id="page-messages">
+            <div class="card card-pad">
+              <div class="card-head">
+                <h3>Messages</h3>
+              </div>
+              <p class="msg-note">
+                This is where the Registrar's Office replies to you. New
+                questions go to the portal assistant first, and anything it
+                cannot answer becomes a consultation request.
+              </p>
+
+              <!-- There is deliberately no composer here.
+                   The assistant on the Help page is the single front door for a
+                   question, so a student cannot start a second, untracked
+                   conversation that bypasses the articles staff have published.
+                   Staff still start conversations from their side, and the
+                   appointment trigger opens a thread when a request is filed;
+                   both arrive in the table below and can be replied to. -->
+              <div class="msg-greeting" id="msgGreeting" hidden>
+                <div class="msg-greeting-avatar" aria-hidden="true">IM</div>
+                <div class="msg-greeting-body">
+                  <div class="msg-greeting-name">Nothing here yet</div>
+                  <p>
+                    Once you book a consultation, this is where the confirmed
+                    time and any replies from staff will appear.
+                  </p>
+                  <p class="msg-actions">
+                    <button class="btn btn-primary" type="button" id="btnGotoHelp">
+                      Ask the assistant
+                    </button>
+                    <button class="btn" type="button" id="btnGotoBooking">
+                      Book a consultation
+                    </button>
+                  </p>
+                  <p class="msg-greeting-meta">
+                    Do not send personal or medical information over this channel.
+                  </p>
+                </div>
+              </div>
+
+              <div class="table-responsive">
+                <table class="sched-table">
+                  <caption class="sr-only">Your conversations with school staff</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">From</th>
+                      <th scope="col">Subject</th>
+                      <th scope="col">Last message</th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="msgThreadsBody">
+                    <tr>
+                      <td colspan="4" class="table-empty">Loading your messages…</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div id="msgEmpty" class="table-empty" hidden>
+                No conversations yet.
+              </div>
+
+              <!-- Only shown when the query reports more rows than were
+                   fetched. Without it the inbox silently dropped older
+                   conversations at the page limit and said nothing. -->
+              <div class="msg-load-more">
+                <button type="button" class="btn btn-outline" id="msgLoadMore" hidden>
+                  Load older messages
+                </button>
+                <p class="msg-note" id="msgOlderNote" hidden></p>
+              </div>
+            </div>
+
+
+          <div class="card card-pad msg-thread hidden" id="msgThreadPanel" aria-live="polite">
+            <div class="msg-thread-head">
+              <div>
+                <div class="msg-peer" id="msgPeerName">&nbsp;</div>
+                <div class="msg-note" id="msgPeerMeta">&nbsp;</div>
+              </div>
+              <button class="mini-btn" type="button" id="btnCloseThread">Close</button>
+            </div>
+            <div class="msg-history" id="msgHistory"></div>
+            <form class="msg-reply" id="msgReplyForm">
+              <label class="sr-only" for="msgReplyBody">Reply</label>
+              <textarea id="msgReplyBody" rows="3" required
+                placeholder="Write a reply…"></textarea>
+              <button class="btn btn-primary" type="submit" id="btnSendReply">Send reply</button>
+            </form>
+          </div>
+        </section>
+
+        <section class="page" id="page-schedule">
+          <div class="grid-4">
+            <div class="stat">
+              <div class="stat-top"><span class="stat-label">ENROLLED SUBJECTS</span></div>
+              <div class="stat-value" id="sched-subjects">—</div>
+              <div class="stat-sub">Currently enrolled</div>
+            </div>
+            <div class="stat" style="border-left-color:var(--green);">
+              <div class="stat-top"><span class="stat-label">WEEKLY SESSIONS</span></div>
+              <div class="stat-value" style="color:var(--green);" id="sched-sessions">—</div>
+              <div class="stat-sub">Class meetings per week</div>
+            </div>
+            <div class="stat" style="border-left-color:var(--amber);">
+              <div class="stat-top"><span class="stat-label">UNITS</span></div>
+              <div class="stat-value" style="color:var(--amber);" id="sched-units">—</div>
+              <div class="stat-sub">Total credit units</div>
+            </div>
+            <div class="stat" style="border-left-color:var(--red);">
+              <div class="stat-top"><span class="stat-label">UNSCHEDULED</span></div>
+              <div class="stat-value" style="color:var(--red);" id="sched-unscheduled">—</div>
+              <div class="stat-sub">Enrolled, no time set</div>
+            </div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="card-head">
+              <h3>Weekly Class Schedule</h3>
+              <button class="mini-btn" type="button" id="schedRefresh">Refresh</button>
+            </div>
+
+            <p class="sched-note" id="schedNote" hidden></p>
+
+            <div class="table-responsive">
+              <table class="sched-table">
+                <caption class="sr-only">
+                  Your enrolled subjects with meeting day, time, room and instructor
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Day</th>
+                    <th scope="col">Time</th>
+                    <th scope="col">Subject</th>
+                    <th scope="col">Units</th>
+                    <th scope="col">Room</th>
+                    <th scope="col">Instructor</th>
+                  </tr>
+                </thead>
+                <tbody id="schedBody">
+                  <tr>
+                    <td colspan="6" class="table-empty">Loading your schedule…</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <section class="page" id="page-attendance">
           <div class="grid-4">
             <div class="stat">
@@ -826,7 +1112,9 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../env-config.js"></script>
   <script src="../shared/supabase-config.js"></script>
-  <script src="../shared/loading.js"></script>
+<script src="../shared/identity.js"></script>
+<script src="../shared/datetime.js"></script>
+<script src="../shared/loading.js"></script>
   <script src="dashboard.js"></script>
 </body>
 
