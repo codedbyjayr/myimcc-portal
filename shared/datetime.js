@@ -255,6 +255,48 @@
     return formatSchoolDate(date);
   }
 
+  /**
+   * Parse a course schedule string (e.g. "MWF 9:00-10:00 AM" or "TTH 1:00-2:30 PM")
+   * into days and start/end minutes from midnight.
+   */
+  function parseSchedule(scheduleStr) {
+    if (!scheduleStr) return null;
+    const s = scheduleStr.trim().toUpperCase();
+    const match = s.match(/^([A-Z]{1,4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?\s*[-–]\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (!match) return null;
+
+    const dayStr = match[1];
+    let startH = parseInt(match[2], 10);
+    const startM = parseInt(match[3], 10);
+    let startMeridiem = match[4];
+    let endH = parseInt(match[5], 10);
+    const endM = parseInt(match[6], 10);
+    const endMeridiem = match[7];
+
+    if (!startMeridiem && endMeridiem) {
+      startMeridiem = (startH < endH || startH === 12) ? endMeridiem : (endMeridiem === 'PM' ? 'AM' : 'PM');
+    }
+    if (startMeridiem === 'PM' && startH < 12) startH += 12;
+    if (startMeridiem === 'AM' && startH === 12) startH = 0;
+    if (endMeridiem === 'PM' && endH < 12) endH += 12;
+    if (endMeridiem === 'AM' && endH === 12) endH = 0;
+
+    let days = [];
+    if (dayStr === 'TTH' || dayStr === 'TH') days = dayStr === 'TTH' ? ['T', 'TH'] : ['TH'];
+    else if (dayStr === 'MWF') days = ['M', 'W', 'F'];
+    else if (dayStr === 'MW') days = ['M', 'W'];
+    else days = dayStr.split('');
+
+    return { days, startMin: startH * 60 + startM, endMin: endH * 60 + endM };
+  }
+
+  function schedulesConflict(a, b) {
+    if (!a || !b) return false;
+    const sharedDays = a.days.some(d => b.days.includes(d));
+    if (!sharedDays) return false;
+    return a.startMin < b.endMin && b.startMin < a.endMin;
+  }
+
   const api = {
     SCHOOL_TIME_ZONE,
     SCHOOL_TIME_ZONE_LABEL,
@@ -271,9 +313,13 @@
     formatSchoolDate,
     formatSchoolTime,
     isPast,
-    relativeToNow
+    relativeToNow,
+    parseSchedule,
+    schedulesConflict
   };
 
   global.SCHOOLTIME = api;
+  global.parseSchedule = parseSchedule;
+  global.schedulesConflict = schedulesConflict;
   global.IMCC = Object.assign(global.IMCC || {}, api);
 })(typeof window !== 'undefined' ? window : globalThis);

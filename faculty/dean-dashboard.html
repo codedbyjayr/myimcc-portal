@@ -355,6 +355,34 @@
           <div class="card card-pad" style="margin-top:20px;">
             <div class="card-head">
               <div>
+                <h3>Student Evaluation Ratings</h3>
+                <div class="sub">Aggregated student feedback averages per instructor</div>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Faculty Member</th>
+                    <th>Term</th>
+                    <th>Evaluations</th>
+                    <th>Clarity</th>
+                    <th>Knowledge</th>
+                    <th>Availability</th>
+                    <th>Fairness</th>
+                    <th>Punctuality</th>
+                    <th>Overall Rating</th>
+                  </tr>
+                </thead>
+                <tbody id="deanEvalBody"></tbody>
+              </table>
+            </div>
+            <div id="noDeanEvalMsg" class="empty-state" style="display:none;">No student evaluations recorded yet.</div>
+          </div>
+
+          <div class="card card-pad" style="margin-top:20px;">
+            <div class="card-head">
+              <div>
                 <h3>Faculty Performance Log</h3>
                 <div class="sub">Evaluations, publications, and tenure-track notes</div>
               </div>
@@ -581,8 +609,11 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../env-config.js"></script>
   <script src="../shared/supabase-config.js"></script>
-<script src="../shared/identity.js"></script>
+  <script src="../shared/identity.js"></script>
+  <script src="../shared/datetime.js"></script>
   <script src="../shared/loading.js"></script>
+  <script src="../shared/grading.js"></script>
+  <script src="../shared/faculty-chrome.js"></script>
   <script src="dean-dashboard.js"></script>
 </body>
 

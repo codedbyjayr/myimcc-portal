@@ -8,34 +8,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // ── Shared helpers ──────────────────────────────────────────────────
+    // ── Shared helpers — delegated to shared/faculty-chrome.js (FC) ──
+    const getEl = FC.getEl;
+    const escapeHtml = FC.escapeHtml;
+    const fmtDate = FC.fmtDate;
+    const showToast = FC.showToast;
+    const isMissingTableError = FC.isMissingTableError;
     const peso = n => '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-    const getEl = id => document.getElementById(id);
-    function escapeHtml(str) {
-        return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-    function initials(name) {
-        return (name || '?').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
-    }
-    function fmtDate(iso) {
-        if (!iso) return '—';
-        return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-    }
-    let toastTimer;
-    function showToast(msg, isError = false) {
-        const t = getEl('toast');
-        if (!t) return;
-        t.textContent = msg;
-        t.classList.toggle('error', isError);
-        t.classList.add('show');
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
-    }
-    // Table-missing errors (schema not yet migrated) shouldn't look like app bugs.
-    function isMissingTableError(err) {
-        return err && (err.code === '42P01' || /relation .* does not exist/i.test(err.message || ''));
-    }
-    // Maps arbitrary status strings onto the four generic badge colors.
     function statusBadgeClass(status) {
         const map = {
             pending: 'badge-amber', approved: 'badge-green', active: 'badge-green', compliant: 'badge-green',
@@ -44,43 +23,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         return map[status] || 'badge-blue';
     }
 
-    // Reused verbatim from the student dashboard's enrollment conflict logic,
-    // so "MWF 9:00-10:00 AM"-style schedule strings parse identically.
-    function parseSchedule(scheduleStr) {
-        if (!scheduleStr) return null;
-        const s = scheduleStr.trim().toUpperCase();
-        const match = s.match(/^([A-Z]{1,4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?\s*[-–]\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-        if (!match) return null;
-
-        const dayStr = match[1];
-        let startH = parseInt(match[2], 10);
-        const startM = parseInt(match[3], 10);
-        let startMeridiem = match[4];
-        let endH = parseInt(match[5], 10);
-        const endM = parseInt(match[6], 10);
-        const endMeridiem = match[7];
-
-        if (!startMeridiem && endMeridiem) {
-            startMeridiem = (startH < endH || startH === 12) ? endMeridiem : (endMeridiem === 'PM' ? 'AM' : 'PM');
-        }
-        if (startMeridiem === 'PM' && startH < 12) startH += 12;
-        if (startMeridiem === 'AM' && startH === 12) startH = 0;
-        if (endMeridiem === 'PM' && endH < 12) endH += 12;
-        if (endMeridiem === 'AM' && endH === 12) endH = 0;
-
-        let days = [];
-        if (dayStr === 'TTH' || dayStr === 'TH') days = dayStr === 'TTH' ? ['T', 'TH'] : ['TH'];
-        else if (dayStr === 'MWF') days = ['M', 'W', 'F'];
-        else if (dayStr === 'MW') days = ['M', 'W'];
-        else days = dayStr.split('');
-
-        return { days, startMin: startH * 60 + startM, endMin: endH * 60 + endM };
-    }
-    function schedulesConflict(a, b) {
-        if (!a || !b) return false;
-        if (!a.days.some(d => b.days.includes(d))) return false;
-        return a.startMin < b.endMin && b.startMin < a.endMin;
-    }
+    // Schedule parser & conflict detection — delegated to shared/datetime.js (SCHOOLTIME)
+    const parseSchedule = (window.SCHOOLTIME && window.SCHOOLTIME.parseSchedule) || window.parseSchedule;
+    const schedulesConflict = (window.SCHOOLTIME && window.SCHOOLTIME.schedulesConflict) || window.schedulesConflict;
 
     const SEMESTER_ORDER = { '1st Semester': 1, '2nd Semester': 2, 'Summer': 3, 'Summer Semester': 3 };
     function termKey(schoolYear, semester) { return `${schoolYear || '—'} · ${semester || '—'}`; }
@@ -102,97 +47,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         instructorOptionsError: null,
     };
 
-    // ── Mobile Navigation Drawer ────────────────────────────────────────
-    function closeMobileNav() {
-        const sidebar = getEl('sidebar');
-        const overlay = getEl('sidebarOverlay');
-        if (sidebar) sidebar.classList.remove('open');
-        if (overlay) overlay.classList.remove('active');
-        document.body.style.overflow = '';
-    }
+    // ── Mobile Navigation — delegated to FC ──
+    FC.initMobileNav();
 
-    function openMobileNav() {
-        const sidebar = getEl('sidebar');
-        const overlay = getEl('sidebarOverlay');
-        if (sidebar) sidebar.classList.add('open');
-        if (overlay) overlay.classList.add('active');
-        if (window.innerWidth < 1024) {
-            document.body.style.overflow = 'hidden';
-        }
-    }
-
-    function toggleMobileNav() {
-        const sidebar = getEl('sidebar');
-        if (sidebar && sidebar.classList.contains('open')) {
-            closeMobileNav();
-        } else {
-            openMobileNav();
-        }
-    }
-
-    const menuToggle = getEl('menuToggle');
-    const sidebarClose = getEl('sidebarCloseBtn');
-    const sidebarOverlay = getEl('sidebarOverlay');
-
-    if (menuToggle) menuToggle.addEventListener('click', toggleMobileNav);
-    if (sidebarClose) sidebarClose.addEventListener('click', closeMobileNav);
-    if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeMobileNav);
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeMobileNav();
-    });
-
-    window.addEventListener('resize', () => {
-        if (window.innerWidth >= 1024) {
-            closeMobileNav();
-        }
-    });
-
-    // ── Navigation (goto) ───────────────────────────────────────────────
-    const titles = {
+    // ── Navigation — delegated to FC ──
+    const goto = FC.initNavigation({
         dashboard: 'Dashboard',
         classes: 'My Classes',
         faculty: 'Faculty & Schedule',
         financial: 'Financial Oversight',
         compliance: 'Student Compliance',
         profile: 'My Profile',
-    };
-
-    function goto(page) {
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        const pageEl = getEl('page-' + page);
-        if (pageEl) {
-            pageEl.classList.add('active');
-            if (window.imccFadeIn) window.imccFadeIn(pageEl);
-        }
-        document.querySelectorAll('.nav-item[data-page]').forEach(n => n.classList.toggle('active', n.dataset.page === page));
-        getEl('pageTitle').textContent = titles[page] || 'Dashboard';
-        getEl('userDropdown')?.classList.remove('open');
-        closeMobileNav();
+    }, function (page) {
         if (page === 'profile') renderProfile();
         if (page === 'classes') loadMyClasses();
-    }
-    document.querySelectorAll('[data-page]').forEach(el => el.addEventListener('click', () => goto(el.dataset.page)));
-    document.querySelectorAll('[data-goto]').forEach(el => el.addEventListener('click', () => goto(el.dataset.goto)));
-
-    // ── Dropdown + theme toggle ───────────────────────────────────────────
-    function setupDropdown(btnId, ddId) {
-        const btn = getEl(btnId), dd = getEl(ddId);
-        if (!btn || !dd) return;
-        btn.addEventListener('click', e => { e.stopPropagation(); dd.classList.toggle('open'); });
-        document.addEventListener('click', () => dd.classList.remove('open'));
-        dd.addEventListener('click', e => e.stopPropagation());
-    }
-    setupDropdown('userBtn', 'userDropdown');
-
-    getEl('themeToggle')?.addEventListener('click', () => {
-        darkMode = !darkMode;
-        document.body.setAttribute('data-theme', darkMode ? 'dark' : 'light');
-        getEl('themeLabel').textContent = darkMode ? 'Light' : 'Dark';
-        getEl('themeIcon').innerHTML = darkMode
-            ? '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>'
-            : '<path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/>';
     });
+
+    // ── Dropdown + theme — delegated to FC ──
+    FC.setupDropdown('userBtn', 'userDropdown');
+    FC.initThemeToggle();
 
     // ── Auth ────────────────────────────────────────────────────────────
     async function checkDeanAuth() {
@@ -210,12 +83,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         currentProfile = profile;
-        const name = profile.full_name || user.email;
-        getEl('sidebarName').textContent = name;
-        getEl('sidebarDept').textContent = profile.program || 'Dean\'s Office';
-        getEl('sidebarAvatar').textContent = initials(name);
-        getEl('topAvatar').textContent = initials(name);
-        getEl('topName').textContent = name.split(' ')[0] || 'Dean';
+        FC.setSidebarProfile(profile, user.email);
         return true;
     }
 
@@ -546,6 +414,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderWorkloads();
         renderAssignments();
         renderConflicts();
+        loadFacultyEvaluations();
     }
 
     function offeringsForSelectedTerm() {
@@ -785,6 +654,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     `).join('');
     }
 
+    // ── Faculty Student Evaluations ─────────────────────────────────────
+    async function loadFacultyEvaluations() {
+        const { data, error } = await supabaseClient
+            .from('instructor_evaluation_summary')
+            .select('*')
+            .order('school_year', { ascending: false });
+
+        renderFacultyEvaluations(data || []);
+    }
+
+    function renderFacultyEvaluations(rows) {
+        const body = getEl('deanEvalBody');
+        const noMsg = getEl('noDeanEvalMsg');
+        if (!body) return;
+
+        if (!rows || !rows.length) {
+            body.innerHTML = '';
+            if (noMsg) noMsg.style.display = 'block';
+            return;
+        }
+
+        if (noMsg) noMsg.style.display = 'none';
+        body.innerHTML = rows.map(r => `
+            <tr>
+                <td><b>${escapeHtml(r.instructor_name || 'Unknown')}</b></td>
+                <td>${escapeHtml(r.school_year)} · ${escapeHtml(r.semester)}</td>
+                <td>${r.total_evaluations || 0}</td>
+                <td>${r.avg_teaching_clarity != null ? Number(r.avg_teaching_clarity).toFixed(2) : '—'}</td>
+                <td>${r.avg_knowledge != null ? Number(r.avg_knowledge).toFixed(2) : '—'}</td>
+                <td>${r.avg_availability != null ? Number(r.avg_availability).toFixed(2) : '—'}</td>
+                <td>${r.avg_fairness != null ? Number(r.avg_fairness).toFixed(2) : '—'}</td>
+                <td>${r.avg_punctuality != null ? Number(r.avg_punctuality).toFixed(2) : '—'}</td>
+                <td><b style="color:var(--brand);">${r.avg_overall != null ? Number(r.avg_overall).toFixed(2) + ' / 5.00' : '—'}</b></td>
+            </tr>
+        `).join('');
+    }
+
     // ══════════════════════════════════════════════════════════════════
     // STUDENT COMPLIANCE
     // ══════════════════════════════════════════════════════════════════
@@ -932,20 +838,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let selectedMyOffering = null;
     let myRoster = [];
 
-    // Standard Philippine collegiate 0–100 → 1.00–5.00 conversion matching official grading_scale
-    function computeEquivalent(avg) {
-        if (avg === null || avg === undefined || isNaN(avg)) return null;
-        if (avg >= 96) return 1.00;
-        if (avg >= 94) return 1.25;
-        if (avg >= 92) return 1.50;
-        if (avg >= 89) return 1.75;
-        if (avg >= 86) return 2.00;
-        if (avg >= 83) return 2.25;
-        if (avg >= 80) return 2.50;
-        if (avg >= 76) return 2.75;
-        if (avg >= 75) return 3.00;
-        return 5.00;
-    }
+    // Grade helpers — delegated to shared/grading.js
+    const computeEquivalent = Grading.computeEquivalent;
 
     let deanCourseScope = 'my';
 
@@ -1126,26 +1020,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Equal-weighted average of whichever grading periods have been entered so
-    // far (Pre-Lim, Midterm, Semi-Final, Final). Adjust the weights below if
-    // your institution weighs periods unevenly (e.g. Final worth more).
-    function myPeriodAverage(r) {
-        const periods = [r.prelim, r.midterm, r.semifinal, r.final].filter(v => v !== null && v !== undefined);
-        if (!periods.length) return null;
-        return periods.reduce((s, v) => s + Number(v), 0) / periods.length;
-    }
-
-    function previewMyEquivalent(r) {
-        const eq = computeEquivalent(myPeriodAverage(r));
-        return eq === null ? '—' : eq.toFixed(2);
-    }
-
-    function previewMyRemarkBadge(r) {
-        if (r.final === null || r.final === undefined) return '<span class="badge badge-amber">Pending</span>';
-        const eq = computeEquivalent(myPeriodAverage(r));
-        const remark = eq !== null && eq <= 3.00 ? 'Passed' : 'Failed';
-        return `<span class="badge ${remark === 'Passed' ? 'badge-green' : 'badge-red'}">${remark}</span>`;
-    }
+    // Grade preview — delegated to shared/grading.js
+    function myPeriodAverage(r) { return Grading.periodAverage(r); }
+    function previewMyEquivalent(r) { return Grading.previewEquivalent(r); }
+    function previewMyRemarkBadge(r) { return Grading.previewRemarkBadge(r); }
 
     getEl('saveMyGradesBtn').addEventListener('click', async () => {
         if (!selectedMyOffering || !myRoster.length) return;
@@ -1157,12 +1035,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         for (const r of myRoster) {
             const equivalent = computeEquivalent(myPeriodAverage(r));
-            const remark = r.final === null || r.final === undefined ? 'Pending' : (equivalent <= 3.00 ? 'Passed' : 'Failed');
+            const remark = Grading.computeRemark(r);
 
             const payload = {
                 student_id: r.student.id, offering_id: selectedMyOffering.id,
                 prelim: r.prelim, midterm: r.midterm, semifinal: r.semifinal, final: r.final,
                 equivalent, remark,
+                graded_by: currentUserId, graded_at: new Date().toISOString(),
             };
 
             const { data, error } = await supabaseClient
@@ -1278,108 +1157,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function renderDeanHistoryRows(rows, targetStudent) {
-        const body = getEl('gradeHistoryBody');
-        const noMsg = getEl('noGradeHistoryMsg');
-
-        if (!rows.length) {
-            body.innerHTML = '';
-            noMsg.style.display = 'block';
-            return;
-        }
-
-        noMsg.style.display = 'none';
-        body.innerHTML = rows.map((h) => {
-            const dt = new Date(h.created_at).toLocaleString('en-US', {
-                month: 'short', day: 'numeric', year: 'numeric',
-                hour: 'numeric', minute: '2-digit', hour12: true
-            });
-            const typeLabel = h.change_type === 'revert' ? 'Reverted' : (h.change_type === 'initial_entry' ? 'Initial' : 'Updated');
-            const typeClass = h.change_type || 'before_update';
-            const studentCol = targetStudent ? '' : `<td><b>${escapeHtml(h.student_name || 'N/A')}</b><br><small style="color:var(--ink-500);">${escapeHtml(h.student_no || '')}</small></td>`;
-
-            return `
-                <tr>
-                    <td style="white-space:nowrap;font-size:11.5px;">${escapeHtml(dt)}</td>
-                    ${studentCol}
-                    <td style="font-size:12px;">${escapeHtml(h.changed_by_name || 'Faculty / Dean')}</td>
-                    <td><span class="history-badge ${typeClass}">${typeLabel}</span></td>
-                    <td><span class="history-chip">${h.prelim != null ? Number(h.prelim).toFixed(2) : '—'}</span></td>
-                    <td><span class="history-chip">${h.midterm != null ? Number(h.midterm).toFixed(2) : '—'}</span></td>
-                    <td><span class="history-chip">${h.semifinal != null ? Number(h.semifinal).toFixed(2) : '—'}</span></td>
-                    <td><span class="history-chip">${h.final != null ? Number(h.final).toFixed(2) : '—'}</span></td>
-                    <td><b>${h.equivalent != null ? Number(h.equivalent).toFixed(2) : '—'}</b></td>
-                    <td>${h.remark ? `<span class="badge ${h.remark === 'Passed' ? 'badge-green' : (h.remark === 'Failed' ? 'badge-red' : 'badge-amber')}">${escapeHtml(h.remark)}</span>` : '—'}</td>
-                    <td style="text-align:center;white-space:nowrap;">
-                        <button type="button" class="btn btn-outline revert-btn" data-hist-id="${h.id}" data-student-id="${h.student_id}" style="padding:3px 8px;font-size:11.5px;color:var(--pink-600);border-color:var(--pink-200);" title="Revert to this past version">
-                            ⏪ Revert
-                        </button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-
-        body.querySelectorAll('.revert-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const histId = btn.dataset.histId;
-                const studentId = btn.dataset.studentId;
-                const histEntry = rows.find(x => x.id === histId);
-                executeDeanRevert(histEntry, targetStudent || myRoster.find(x => x.student.id === studentId));
-            });
+        Grading.renderHistoryRows(rows, targetStudent, (histEntry, studentId) => {
+            executeDeanRevert(histEntry, targetStudent || myRoster.find(x => x.student.id === studentId));
         });
     }
 
     async function executeDeanRevert(histEntry, studentRosterItem) {
-        if (!histEntry) return;
-        const studentName = histEntry.student_name || studentRosterItem?.student?.full_name || 'student';
-        const formattedDate = new Date(histEntry.created_at).toLocaleString('en-US', {
-            month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
-        });
-        
-        const reason = prompt(
-            `Confirm Reverting Grade for ${studentName} (Dean Oversight)\n\nThis will restore the previous scores recorded on ${formattedDate}:\n• Pre-Lim: ${histEntry.prelim ?? '—'}\n• Midterm: ${histEntry.midterm ?? '—'}\n• Semi-Final: ${histEntry.semifinal ?? '—'}\n• Final: ${histEntry.final ?? '—'}\n• Equivalent: ${histEntry.equivalent ?? '—'}\n• Remark: ${histEntry.remark ?? '—'}\n\nEnter reason / note for Dean audit log (optional):`,
-            `Dean revert to version from ${formattedDate}`
-        );
-        if (reason === null) return; // User cancelled prompt
+        await Grading.executeRevert({
+            supabaseClient,
+            histEntry,
+            studentRosterItem,
+            roleLabel: '(Dean Oversight)',
+            showToast,
+            async onDone(data, item) {
+                if (item) {
+                    renderMyRoster();
+                    if (getEl('gradeHistoryModal').classList.contains('open')) {
+                        openDeanStudentGradeHistory(item);
+                    }
+                } else if (selectedMyOffering) {
+                    selectMyCourse(selectedMyOffering.id);
+                }
+                showToast('Grade successfully reverted!');
 
-        showToast('Reverting grade…');
-
-        const { data, error } = await supabaseClient.rpc('revert_grade', {
-            p_history_id: histEntry.id,
-            p_reason: reason.trim() || 'Dean revert to previous version'
-        });
-
-        if (error) {
-            showToast('Failed to revert: ' + error.message, true);
-            return;
-        }
-
-        // Update in-memory roster if present
-        if (studentRosterItem) {
-            studentRosterItem.prelim = histEntry.prelim != null ? Number(histEntry.prelim) : null;
-            studentRosterItem.midterm = histEntry.midterm != null ? Number(histEntry.midterm) : null;
-            studentRosterItem.semifinal = histEntry.semifinal != null ? Number(histEntry.semifinal) : null;
-            studentRosterItem.final = histEntry.final != null ? Number(histEntry.final) : null;
-            studentRosterItem.equivalent = histEntry.equivalent != null ? Number(histEntry.equivalent) : null;
-            studentRosterItem.remark = histEntry.remark || 'Pending';
-            if (data && data.id) studentRosterItem.gradeId = data.id;
-
-            renderMyRoster();
-            // Refresh modal if open
-            if (getEl('gradeHistoryModal').classList.contains('open')) {
-                openDeanStudentGradeHistory(studentRosterItem);
+                // Refresh overview
+                const { data: gradeRows } = await supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)');
+                state.grades = gradeRows || [];
+                renderOverview();
+                renderGradReadiness();
             }
-        } else {
-            // Refresh offering
-            if (selectedMyOffering) selectMyCourse(selectedMyOffering.id);
-        }
-
-        showToast(`Grade for ${studentName} successfully reverted!`);
-
-        // Refresh overview
-        const { data: gradeRows } = await supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)');
-        state.grades = gradeRows || [];
-        renderOverview();
-        renderGradReadiness();
+        });
     }
 
     getEl('gradeHistoryCloseBtn')?.addEventListener('click', () => getEl('gradeHistoryModal').classList.remove('open'));
@@ -1908,19 +1715,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (cfg.onSaved) cfg.onSaved(savedRow);
     });
 
-    // ── Quick Links (SSO) — same sso_links table the student portal uses ──
+    // ── Quick Links (SSO) — delegated to FC ──
     async function loadSSOLinks() {
-        const { data: links } = await supabaseClient.from('sso_links').select('*').eq('is_active', true).order('sort_order');
-        const nav = getEl('ssoLinksNav');
-        if (!nav) return;
-        const role = currentProfile?.role || 'dean';
-        const visible = (links || []).filter(l => (l.roles || '').split(',').map(r => r.trim()).includes(role))
-            .filter(l => (l.label || '').trim().toLowerCase() !== 'library');
-        nav.innerHTML = visible.map(l => `
-      <a href="${l.url}" target="_blank" class="nav-item" style="text-decoration:none;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-        ${escapeHtml(l.label)}
-      </a>`).join('') || '<div class="nav-item soon" style="opacity:.4;">No links configured</div>';
+        await FC.loadSSOLinks(supabaseClient, currentProfile?.role || 'dean');
     }
 
     // ── Logout ──────────────────────────────────────────────────────────

@@ -298,6 +298,30 @@ eq(T.formatSchoolDate('2026-06-15T01:00:00Z').length > 0, true, 'date-only forma
   eq(T.isSlotNow(slot('Mon', '23:30:00', '23:59:00'), { weekday: 'Mon', minutes: 1439 }), false, 'class is over at its exclusive 23:59 end');
 })();
 
+(() => {
+  // parseSchedule & schedulesConflict
+  eq(T.parseSchedule(null), null, 'null schedule is null');
+  eq(T.parseSchedule(''), null, 'empty schedule is null');
+  eq(T.parseSchedule('invalid text'), null, 'invalid schedule is null');
+
+  const mwf = T.parseSchedule('MWF 9:00-10:00 AM');
+  eq(mwf.days.join(','), 'M,W,F', 'MWF parsed to M,W,F');
+  eq(mwf.startMin, 9 * 60, 'MWF start at 540 min');
+  eq(mwf.endMin, 10 * 60, 'MWF end at 600 min');
+
+  const tth = T.parseSchedule('TTH 1:00-2:30 PM');
+  eq(tth.days.join(','), 'T,TH', 'TTH parsed to T,TH');
+  eq(tth.startMin, 13 * 60, 'TTH start at 13:00 (780 min)');
+  eq(tth.endMin, 14 * 60 + 30, 'TTH end at 14:30 (870 min)');
+
+  const overlapMwf = T.parseSchedule('MWF 9:30-10:30 AM');
+  eq(T.schedulesConflict(mwf, overlapMwf), true, 'overlapping MWF schedules conflict');
+  eq(T.schedulesConflict(mwf, tth), false, 'MWF and TTH do not conflict');
+
+  const adjacentMwf = T.parseSchedule('MWF 10:00-11:00 AM');
+  eq(T.schedulesConflict(mwf, adjacentMwf), false, 'back-to-back schedules do not conflict');
+})();
+
 console.log(`\nschool datetime (Asia/Manila): ${passed} passed, ${failures.length} failed\n`);
 if (failures.length) {
   for (const f of failures) console.error('  FAIL ' + f + '\n');
