@@ -22,7 +22,7 @@ if (!navigation) {
   process.exit(1);
 }
 const NAV = new RegExp(
-  navigation[1].split("' + '").map(s => s.replace(/\\\\/g, '\\').replace(/\\'/g, "'")).join(''),
+  navigation[1].split("' + '").map(s => s.replace(/\\'/g, "'").replace(/\\\\/g, '\\')).join(''),
   'i'
 );
 
