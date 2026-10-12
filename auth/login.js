@@ -256,7 +256,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.warn("OAuth callback timeout - no valid session established.");
             window.history.replaceState({}, document.title, window.location.pathname);
             if (ssoBtn) ssoBtn.disabled = false;
-            if (ssoBtnText) ssoBtnText.textContent = 'Sign In with Google / School Account';
+            if (ssoBtnText) ssoBtnText.textContent = 'Sign In with Google Account';
             showError(ssoError, 'Sign-in session expired or invalid. Please click Sign In again.');
             showStep(stepSso);
           }
@@ -270,35 +270,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     ssoForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       hideError(ssoError);
-      const email = emailInput.value.trim();
+      const email = emailInput ? emailInput.value.trim() : '';
 
-      if (!email) {
-        showError(ssoError, 'Please enter your official institutional email.');
-        return;
+      const queryParams = {
+        hd: 'imcc.edu.ph' // Restricts Google auth strictly to the school domain
+      };
+
+      if (email) {
+        if (window.IMCC.isDemoEmail(email) && window.IMCC.demoModeEnabled()) {
+          await loginAsDemoStudent();
+          return;
+        }
+
+        if (!isAllowedDomain(email)) {
+          showStep(stepUnauthorized);
+          return;
+        }
+
+        activeEmail = email;
+        queryParams.login_hint = email;
       }
 
-      if (window.IMCC.isDemoEmail(email) && window.IMCC.demoModeEnabled()) {
-        await loginAsDemoStudent();
-        return;
-      }
-
-      if (!isAllowedDomain(email)) {
-        showStep(stepUnauthorized);
-        return;
-      }
-
-      activeEmail = email;
       ssoBtn.disabled = true;
+      const ssoBtnText = document.getElementById('ssoBtnText');
+      if (ssoBtnText) ssoBtnText.textContent = 'Connecting to Google...';
 
       try {
         const redirectUrl = window.location.origin + window.location.pathname;
         const { error: oauthError } = await supabaseClient.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            queryParams: {
-              login_hint: email,
-              hd: 'imcc.edu.ph' // Restricts/hints the Google auth window strictly to the school domain
-            },
+            queryParams,
             redirectTo: redirectUrl, // Points directly to the login page to capture the callback
           },
         });
@@ -306,6 +308,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } catch (err) {
         showError(ssoError, err.message || 'Authentication failed.');
         ssoBtn.disabled = false;
+        if (ssoBtnText) ssoBtnText.textContent = 'Sign In with Google Account';
       }
     });
   }
