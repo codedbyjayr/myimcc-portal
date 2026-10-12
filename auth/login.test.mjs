@@ -25,6 +25,7 @@ const deadSelectors = ['.password-wrap', '.eye-btn', '.remember', '.card-stack',
 for (const selector of deadSelectors) {
   assert(!css.includes(selector), `Dead selector ${selector} should not exist in login.css`);
 }
+assert(!css.includes('.login-right { display: none; }'), 'login-right should not be hidden on mobile');
 
 // 3. Google OAuth hd constraint present in login.js
 assert(js.includes("hd: 'imcc.edu.ph'"), "Missing hd: 'imcc.edu.ph' constraint in login.js");
