@@ -21,7 +21,7 @@ for (const id of requiredIds) {
 }
 
 // 2. Dead AI-slop / zombie rules purged from CSS
-const deadSelectors = ['.password-wrap', '.eye-btn', '.remember', '.card-stack', '.mini-card', '.mc-bar'];
+const deadSelectors = ['.password-wrap', '.eye-btn', '.remember', '.card-stack', '.mini-card', '.mc-bar', '.right-support', '.portal-info-panel'];
 for (const selector of deadSelectors) {
   assert(!css.includes(selector), `Dead selector ${selector} should not exist in login.css`);
 }
