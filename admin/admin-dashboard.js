@@ -18,6 +18,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const searchInput = document.getElementById('searchInput');
     const courseFilter = document.getElementById('courseFilter');
     const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+    if (window.imccTableSkeleton) {
+        if (pendingTableBody) pendingTableBody.innerHTML = window.imccTableSkeleton(5, 2);
+        if (approvedTableBody) approvedTableBody.innerHTML = window.imccTableSkeleton(5, 4);
+    }
 
     let currentAdminId = null;
 

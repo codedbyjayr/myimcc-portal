@@ -1,79 +1,66 @@
 /* =====================================================================
-   MyIMCC Portal — Smooth Loading System
-   Shared helpers: branded preloader, skeleton builders, and fade-ins.
-
-   Usage:
-     1. Include shared/loading.css in <head>.
-     2. Include shared/loading.js after the CSS.
-     3. Call `imccHidePreloader()` in your page script once data is
-        rendered, or let it auto-hide on window 'load'.
-     4. For dashboard sections: wrap container with class="imcc-section"
-        or call `imccFadeIn(el)` to play the fade-in.
-        Use `imccSkeleton(lines)` to insert shimmer placeholders.
+   MyIMCC Portal — Professional Loading & Skeleton System
+   Shared helpers: non-blocking top progress bar, skeleton builders, and fade-ins.
    ===================================================================== */
 
 (function () {
   'use strict';
 
-  var MIN_DISPLAY_MS = 450;   // keep preloader visible at least this long
-  var startedAt = Date.now();
   var preloaderEl = null;
   var hidden = false;
 
-  /* Build the preloader DOM once */
+  /* Build the non-blocking top progress bar */
   function ensurePreloader() {
     if (preloaderEl) return preloaderEl;
-    var el = document.createElement('div');
-    el.className = 'imcc-preloader';
-    el.id = 'imccPreloader';
-    el.innerHTML =
-      '<div class="pl-mark">MI</div>' +
-      '<div class="pl-ring"></div>' +
-      '<div class="pl-text">Loading MyIMCC…</div>';
-    document.body.insertBefore(el, document.body.firstChild);
+    var el = document.getElementById('imccPreloader');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'imcc-preloader';
+      el.id = 'imccPreloader';
+      el.setAttribute('role', 'progressbar');
+      el.setAttribute('aria-label', 'Loading page content');
+      el.innerHTML = '<div class="pl-bar"></div>';
+      document.body.insertBefore(el, document.body.firstChild);
+    }
     preloaderEl = el;
     return el;
   }
 
-  /* Expose: hide the preloader with a smooth fade */
+  /* Expose: hide the preloader smoothly without artificial delay */
   window.imccHidePreloader = function (immediate) {
     var wrapUp = function () {
-      if (hidden || !preloaderEl) return;
+      var el = preloaderEl || document.getElementById('imccPreloader');
+      if (!el) return;
       hidden = true;
-      preloaderEl.classList.add('hidden');
+      el.classList.add('hidden');
       setTimeout(function () {
-        if (preloaderEl && preloaderEl.parentNode) {
-          preloaderEl.parentNode.removeChild(preloaderEl);
+        if (el && el.parentNode) {
+          el.parentNode.removeChild(el);
         }
-      }, 550);
+      }, immediate ? 0 : 260);
     };
 
     if (immediate) { wrapUp(); return; }
-
-    var elapsed = Date.now() - startedAt;
-    var remaining = Math.max(0, MIN_DISPLAY_MS - elapsed);
-    setTimeout(wrapUp, remaining);
+    // Zero artificial delay — hide as soon as ready
+    wrapUp();
   };
 
-  /* Expose: force the preloader to appear (e.g. before a long load) */
+  /* Expose: force the preloader to appear during async fetches */
   window.imccShowPreloader = function () {
     hidden = false;
     var el = ensurePreloader();
     el.classList.remove('hidden');
-    startedAt = Date.now();
   };
 
-  /* Expose: fade a section in (use on containers updated by JS) */
+  /* Expose: fade a section in smoothly */
   window.imccFadeIn = function (el, slow) {
     if (!el) return;
     el.classList.remove('imcc-fade-in', 'imcc-fade-in-slow');
-    // Force reflow so the animation restarts even on repeated updates.
     void el.offsetWidth;
     el.classList.add(slow ? 'imcc-fade-in-slow' : 'imcc-fade-in');
   };
 
-  /* Expose: skeleton placeholders builder
-     imccSkeleton({ title, avatar, lines, rows, card, chip }) */
+  /* Expose: skeleton placeholders builder */
   window.imccSkeleton = function (opts) {
     opts = opts || {};
     var html = '';
@@ -92,7 +79,7 @@
       html += '<div class="imcc-skel-title imcc-skel"></div>';
     }
     for (var i = 0; i < (opts.lines || 0); i++) {
-      var w = 100 - ((i % 3) * 12);
+      var w = 100 - ((i % 3) * 14);
       html += '<div class="imcc-skel-line imcc-skel" style="width:' + w + '%;"></div>';
     }
     for (var j = 0; j < (opts.rows || 0); j++) {
@@ -104,26 +91,42 @@
     return html;
   };
 
-  /* Expose: empty a container and stamp skeleton rows into it */
-  window.imccWithSkeleton = function (container, opts) {
-    if (!container) return;
-    container.innerHTML = imccSkeleton(opts || { card: true, lines: 3, rows: 3 });
+  /* Expose: table rows skeleton builder */
+  window.imccTableSkeleton = function (cols, rows) {
+    cols = cols || 4;
+    rows = rows || 4;
+    var out = '';
+    for (var r = 0; r < rows; r++) {
+      out += '<tr class="imcc-skel-table-row">';
+      for (var c = 0; c < cols; c++) {
+        var w = 55 + ((c * 19 + r * 11) % 35);
+        out += '<td><div class="imcc-skel imcc-skel-line" style="width:' + w + '%;"></div></td>';
+      }
+      out += '</tr>';
+    }
+    return out;
   };
 
-  /* Auto-create the preloader on first meaningful paint. */
+  /* Expose: empty a container and stamp skeleton into it */
+  window.imccWithSkeleton = function (container, opts) {
+    if (!container) return;
+    container.innerHTML = imccSkeleton(opts || { lines: 3, rows: 2 });
+  };
+
+  /* Auto-create top progress bar */
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', ensurePreloader);
   } else {
     ensurePreloader();
   }
 
-  /* Fallback: hide after 'load' even if the page script never calls it. */
+  /* Fallback: hide after window load */
   window.addEventListener('load', function () {
-    imccHidePreloader();
+    window.imccHidePreloader();
   });
 
-  /* Safety net in case neither auth guard nor data calls it. */
+  /* Safety net in case no script calls it */
   setTimeout(function () {
-    imccHidePreloader(true);
-  }, 8000);
+    window.imccHidePreloader(true);
+  }, 4000);
 })();
