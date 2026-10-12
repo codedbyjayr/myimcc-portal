@@ -188,9 +188,9 @@ a { color: inherit; }
   background: radial-gradient(110% 110% at 85% 15%, #38121f 0%, #200d17 48%, #140810 100%);
   border-left: 1px solid rgba(231, 51, 138, .2);
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 56px 48px;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 32px;
   position: relative;
   overflow: hidden;
 }
@@ -205,47 +205,22 @@ a { color: inherit; }
   background: radial-gradient(circle, rgba(231, 51, 138, 0.12) 0%, transparent 70%);
   pointer-events: none;
 }
-.right-content {
-  max-width: 440px;
-  margin: 0 auto;
+.right-inner {
   width: 100%;
+  max-width: 390px;
   position: relative;
   z-index: 2;
 }
 
-.right-seal {
-  margin-bottom: 24px;
-}
-.seal-svg {
-  width: 72px;
-  height: 72px;
-  display: block;
-  filter: drop-shadow(0 4px 16px rgba(231, 51, 138, 0.25));
-}
-
-.right-header {
-  margin-bottom: 24px;
-}
-.right-kicker {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--pink-500);
-  margin-bottom: 6px;
-}
-.right-header h2 {
-  font-size: 28px;
-  font-weight: 800;
-  color: #fff;
-  line-height: 1.25;
-  margin: 0 0 6px;
-}
-.right-subhead {
-  font-size: 13.5px;
-  color: var(--ink-400);
-  font-weight: 600;
+.brand-seal-img {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  background: #000;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
 }
 
 .creed-card {
@@ -253,8 +228,8 @@ a { color: inherit; }
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-left: 3px solid var(--pink-500);
   border-radius: 10px;
-  padding: 18px 20px;
-  margin-bottom: 24px;
+  padding: 16px 18px;
+  margin-bottom: 22px;
   backdrop-filter: blur(8px);
 }
 .creed-label {
@@ -263,7 +238,7 @@ a { color: inherit; }
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--pink-500);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 .creed-body {
   font-size: 13px;
@@ -274,7 +249,7 @@ a { color: inherit; }
 }
 
 .academic-division-wrap {
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 .division-title {
   font-size: 11px;
@@ -282,12 +257,12 @@ a { color: inherit; }
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--ink-400);
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 .division-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 7px;
 }
 .div-tag {
   font-size: 11.5px;
@@ -295,7 +270,7 @@ a { color: inherit; }
   color: var(--ink-100);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 5px 11px;
+  padding: 4px 10px;
   border-radius: 6px;
   transition: border-color .15s ease, background .15s ease;
 }
@@ -304,13 +279,12 @@ a { color: inherit; }
   border-color: rgba(231, 51, 138, 0.4);
 }
 
-.right-footer {
-  text-align: center;
-  font-size: 11.5px;
-  color: var(--ink-600);
-  font-weight: 500;
-  letter-spacing: .02em;
-  margin-top: 32px;
+.login-right .divider span {
+  background: #190a13;
+  color: var(--ink-400);
+}
+.login-right .divider::before {
+  background: rgba(231, 51, 138, 0.2);
 }
 
 /* ---------------- DEMO ACCESS CARD ---------------- */
