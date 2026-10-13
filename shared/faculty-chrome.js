@@ -91,15 +91,25 @@
   function initThemeToggle() {
     var toggle = getEl('themeToggle');
     if (!toggle) return;
-    toggle.addEventListener('click', function () {
-      darkMode = !darkMode;
-      doc.body.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+    function syncTheme(dark) {
+      darkMode = dark;
+      var theme = dark ? 'dark' : 'light';
+      doc.body.setAttribute('data-theme', theme);
+      doc.documentElement.setAttribute('data-theme', theme);
+      try { localStorage.setItem('myimcc_theme', theme); } catch (_) {}
       var label = getEl('themeLabel');
       var icon = getEl('themeIcon');
-      if (label) label.textContent = darkMode ? 'Light' : 'Dark';
-      if (icon) icon.innerHTML = darkMode
+      if (label) label.textContent = dark ? 'Light' : 'Dark';
+      if (icon) icon.innerHTML = dark
         ? '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>'
         : '<path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/>';
+    }
+    var stored = null;
+    try { stored = localStorage.getItem('myimcc_theme'); } catch (_) {}
+    var initDark = stored ? stored === 'dark' : !!(global.matchMedia && global.matchMedia('(prefers-color-scheme: dark)').matches);
+    syncTheme(initDark);
+    toggle.addEventListener('click', function () {
+      syncTheme(!darkMode);
     });
   }
 

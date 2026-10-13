@@ -278,18 +278,31 @@ getEl('bellBtn')?.addEventListener('click', () => {
 });
 
 // ── Theme Switcher ───────────────────────────────────────────────────
-getEl('themeToggle')?.addEventListener('click', () => {
-  state.darkMode = !state.darkMode;
-  document.body.setAttribute('data-theme', state.darkMode ? 'dark' : 'light');
+function applyTheme(dark) {
+  state.darkMode = dark;
+  const theme = dark ? 'dark' : 'light';
+  document.body.setAttribute('data-theme', theme);
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem('myimcc_theme', theme); } catch (_) {}
   const label = getEl('themeLabel');
   const icon = getEl('themeIcon');
-  if (label) label.textContent = state.darkMode ? 'Light' : 'Dark';
+  if (label) label.textContent = dark ? 'Light' : 'Dark';
   if (icon) {
-    icon.innerHTML = state.darkMode
+    icon.innerHTML = dark
       ? '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>'
       : '<path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/>';
   }
-});
+}
+
+(function initTheme() {
+  let isDark = false;
+  try {
+    const saved = localStorage.getItem('myimcc_theme');
+    isDark = saved ? saved === 'dark' : !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  } catch (_) {}
+  applyTheme(isDark);
+  getEl('themeToggle')?.addEventListener('click', () => applyTheme(!state.darkMode));
+})();
 
 // ── Dashboard Loader & Renderer ───────────────────────────────────────
 async function loadDashboard() {

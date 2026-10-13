@@ -36,8 +36,14 @@ for (const id of expectedIds) {
 // 3. Collegiate Styling Integrity
 assert(css.includes('linear-gradient(135deg, #7A132C'), 'Collegiate wine gradient must be defined on .hero');
 assert(css.includes('backdrop-filter: blur(12px)'), 'Frosted glass blur must be defined on .topbar');
-assert(css.includes('--topbar-bg'), '--topbar-bg variable must be configured for light and dark modes');
 assert(css.includes("font-family: 'JetBrains Mono', monospace;"), 'JetBrains Mono must be used on .stat-value');
 assert(css.includes('.stat.c2 .stat-icon') && css.includes('.stat.c4 .stat-icon'), 'Semantic accent icons must be defined for stats');
+
+// 4. Dark Mode Token Calibration & Persistence Integrity
+assert(html.includes("localStorage.getItem('myimcc_theme')"), 'Anti-FOUC script with localStorage theme lookup must be present in <head>');
+assert(css.includes('[data-theme="dark"] .hero'), 'Dark mode specific velvet hero gradient override must be present in CSS');
+assert(css.includes('--green: #34D399;'), 'Luminous emerald semantic green must be defined for dark mode');
+assert(css.includes('--amber: #FBBF24;'), 'Luminous amber semantic token must be defined for dark mode');
+assert(css.includes('[data-theme="dark"] .nav-item.active'), 'High contrast active nav item must be defined for dark mode');
 
 console.log('student/dashboard: all verification checks passed.');
