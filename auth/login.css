@@ -22,19 +22,19 @@ a { color: inherit; }
 
 /* ---------------- LEFT: AUTH FORM ---------------- */
 .login-left {
-  background: var(--charcoal-950);
+  background: radial-gradient(100% 100% at 20% 30%, #20111a 0%, #170d14 45%, #141019 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 48px 32px;
+  padding: 48px 40px;
 }
-.left-inner { width: 100%; max-width: 390px; }
+.left-inner { width: 100%; max-width: 460px; }
 
-.brand { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; }
+.brand { display: flex; align-items: center; gap: 14px; margin-bottom: 36px; }
 .brand-mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -46,31 +46,31 @@ a { color: inherit; }
   height: 100%;
   display: block;
 }
-.brand-name { font-weight: 800; font-size: 17px; color: var(--ink-100); line-height: 1.2; }
-.brand-sub { font-size: 10.5px; letter-spacing: .08em; color: var(--pink-500); font-weight: 700; text-transform: uppercase; }
+.brand-name { font-weight: 800; font-size: 19px; color: var(--ink-100); line-height: 1.2; }
+.brand-sub { font-size: 11.5px; letter-spacing: .08em; color: var(--pink-500); font-weight: 700; text-transform: uppercase; }
 .brand-seal-mobile { display: none; }
 .mobile-only { display: none; }
 .desktop-only { display: inline; }
 
-.form-head h1 { font-size: 26px; font-weight: 800; color: var(--ink-100); margin: 0 0 8px; }
-.form-head p { font-size: 13.5px; color: var(--ink-400); line-height: 1.6; margin: 0 0 28px; }
+.form-head h1 { font-size: clamp(28px, 2.2vw, 32px); font-weight: 800; color: var(--ink-100); margin: 0 0 10px; letter-spacing: -0.01em; }
+.form-head p { font-size: 14.5px; color: var(--ink-400); line-height: 1.6; margin: 0 0 28px; }
 
-.field { margin-bottom: 18px; }
-.field label { display: block; font-size: 12.5px; font-weight: 700; color: var(--ink-100); margin-bottom: 7px; }
-.label-optional { font-size: 11px; font-weight: 400; color: var(--ink-400); margin-left: 4px; }
+.field { margin-bottom: 20px; }
+.field label { display: block; font-size: 13px; font-weight: 700; color: var(--ink-100); margin-bottom: 8px; }
+.label-optional { font-size: 11.5px; font-weight: 400; color: var(--ink-400); margin-left: 4px; }
 .field input {
   width: 100%;
-  padding: 12px 14px;
-  border-radius: 8px;
+  padding: 14px 16px;
+  border-radius: 10px;
   border: 1.5px solid var(--line-dark);
   background: var(--charcoal-900);
   color: var(--ink-100);
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
-  transition: border-color .15s ease;
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
 .field input::placeholder { color: var(--ink-600); }
-.field input:focus { outline: none; border-color: var(--pink-500); }
+.field input:focus { outline: none; border-color: var(--pink-500); box-shadow: 0 0 0 3px rgba(231, 51, 138, 0.15); }
 
 .form-error {
   background: rgba(227, 43, 79, .12);
@@ -85,10 +85,10 @@ a { color: inherit; }
 
 .btn-login {
   width: 100%;
-  padding: 13px;
+  padding: 15px 18px;
   border: none;
-  border-radius: 8px;
-  font-size: 14.5px;
+  border-radius: 10px;
+  font-size: 15.5px;
   font-weight: 700;
   color: #fff;
   background: var(--pink-600);
@@ -97,9 +97,11 @@ a { color: inherit; }
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background .15s ease, transform .1s ease;
+  gap: 10px;
+  transition: background .15s ease, transform .1s ease, box-shadow .15s ease;
+  box-shadow: 0 4px 14px rgba(227, 43, 79, 0.25);
 }
-.btn-login:hover { background: var(--pink-700); }
+.btn-login:hover { background: var(--pink-700); box-shadow: 0 6px 18px rgba(227, 43, 79, 0.35); }
 .btn-login:active { transform: scale(.99); }
 .btn-login:disabled { opacity: .65; cursor: not-allowed; }
 
@@ -189,12 +191,12 @@ a { color: inherit; }
 
 /* ---------------- RIGHT: INSTITUTIONAL HERITAGE PANEL ---------------- */
 .login-right {
-  background: radial-gradient(110% 110% at 85% 15%, #38121f 0%, #200d17 48%, #140810 100%);
+  background: radial-gradient(110% 110% at 85% 15%, #421424 0%, #220c19 48%, #140810 100%);
   border-left: 1px solid rgba(231, 51, 138, .2);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 48px 32px;
+  padding: 48px 40px;
   position: relative;
   overflow: hidden;
 }
@@ -203,84 +205,84 @@ a { color: inherit; }
   position: absolute;
   top: -60px;
   right: -60px;
-  width: 320px;
-  height: 320px;
+  width: 360px;
+  height: 360px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(231, 51, 138, 0.12) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(231, 51, 138, 0.15) 0%, transparent 70%);
   pointer-events: none;
 }
 .right-inner {
   width: 100%;
-  max-width: 390px;
+  max-width: 480px;
   position: relative;
   z-index: 2;
 }
 
 .brand-seal-img {
-  width: 42px;
-  height: 42px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.28);
   background: #000;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
   flex-shrink: 0;
 }
 
 .creed-card {
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-left: 3px solid var(--pink-500);
-  border-radius: 10px;
-  padding: 16px 18px;
-  margin-bottom: 22px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-left: 3.5px solid var(--pink-500);
+  border-radius: 12px;
+  padding: 18px 22px;
+  margin-bottom: 24px;
   backdrop-filter: blur(8px);
 }
 .creed-label {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--pink-500);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 .creed-body {
-  font-size: 13px;
-  color: rgba(243, 238, 247, 0.88);
-  line-height: 1.6;
+  font-size: 14px;
+  color: rgba(243, 238, 247, 0.92);
+  line-height: 1.65;
   margin: 0;
   font-style: italic;
 }
 
 .academic-division-wrap {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 .division-title {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--ink-400);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 .division-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 8px;
 }
 .div-tag {
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--ink-100);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 4px 10px;
-  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.065);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 6px 13px;
+  border-radius: 8px;
   transition: border-color .15s ease, background .15s ease;
 }
 .div-tag:hover {
-  background: rgba(231, 51, 138, 0.15);
-  border-color: rgba(231, 51, 138, 0.4);
+  background: rgba(231, 51, 138, 0.18);
+  border-color: rgba(231, 51, 138, 0.45);
 }
 
 .login-right .divider span {
