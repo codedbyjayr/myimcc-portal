@@ -384,7 +384,8 @@ a { color: inherit; }
 
   .login-wrap {
     grid-template-columns: 1fr;
-    background: var(--charcoal-950);
+    background: radial-gradient(120% 90% at 50% 0%, #3a1220 0%, #1e0b15 48%, #12060d 100%);
+    min-height: 100vh;
   }
   .login-left {
     min-height: auto;
@@ -401,9 +402,17 @@ a { color: inherit; }
   }
   .login-right::before { display: none; }
   .left-inner, .right-inner { max-width: 420px; }
+  .field input {
+    background: rgba(0, 0, 0, 0.35);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
   .creed-card {
     margin-top: 8px;
-    background: rgba(255, 255, 255, 0.035);
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .divider span {
+    background: #15080f;
   }
 }
 
