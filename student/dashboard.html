@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="dashboard.css">
   <link rel="stylesheet" href="../shared/loading.css">
   <link rel="stylesheet" href="../shared/rwd.css">
+  <script>(function(){try{var t=localStorage.getItem('myimcc_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(_){}})();</script>
 </head>
 
 <body data-theme="light">
@@ -23,7 +24,16 @@
     <!-- SIDEBAR -->
     <aside class="sidebar" id="sidebar">
       <div class="brand">
-        <div class="brand-mark">MI</div>
+        <div class="brand-mark">
+          <svg viewBox="0 0 42 42" class="brand-mark-svg" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect width="42" height="42" rx="10" fill="#E32B4F"/>
+            <circle cx="21" cy="11.5" r="2.2" fill="#FFFFFF"/>
+            <path d="M21 15V28.5" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M9.5 27.5V14L19.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M32.5 27.5V14L22.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M9.5 27.5C13.5 25 17.5 25.5 21 28.5C24.5 25.5 28.5 25 32.5 27.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
         <div>
           <div class="brand-name">MyIMCC</div>
           <div class="brand-sub">Student Portal</div>
