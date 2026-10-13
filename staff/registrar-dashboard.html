@@ -19,9 +19,10 @@
     <link rel="stylesheet" href="../shared/ui.css">
     <link rel="stylesheet" href="../shared/loading.css">
     <link rel="stylesheet" href="../shared/rwd.css">
+    <script>(function(){try{var t=localStorage.getItem('myimcc_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(_){}})();</script>
 </head>
 
-<body>
+<body data-theme="light">
 
     <div class="app">
 
@@ -105,6 +106,14 @@
                         </svg>
                     </button>
                     <h1 id="pageTitle">Dashboard</h1>
+                </div>
+                <div class="topbar-right">
+                    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle Dark Mode">
+                        <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/>
+                        </svg>
+                        <span id="themeLabel">Dark</span>
+                    </button>
                 </div>
             </div>
 
