@@ -48,6 +48,9 @@ a { color: inherit; }
 }
 .brand-name { font-weight: 800; font-size: 17px; color: var(--ink-100); line-height: 1.2; }
 .brand-sub { font-size: 10.5px; letter-spacing: .08em; color: var(--pink-500); font-weight: 700; text-transform: uppercase; }
+.brand-seal-mobile { display: none; }
+.mobile-only { display: none; }
+.desktop-only { display: inline; }
 
 .form-head h1 { font-size: 26px; font-weight: 800; color: var(--ink-100); margin: 0 0 8px; }
 .form-head p { font-size: 13.5px; color: var(--ink-400); line-height: 1.6; margin: 0 0 28px; }
@@ -371,28 +374,46 @@ a { color: inherit; }
 
 /* ---------------- RESPONSIVE ---------------- */
 @media (max-width: 900px) {
-  .login-wrap { grid-template-columns: 1fr; }
+  .brand-mark-desktop { display: none !important; }
+  .brand-seal-mobile { display: block !important; }
+  .desktop-only { display: none !important; }
+  .mobile-only { display: inline !important; }
+
+  .right-brand-desktop { display: none !important; }
+  .right-head-desktop { display: none !important; }
+
+  .login-wrap {
+    grid-template-columns: 1fr;
+    background: var(--charcoal-950);
+  }
   .login-left {
     min-height: auto;
-    padding: 48px 24px 36px;
+    background: transparent;
+    padding: 44px 20px 20px;
   }
   .login-right {
     display: flex;
+    background: transparent;
     border-left: none;
-    border-top: 1px solid rgba(231, 51, 138, .2);
-    padding: 40px 24px 48px;
+    border-top: none;
+    padding: 0 20px 48px;
     min-height: auto;
   }
+  .login-right::before { display: none; }
   .left-inner, .right-inner { max-width: 420px; }
+  .creed-card {
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.035);
+  }
 }
 
 @media (max-width: 640px) {
-  .login-left { padding: 32px 18px 24px; }
-  .login-right { padding: 28px 18px 36px; }
+  .login-left { padding: 32px 16px 18px; }
+  .login-right { padding: 0 16px 40px; }
   .left-inner, .right-inner { max-width: 100%; }
-  .brand { margin-bottom: 28px; }
+  .brand { margin-bottom: 24px; }
   .form-head h1 { font-size: 22px; }
-  .form-head p { font-size: 13px; margin-bottom: 22px; }
+  .form-head p { font-size: 13px; margin-bottom: 20px; }
   .field input { padding: 11px 12px; font-size: 16px; }
   .field label { font-size: 12px; margin-bottom: 5px; }
   .btn-login { padding: 12px; font-size: 13.5px; }
@@ -402,14 +423,13 @@ a { color: inherit; }
 }
 
 @media (max-width: 480px) {
-  .login-left { padding: 24px 14px 20px; }
-  .login-right { padding: 24px 14px 32px; }
+  .login-left { padding: 24px 14px 14px; }
+  .login-right { padding: 0 14px 36px; }
   .left-inner, .right-inner { max-width: 100%; }
-  .brand { margin-bottom: 22px; gap: 8px; }
-  .brand-mark { width: 36px; height: 36px; }
-  .brand-seal-img { width: 36px; height: 36px; }
+  .brand { margin-bottom: 20px; gap: 10px; }
+  .brand-seal-img { width: 38px; height: 38px; }
   .brand-name { font-size: 15px; }
-  .brand-sub { font-size: 9px; }
+  .brand-sub { font-size: 9.5px; }
   .form-head h1 { font-size: 20px; margin-bottom: 6px; }
   .form-head p { font-size: 12px; margin-bottom: 16px; }
   .field { margin-bottom: 14px; }
