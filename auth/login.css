@@ -75,8 +75,8 @@ a { color: inherit; }
   width: 100%;
   padding: 14px 16px;
   border-radius: 10px;
-  border: 1.5px solid rgba(255, 255, 255, 0.12);
-  background: rgba(10, 4, 8, 0.65);
+  border: 1.5px solid rgba(227, 43, 79, 0.28);
+  background: rgba(14, 5, 10, 0.75);
   color: var(--ink-100);
   font-size: 15px;
   font-family: inherit;
@@ -86,8 +86,8 @@ a { color: inherit; }
 .field input:focus {
   outline: none;
   border-color: var(--pink-500);
-  background: rgba(16, 6, 12, 0.9);
-  box-shadow: 0 0 0 3px rgba(231, 51, 138, 0.18);
+  background: rgba(18, 6, 13, 0.92);
+  box-shadow: 0 0 0 3px rgba(231, 51, 138, 0.22);
 }
 
 .form-error {
@@ -109,17 +109,20 @@ a { color: inherit; }
   font-size: 15.5px;
   font-weight: 700;
   color: #fff;
-  background: var(--pink-600);
+  background: linear-gradient(135deg, #E32B4F 0%, #E7338A 100%);
   cursor: pointer;
   font-family: inherit;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  transition: background .15s ease, transform .1s ease, box-shadow .15s ease;
-  box-shadow: 0 4px 14px rgba(227, 43, 79, 0.25);
+  transition: filter .15s ease, transform .1s ease, box-shadow .15s ease;
+  box-shadow: 0 4px 18px rgba(227, 43, 79, 0.35);
 }
-.btn-login:hover { background: var(--pink-700); box-shadow: 0 6px 18px rgba(227, 43, 79, 0.35); }
+.btn-login:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 6px 22px rgba(231, 51, 138, 0.45);
+}
 .btn-login:active { transform: scale(.99); }
 .btn-login:disabled { opacity: .65; cursor: not-allowed; }
 
@@ -214,7 +217,8 @@ a { color: inherit; }
 /* ---------------- RIGHT: INSTITUTIONAL HERITAGE PANEL ---------------- */
 .login-right {
   background: radial-gradient(110% 110% at 85% 15%, #421424 0%, #220c19 48%, #140810 100%);
-  border-left: 1px solid rgba(231, 51, 138, .2);
+  border-left: 1px solid transparent;
+  border-image: linear-gradient(to bottom, transparent, rgba(231, 51, 138, 0.25) 20%, rgba(227, 43, 79, 0.25) 80%, transparent) 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -252,8 +256,8 @@ a { color: inherit; }
 }
 
 .creed-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(231, 51, 138, 0.05);
+  border: 1px solid rgba(227, 43, 79, 0.2);
   border-left: 3.5px solid var(--pink-500);
   border-radius: 12px;
   padding: 18px 22px;
@@ -296,15 +300,17 @@ a { color: inherit; }
   font-size: 12.5px;
   font-weight: 600;
   color: var(--ink-100);
-  background: rgba(255, 255, 255, 0.065);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(231, 51, 138, 0.08);
+  border: 1px solid rgba(227, 43, 79, 0.24);
   padding: 6px 13px;
   border-radius: 8px;
-  transition: border-color .15s ease, background .15s ease;
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease, transform .1s ease;
 }
 .div-tag:hover {
-  background: rgba(231, 51, 138, 0.18);
-  border-color: rgba(231, 51, 138, 0.45);
+  background: rgba(231, 51, 138, 0.22);
+  border-color: rgba(231, 51, 138, 0.55);
+  box-shadow: 0 0 12px rgba(231, 51, 138, 0.25);
+  transform: translateY(-1px);
 }
 
 .login-right .divider span {
