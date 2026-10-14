@@ -79,6 +79,38 @@
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
 }
 
+[data-theme="dark"] .btn-white {
+  background: rgba(255, 255, 255, 0.92);
+  color: #5C0C20;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+[data-theme="dark"] .btn-white:hover {
+  background: #ffffff;
+  color: #420816;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* Custom Scrollbars — eliminates default white scrollbars */
+html, body, .sidebar, .main, [data-theme="dark"] * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(227, 43, 79, 0.3) transparent;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(227, 43, 79, 0.22);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(227, 43, 79, 0.45);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -234,10 +266,9 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 8px;
-  margin-bottom: 14px;
+  padding: 8px 6px 12px;
+  margin-bottom: 8px;
   border-bottom: 1px solid var(--line);
-  padding-bottom: 18px;
 }
 
 .avatar {
@@ -270,25 +301,25 @@ button {
   letter-spacing: .09em;
   color: var(--ink-300);
   font-weight: 700;
-  margin: 14px 10px 8px;
+  margin: 10px 10px 4px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  font-size: 13.5px;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink-700);
   text-decoration: none;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
   border: 1px solid transparent;
   background: none;
   width: 100%;
   text-align: left;
-  min-height: 42px;
+  min-height: 36px;
 }
 
 .nav-item svg {
@@ -348,11 +379,42 @@ button {
   color: #fff;
   font-size: 12.5px;
   font-weight: 600;
-  padding: 8px 16px;
-  text-align: center;
+  padding: 7px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
   flex-shrink: 0;
   line-height: 1.4;
   letter-spacing: 0.01em;
+}
+
+.banner-text {
+  flex: 1;
+  text-align: center;
+  padding: 0 24px;
+}
+
+.banner-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  position: absolute;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.banner-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .banner b {
@@ -752,9 +814,9 @@ button {
 
 .grid-4 {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  margin-bottom: 18px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
 .grid-2 {
@@ -788,13 +850,6 @@ button {
   }
 }
 
-@media (min-width: 580px) {
-  .grid-4 {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 14px;
-  }
-}
-
 @media (min-width: 1024px) {
   .grid-4 {
     grid-template-columns: repeat(4, 1fr);
@@ -812,9 +867,24 @@ button {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 18px 20px;
+  padding: 13px 14px;
   box-shadow: var(--shadow);
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+@media (min-width: 1024px) {
+  .stat {
+    padding: 18px 20px;
+  }
+}
+
+.empty-state-muted {
+  padding: 14px 2px;
+  color: var(--ink-500);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .stat:hover {
@@ -1721,7 +1791,7 @@ tr:last-child td {
     transform: none !important;
     box-shadow: none !important;
     z-index: 10;
-    padding: 22px 18px;
+    padding: 16px 14px;
   }
 
   .sidebar-overlay {

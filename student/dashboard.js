@@ -421,7 +421,7 @@ function renderDashboard() {
           <div class="adot" style="width:8px;height:8px;border-radius:50%;background:${a.color || '#E7338A'};"></div>
           <div><div class="t" style="font-size:13px;font-weight:600;">${escapeHtml(a.description)}</div><div class="d" style="font-size:11px;color:var(--ink-500);">${fmtDate(a.created_at)}</div></div>
         </div>`).join('')
-      : `<div style="color:var(--ink-300);font-size:13px;">No recent activity yet.</div>`;
+      : `<div class="empty-state-muted"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5;"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> No recent activity yet.</div>`;
   }
 
   const sf = getEl('sidebarFoot');
@@ -446,8 +446,22 @@ async function loadAnnouncements() {
   const banner = getEl('topBanner');
   if (rows && rows[0] && banner) {
     const a = rows[0];
+    const dismissKey = `myimcc_banner_dismissed_${a.id || String(a.content).slice(0, 16)}`;
+    try {
+      if (localStorage.getItem(dismissKey)) {
+        banner.style.display = 'none';
+        return;
+      }
+    } catch (_) {}
     const deadline = a.deadline ? ` Deadline: <b>${fmtDate(a.deadline)}</b>.` : '';
-    banner.innerHTML = `🔔 ${escapeHtml(a.content)}${deadline}`;
+    banner.innerHTML = `<span class="banner-text">🔔 ${escapeHtml(a.content)}${deadline}</span><button class="banner-close" id="bannerCloseBtn" aria-label="Dismiss announcement" type="button">&times;</button>`;
+    banner.style.display = '';
+    getEl('bannerCloseBtn')?.addEventListener('click', () => {
+      banner.style.display = 'none';
+      try { localStorage.setItem(dismissKey, '1'); } catch (_) {}
+    });
+  } else if (banner) {
+    banner.style.display = 'none';
   }
 }
 
