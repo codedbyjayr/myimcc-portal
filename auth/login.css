@@ -22,13 +22,26 @@ a { color: inherit; }
 
 /* ---------------- LEFT: AUTH FORM ---------------- */
 .login-left {
-  background: radial-gradient(100% 100% at 20% 30%, #20111a 0%, #170d14 45%, #141019 100%);
+  background: radial-gradient(110% 110% at 15% 25%, #280a16 0%, #15060f 48%, #0d0309 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 48px 40px;
+  position: relative;
+  overflow: hidden;
 }
-.left-inner { width: 100%; max-width: 460px; }
+.login-left::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  left: -60px;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(231, 51, 138, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+.left-inner { width: 100%; max-width: 460px; position: relative; z-index: 2; }
 
 .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 36px; }
 .brand-mark {
@@ -62,15 +75,20 @@ a { color: inherit; }
   width: 100%;
   padding: 14px 16px;
   border-radius: 10px;
-  border: 1.5px solid var(--line-dark);
-  background: var(--charcoal-900);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 4, 8, 0.65);
   color: var(--ink-100);
   font-size: 15px;
   font-family: inherit;
-  transition: border-color .15s ease, box-shadow .15s ease;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
 }
 .field input::placeholder { color: var(--ink-600); }
-.field input:focus { outline: none; border-color: var(--pink-500); box-shadow: 0 0 0 3px rgba(231, 51, 138, 0.15); }
+.field input:focus {
+  outline: none;
+  border-color: var(--pink-500);
+  background: rgba(16, 6, 12, 0.9);
+  box-shadow: 0 0 0 3px rgba(231, 51, 138, 0.18);
+}
 
 .form-error {
   background: rgba(227, 43, 79, .12);
@@ -106,10 +124,14 @@ a { color: inherit; }
 .btn-login:disabled { opacity: .65; cursor: not-allowed; }
 
 .btn-secondary {
-  background: var(--charcoal-800);
+  background: rgba(255, 255, 255, 0.065);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   color: var(--ink-100);
 }
-.btn-secondary:hover { background: var(--line-dark); }
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+}
 
 /* TOTP & MFA Elements */
 .qr-container { text-align: center; margin: 16px 0; }
@@ -183,8 +205,8 @@ a { color: inherit; }
 .unauthorized-card p { color: var(--ink-400); font-size: 13px; line-height: 1.6; margin: 0 0 20px; }
 
 .divider { position: relative; text-align: center; margin: 28px 0 16px; }
-.divider::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--line-dark); }
-.divider span { position: relative; background: var(--charcoal-950); padding: 0 12px; font-size: 11.5px; color: var(--ink-600); font-weight: 600; }
+.divider::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(231, 51, 138, 0.16); }
+.divider span { position: relative; background: #11050c; padding: 0 12px; font-size: 11.5px; color: var(--ink-400); font-weight: 600; }
 
 .footnote { font-size: 12px; color: var(--ink-600); line-height: 1.6; text-align: center; margin: 0; }
 .footnote b { color: var(--ink-400); font-weight: 600; }
@@ -402,7 +424,7 @@ a { color: inherit; }
     padding: 0 20px 48px;
     min-height: auto;
   }
-  .login-right::before { display: none; }
+  .login-left::before, .login-right::before { display: none; }
   .left-inner, .right-inner { max-width: 420px; }
   .field input {
     background: rgba(0, 0, 0, 0.35);

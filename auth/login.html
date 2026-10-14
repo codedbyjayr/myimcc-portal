@@ -24,13 +24,17 @@
       <div class="left-inner">
         <div class="brand">
           <div class="brand-mark brand-mark-desktop">
-            <svg viewBox="0 0 42 42" class="brand-mark-svg" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <rect width="42" height="42" rx="10" fill="#E32B4F"/>
-              <circle cx="21" cy="11.5" r="2.2" fill="#FFFFFF"/>
-              <path d="M21 15V28.5" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"/>
-              <path d="M9.5 27.5V14L19.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M32.5 27.5V14L22.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M9.5 27.5C13.5 25 17.5 25.5 21 28.5C24.5 25.5 28.5 25 32.5 27.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+            <svg viewBox="0 0 42 42" class="brand-mark-svg" fill="none" xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true">
+              <rect width="42" height="42" rx="10" fill="#E32B4F" />
+              <circle cx="21" cy="11.5" r="2.2" fill="#FFFFFF" />
+              <path d="M21 15V28.5" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" />
+              <path d="M9.5 27.5V14L19.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round"
+                stroke-linejoin="round" />
+              <path d="M32.5 27.5V14L22.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round"
+                stroke-linejoin="round" />
+              <path d="M9.5 27.5C13.5 25 17.5 25.5 21 28.5C24.5 25.5 28.5 25 32.5 27.5" stroke="#FFFFFF"
+                stroke-width="2" stroke-linecap="round" />
             </svg>
           </div>
           <img src="imcc-logo.jpg" alt="IMCC Official Seal" class="brand-seal-img brand-seal-mobile">
@@ -55,9 +59,9 @@
 
           <form id="ssoForm" novalidate>
             <div class="field">
-              <label for="emailInput">Institutional School Email <span class="label-optional">(Optional hint)</span></label>
-              <input type="email" id="emailInput" placeholder="name@imcc.edu.ph"
-                autocomplete="email">
+              <label for="emailInput">Institutional School Email <span class="label-optional">(Optional
+                  hint)</span></label>
+              <input type="email" id="emailInput" placeholder="name@imcc.edu.ph" autocomplete="email">
             </div>
 
             <div id="ssoError" class="form-error" hidden></div>
@@ -134,7 +138,8 @@
           <form id="challengeForm" novalidate>
             <div class="field">
               <label for="challengeCodeInput">6-Digit Authenticator Code</label>
-              <input type="text" id="challengeCodeInput" class="code-input" maxlength="6" placeholder="123456" required autofocus>
+              <input type="text" id="challengeCodeInput" class="code-input" maxlength="6" placeholder="123456" required
+                autofocus>
             </div>
 
             <div id="challengeError" class="form-error" hidden></div>
@@ -145,7 +150,8 @@
           </form>
 
           <div class="step-footnote">
-            <a href="#" id="resetMfaBtn" class="link-subtle">Lost or deleted Authenticator code? Reset &amp; Re-scan QR Code</a>
+            <a href="#" id="resetMfaBtn" class="link-subtle">Lost or deleted Authenticator code? Reset &amp; Re-scan QR
+              Code</a>
           </div>
         </div>
 
@@ -160,7 +166,8 @@
           </div>
           <h2>Institutional Account Required</h2>
           <p>
-            Your email domain is not permitted to access the MyIMCC portal. Please sign in using your official school account (<b>@imcc.edu.ph</b>).
+            Your email domain is not permitted to access the MyIMCC portal. Please sign in using your official school
+            account (<b>@imcc.edu.ph</b>).
           </p>
           <button type="button" class="btn-login btn-secondary" id="retrySsoBtn">
             ← Return to Sign-In
@@ -192,7 +199,8 @@
         <div class="creed-card">
           <div class="creed-label">Institutional Philosophy</div>
           <p class="creed-body">
-            &ldquo;Committed to developing globally competitive, compassionate healthcare practitioners, educators, and leaders anchored in academic excellence and community service.&rdquo;
+            &ldquo;Committed to developing globally competitive, compassionate healthcare practitioners, educators, and
+            leaders anchored in academic excellence and community service.&rdquo;
           </p>
         </div>
 
@@ -227,7 +235,8 @@
         </div>
 
         <div class="divider"><span>Official Accreditation</span></div>
-        <p class="footnote">Recognized by the <b>Commission on Higher Education (CHED)</b> and Department of Education (DepEd). San Miguel, Iligan City 9200.</p>
+        <p class="footnote">Recognized by the <b>Commission on Higher Education (CHED)</b> and Department of Education
+          (DepEd).</p>
       </div>
     </section>
 
@@ -235,10 +244,10 @@
 
   <!-- Script Load Order -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="../env-config.js"></script>
-<script src="../shared/supabase-config.js"></script>
-<script src="../shared/identity.js"></script>
-<script src="login.js"></script>
+  <script src="../env-config.js"></script>
+  <script src="../shared/supabase-config.js"></script>
+  <script src="../shared/identity.js"></script>
+  <script src="login.js"></script>
 
 </body>
 
