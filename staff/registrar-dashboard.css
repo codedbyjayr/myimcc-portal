@@ -231,9 +231,9 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 6px;
+    padding: 8px 6px 12px;
     border-bottom: 1px solid var(--line);
-    margin-bottom: 16px;
+    margin-bottom: 8px;
 }
 
 .who .avatar {
@@ -255,28 +255,28 @@ body {
 }
 
 .nav-label {
-    font-size: 11px;
+    font-size: 10.5px;
     color: var(--ink-400);
     text-transform: uppercase;
     letter-spacing: .06em;
-    margin: 14px 8px 6px;
+    margin: 10px 8px 4px;
 }
 
 .nav-item {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 10px;
-    border-radius: 10px;
+    padding: 7px 10px;
+    border-radius: 9px;
     color: var(--ink-600);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     border: none;
     background: none;
     width: 100%;
     text-align: left;
-    min-height: 42px;
+    min-height: 36px;
 }
 
 .nav-item:hover {
@@ -416,9 +416,13 @@ body {
 
 .stats {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-    margin-bottom: 18px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.stats > :nth-child(3) {
+    grid-column: 1 / -1;
 }
 
 .stat-card {
@@ -810,6 +814,9 @@ table {
         grid-template-columns: repeat(3, 1fr);
         gap: 16px;
     }
+    .stats > :nth-child(3) {
+        grid-column: auto;
+    }
     .quick {
         grid-template-columns: repeat(2, 1fr);
         gap: 16px;
@@ -834,7 +841,7 @@ table {
         max-width: 260px;
         transform: none !important;
         box-shadow: none !important;
-        padding: 22px 18px;
+        padding: 16px 14px;
     }
 
     .sidebar-overlay,

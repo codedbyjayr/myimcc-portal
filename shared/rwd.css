@@ -10,6 +10,26 @@ html {
   text-size-adjust: 100%;
 }
 
+/* ── Custom Scrollbars: eliminates default white scrollbars across all portals ── */
+html, body, .sidebar, .main, [data-theme="dark"] * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(227, 43, 79, 0.3) transparent;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(227, 43, 79, 0.22);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(227, 43, 79, 0.45);
+}
+
 /* ── Fluid type scale (base ~320px → desktop ~1400px) ──────────────── */
 .page-header h1,
 .topbar h1,
@@ -194,9 +214,16 @@ h1.display { font-size: clamp(22px, 4.5vw, 32px); line-height: 1.15; }
     display: none !important;
   }
 
-  /* Stats grid single column for tight screens */
-  .stats-grid {
-    grid-template-columns: 1fr !important;
+  /* Stats grid compact 2-column layout for tight screens */
+  .stats-grid,
+  .grid-4,
+  .stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+  .stats > :nth-child(3),
+  .grid-3 > :nth-child(3) {
+    grid-column: 1 / -1;
   }
 
   /* Ensure modal forms never clip on small screens */

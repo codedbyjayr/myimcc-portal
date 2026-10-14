@@ -236,8 +236,8 @@ button {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 12px 8px 18px;
-    margin-bottom: 14px;
+    padding: 8px 6px 12px;
+    margin-bottom: 8px;
     border-bottom: 1px solid var(--line);
 }
 
@@ -271,25 +271,25 @@ button {
     letter-spacing: .09em;
     color: var(--ink-300);
     font-weight: 700;
-    margin: 14px 10px 8px;
+    margin: 10px 10px 4px;
 }
 
 .nav-item {
     display: flex;
     align-items: center;
-    gap: 11px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    font-size: 13.5px;
+    gap: 10px;
+    padding: 7px 12px;
+    border-radius: 9px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--ink-700);
     text-decoration: none;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
     border: 1px solid transparent;
     background: none;
     width: 100%;
     text-align: left;
-    min-height: 42px;
+    min-height: 36px;
 }
 
 .nav-item svg {
@@ -735,8 +735,13 @@ textarea.field-input {
     min-height: 70px;
 }
 
-/* ---------- Grids & stat cards ---------- */
-.grid-4,
+.grid-4 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
 .grid-3 {
     display: grid;
     grid-template-columns: 1fr;
@@ -1341,7 +1346,7 @@ table {
         transform: none !important;
         box-shadow: none !important;
         z-index: 10;
-        padding: 22px 18px;
+        padding: 16px 14px;
     }
 
     .sidebar-overlay {
