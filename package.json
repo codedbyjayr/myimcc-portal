@@ -1,6 +1,7 @@
 {
   "type": "module",
   "scripts": {
+    "test:portal": "node scripts/test-portal.mjs",
     "backup": "node scripts/backup-supabase.js",
     "check:edge": "tsc -p supabase/functions",
     "check:edge:parse": "node supabase/functions/check-syntax.mjs"
