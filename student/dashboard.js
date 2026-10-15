@@ -18,6 +18,7 @@ const state = {
   courses: [],
   miscFees: [],
   selectedOfferingIds: new Set(),
+  enrollmentComplete: false,
   billing: { totalPaid: 0, installments: [], transactions: [] },
         grades: [],
         departments: [],
@@ -586,8 +587,13 @@ async function loadEnrollment() {
   const { data: enrolled } = await supabaseClient
     .from('enrollments')
     .select('offering_id')
-    .eq('student_id', profile.id);
+    .eq('student_id', profile.id)
+    .in('status', ['enrolled', 'completed']);
 
+  const { data: requests, error: requestError } = await supabaseClient
+    .from('enrollment_requests').select('offering_id,status,created_at,review_note')
+    .eq('student_id', profile.id).order('created_at', { ascending: false });
+  if (requestError) { showToast('Could not load enrollment requests: ' + requestError.message, true); return; }
   const enrolledIds = new Set((enrolled || []).map(e => String(e.offering_id)));
 
   const { data: misc } = await supabaseClient
@@ -596,7 +602,11 @@ async function loadEnrollment() {
     .eq('semester', activeSemester)
     .eq('school_year', activeSchoolYear);
 
-  state.courses = (offerings || []).map(o => ({
+  const yearText = String(profile.year_level || '').trim().toLowerCase();
+  const studentYear = Number(yearText.match(/^[1-4]/)?.[0]) || ({ first: 1, second: 2, third: 3, fourth: 4 }[yearText.split(/\s+/)[0]]);
+  state.courses = (offerings || []).filter(o =>
+    (!o.program || o.program === profile.program) && (!o.year || o.year === studentYear)
+  ).map(o => ({
     offering_id: String(o.id),
     code: o.code,
     title: o.title,
@@ -604,11 +614,30 @@ async function loadEnrollment() {
     fee: o.fee,
     instructor_name: o.instructor_name,
     schedule: o.schedule,
-    selected: enrolledIds.has(String(o.id)),
+    enrollmentStatus: enrolledIds.has(String(o.id)) ? 'enrolled' :
+      (requests || []).find(r => String(r.offering_id) === String(o.id))?.status,
+    reviewNote: (requests || []).find(r => String(r.offering_id) === String(o.id))?.review_note,
   }));
 
   state.miscFees = misc || [];
-  state.selectedOfferingIds = new Set(state.courses.filter(c => c.selected).map(c => c.offering_id));
+  state.selectedOfferingIds = new Set();
+  state.enrollmentComplete = state.courses.length > 0 && state.courses.every(c => c.enrollmentStatus === 'enrolled');
+  const steps = getEl('enrollSteps');
+  const summary = getEl('enrollmentBillingSummary');
+  const completeNote = getEl('enrollmentCompleteNote');
+  const enrollmentGrid = summary?.parentElement;
+  if (steps) steps.style.display = state.enrollmentComplete ? 'none' : '';
+  if (summary) summary.style.display = state.enrollmentComplete ? 'none' : '';
+  if (completeNote) completeNote.style.display = state.enrollmentComplete ? 'block' : 'none';
+  if (enrollmentGrid) enrollmentGrid.style.gridTemplateColumns = state.enrollmentComplete ? '1fr' : '';
+  if (state.enrollmentComplete) {
+    if (sectionTitle) sectionTitle.textContent = `Your Enrolled Subjects — ${activeSemester} ${activeSchoolYear}`;
+    setEnrollStep(1);
+  } else if (sectionTitle) {
+    sectionTitle.textContent = state.courses.length
+      ? `Available Courses — ${activeSemester} ${activeSchoolYear}`
+      : `No Courses Available — ${activeSemester} ${activeSchoolYear}`;
+  }
 
   renderCourseList();
   renderMiscFees();
@@ -647,6 +676,7 @@ function renderCourseList() {
       <div>
         <div class="code">${escapeHtml(c.code)}</div>
         <div class="title">${escapeHtml(c.title)}</div>
+        <div class="meta">${escapeHtml(c.enrollmentStatus === 'pending' ? 'Awaiting staff/dean approval' : c.enrollmentStatus === 'enrolled' ? 'Enrolled' : c.enrollmentStatus === 'rejected' ? `Request rejected — you may submit again${c.reviewNote ? `: ${c.reviewNote}` : ''}` : '')}</div>
         <div class="meta">${escapeHtml(c.instructor_name || 'TBA')} · ${escapeHtml(c.schedule || 'Schedule TBA')}</div>
       </div>
       <div class="fee">
@@ -656,9 +686,16 @@ function renderCourseList() {
     </div>`;
   }).join('');
 
+  if (!state.courses.length) {
+    container.innerHTML = '<p class="muted-note">No subjects are available for your program and year in this term. Please check with your dean or registrar.</p>';
+    return;
+  }
+
   container.querySelectorAll('.course-row').forEach(row => {
     row.addEventListener('click', () => {
       const id = String(row.dataset.id);
+      const course = state.courses.find(c => c.offering_id === id);
+      if (['pending', 'enrolled'].includes(course?.enrollmentStatus)) return;
       if (state.selectedOfferingIds.has(id)) {
         state.selectedOfferingIds.delete(id);
         renderCourseList();
@@ -733,7 +770,7 @@ function renderReviewList() {
     <div style="display:flex;justify-content:space-between;padding:14px 16px;background:var(--pink-50, #fdf2f8);border-radius:12px;margin-top:12px;">
       <b>Total Amount Due</b><b style="color:var(--pink-600, #db2777);">${peso(tuitionSum + miscTotal())}</b>
     </div>
-    <button class="btn btn-primary" id="confirmEnrollBtn" style="width:100%;justify-content:center;margin-top:16px;">Confirm Enrollment →</button>`;
+    <button class="btn btn-primary" id="confirmEnrollBtn" style="width:100%;justify-content:center;margin-top:16px;">Submit Enrollment Request →</button>`;
 
   const confirmBtn = getEl('confirmEnrollBtn');
   if (confirmBtn) {
@@ -767,6 +804,7 @@ getEl('backToStep1')?.addEventListener('click', () => setEnrollStep(1));
 
 async function confirmEnrollment() {
   const profile = state.studentProfile;
+  if (!profile || state.selectedOfferingIds.size === 0) return;
   const btn = getEl('confirmEnrollBtn');
   if (btn) {
     btn.disabled = true;
@@ -776,19 +814,19 @@ async function confirmEnrollment() {
     const inserts = [...state.selectedOfferingIds].map(oid => ({
       student_id: profile.id,
       offering_id: oid,
-      status: 'enrolled',
+      status: 'pending',
     }));
-    const { error } = await supabaseClient.from('enrollments').insert(inserts);
+    const { error } = await supabaseClient.from('enrollment_requests').insert(inserts);
     if (error) throw error;
 
     setEnrollStep(3);
-    showToast('Enrollment confirmed successfully');
+    showToast('Enrollment request submitted for staff/dean approval');
     await Promise.all([loadDashboard(), loadEnrollment()]);
   } catch (err) {
-    showToast('Could not confirm enrollment: ' + err.message, true);
+    showToast('Could not submit enrollment request: ' + err.message, true);
     if (btn) {
       btn.disabled = false;
-      btn.textContent = 'Confirm Enrollment →';
+      btn.textContent = 'Submit Enrollment Request →';
     }
   }
 }
@@ -2068,7 +2106,7 @@ async function loadFacultyEval() {
 
   const { data: enrollments } = await supabaseClient
     .from('enrollments')
-    .select('offering_id, course_offerings(id, code, title, instructor_name)')
+    .select('offering_id, course_offerings(id, code, title, instructor_id, instructor_name)')
     .eq('student_id', profile.id)
     .eq('status', 'enrolled');
 
@@ -2086,11 +2124,11 @@ async function loadFacultyEval() {
   const instructorMap = {};
   enrollments.forEach(e => {
     const off = e.course_offerings;
-    if (!off || !off.instructor_name) return;
-    if (!instructorMap[off.instructor_name]) {
-      instructorMap[off.instructor_name] = { name: off.instructor_name, courses: [] };
+    if (!off || !off.instructor_id) return;
+    if (!instructorMap[off.instructor_id]) {
+      instructorMap[off.instructor_id] = { id: off.instructor_id, name: off.instructor_name || 'Instructor', courses: [] };
     }
-    instructorMap[off.instructor_name].courses.push({ code: off.code, title: off.title, offering_id: off.id });
+    instructorMap[off.instructor_id].courses.push({ code: off.code, title: off.title, offering_id: off.id });
   });
 
   const instructors = Object.values(instructorMap);
@@ -2104,12 +2142,12 @@ async function loadFacultyEval() {
 
   const { data: existing } = await supabaseClient
     .from('faculty_evaluations')
-    .select('instructor_name')
+    .select('instructor_id')
     .eq('student_id', profile.id)
     .eq('school_year', sy)
     .eq('semester', sem);
 
-  const evaluatedNames = new Set((existing || []).map(e => e.instructor_name));
+  const evaluatedIds = new Set((existing || []).map(e => e.instructor_id));
   if (evalStatus) evalStatus.style.display = 'none';
 
   const evalQuestions = [
@@ -2122,7 +2160,7 @@ async function loadFacultyEval() {
 
   if (evalList) {
     evalList.innerHTML = instructors.map(inst => {
-      const submitted = evaluatedNames.has(inst.name);
+      const submitted = evaluatedIds.has(inst.id);
       const courseList = inst.courses.map(c => `${c.code} — ${c.title}`).join(', ');
       return `
       <div class="card card-pad" style="margin-bottom:16px;border:1px solid var(--line);${submitted ? 'opacity:0.7;' : ''}">
@@ -2147,7 +2185,7 @@ async function loadFacultyEval() {
             <label style="font-size:12px;font-weight:600;color:var(--ink-700);display:block;margin-bottom:4px;">Additional Comments (optional)</label>
             <textarea class="eval-comment" style="width:100%;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;min-height:70px;resize:vertical;font-family:inherit;" placeholder="Share specific feedback..."></textarea>
           </div>
-          <button class="btn btn-primary eval-submit-btn" style="width:100%;justify-content:center;margin-top:12px;" data-instructor="${escapeHtml(inst.name)}">Submit Anonymous Evaluation</button>
+          <button class="btn btn-primary eval-submit-btn" style="width:100%;justify-content:center;margin-top:12px;" data-instructor-id="${inst.id}">Submit Anonymous Evaluation</button>
         </div>
         `}
       </div>`;
@@ -2168,7 +2206,7 @@ async function loadFacultyEval() {
 
     evalList.querySelectorAll('.eval-submit-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const instructorName = btn.dataset.instructor;
+        const instructor = instructorMap[btn.dataset.instructorId];
         const form = btn.closest('.eval-form');
         const ratings = {};
         let allRated = true;
@@ -2191,7 +2229,8 @@ async function loadFacultyEval() {
         try {
           const { error } = await supabaseClient.from('faculty_evaluations').insert({
             student_id: profile.id,
-            instructor_name: instructorName,
+            instructor_id: instructor.id,
+            instructor_name: instructor.name,
             school_year: sy,
             semester: sem,
             teaching_clarity: ratings.teaching_clarity,

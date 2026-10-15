@@ -363,7 +363,7 @@
 
         <!-- ================= ENROLLMENT ================= -->
         <section class="page" id="page-enrollment">
-          <div class="steps">
+          <div class="steps" id="enrollSteps">
             <div class="step active" id="stepTab1">
               <div class="step-num">1</div>Course Selection
             </div>
@@ -375,6 +375,11 @@
             <div class="step" id="stepTab3">
               <div class="step-num">3</div>Confirmation
             </div>
+          </div>
+
+          <div class="card card-pad" id="enrollmentCompleteNote" hidden style="margin-bottom:16px;">
+            <strong>Enrollment complete for this term.</strong>
+            <span style="color:var(--ink-500);"> Your approved subjects are listed below. View your class schedule or Certificate of Registration from the Academics menu.</span>
           </div>
 
           <div class="grid-2">
@@ -394,7 +399,7 @@
                 </div>
                 <p style="font-size:13px;color:var(--ink-500);margin-top:-8px;">Please confirm the subjects and fees
                   below
-                  before finalizing your enrollment.</p>
+                  before submitting your enrollment request for staff/dean approval.</p>
                 <div id="reviewCourseList"></div>
                 <div style="margin-top:14px;">
                   <button class="btn btn-outline" id="backToStep1">← Back to Course Selection</button>
@@ -409,17 +414,15 @@
                       <path d="M20 6L9 17l-5-5" />
                     </svg>
                   </div>
-                  <h3 style="margin:0 0 8px;">Enrollment Confirmed!</h3>
-                  <p style="color:var(--ink-500);font-size:13.5px;max-width:420px;margin:0 auto 22px;">You are
-                    officially
-                    enrolled. A copy of your Certificate of Registration has been added to your records.</p>
+                  <h3 style="margin:0 0 8px;">Enrollment Request Submitted!</h3>
+                  <p style="color:var(--ink-500);font-size:13.5px;max-width:420px;margin:0 auto 22px;">Your subjects are awaiting staff/dean approval. Units will appear after approval. Check the enrollment page for request status.</p>
                   <button class="btn btn-primary" data-goto="dashboard">Go to Dashboard</button>
                 </div>
               </div>
             </div>
 
             <!-- BILLING SUMMARY (sticky) -->
-            <div class="card card-pad" style="align-self:start;position:sticky;top:90px;">
+            <div class="card card-pad" id="enrollmentBillingSummary" style="align-self:start;position:sticky;top:90px;">
               <div class="card-head">
                 <h3>Billing Summary</h3>
               </div>

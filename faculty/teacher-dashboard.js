@@ -23,7 +23,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let selectedOffering = null;
     let roster = [];
     let darkMode = false;
-    let coursesCatalog = [];
 
     // ── Mobile Navigation — delegated to FC ──
     FC.initMobileNav();
@@ -161,10 +160,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         getEl('selectedCourseSub').textContent = `${selectedOffering.semester || ''} ${selectedOffering.school_year || ''} · ${selectedOffering.schedule || 'Schedule TBA'}`;
         getEl('saveGradesBtn').disabled = true;
 
-        const [{ data: enrollments }, { data: existingGrades }] = await Promise.all([
-            supabaseClient.from('enrollments').select('student_id, profiles(id, full_name, student_no, id_number)').eq('offering_id', offeringId).eq('status', 'enrolled'),
+        const [{ data: enrollments, error: rosterError }, { data: existingGrades }] = await Promise.all([
+            supabaseClient.rpc('get_class_roster', { p_offering_id: Number(offeringId) }),
             supabaseClient.from('grades').select('*').eq('offering_id', offeringId),
         ]);
+
+        if (rosterError) { roster = []; renderRoster(); showToast('Could not load class roster: ' + rosterError.message, true); return; }
 
         const gradeByStudent = {};
         (existingGrades || []).forEach(g => { gradeByStudent[g.student_id] = g; });
@@ -429,10 +430,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const date = getEl('attDateInput').value;
         if (!offeringId || !date) return;
 
-        const [{ data: enrollments }, existingRes] = await Promise.all([
-            supabaseClient.from('enrollments').select('student_id, profiles(id, full_name, student_no)').eq('offering_id', offeringId).eq('status', 'enrolled'),
+        getEl('saveAttendanceBtn').disabled = true;
+        const [{ data: enrollments, error: rosterError }, existingRes] = await Promise.all([
+            supabaseClient.rpc('get_class_roster', { p_offering_id: Number(offeringId) }),
             supabaseClient.from('attendance').select('*').eq('offering_id', offeringId).eq('date', date),
         ]);
+
+        if (rosterError) { attRoster = []; renderAttendanceRoster(); showToast('Could not load attendance roster: ' + rosterError.message, true); return; }
 
         if (isMissingTableError(existingRes.error)) {
             getEl('attTable').style.display = 'none';
@@ -674,12 +678,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ── Student Evaluations ─────────────────────────────────────────────
     async function loadTeacherEvaluations() {
-        const name = currentProfile?.full_name;
-        if (!name) return;
+        const instructorId = currentProfile?.id;
+        if (!instructorId) return;
         const { data, error } = await supabaseClient
             .from('instructor_evaluation_summary')
             .select('*')
-            .eq('instructor_name', name)
+            .eq('instructor_id', instructorId)
             .order('school_year', { ascending: false });
 
         renderTeacherEvaluations(data || []);
@@ -742,153 +746,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         await FC.loadSSOLinks(supabaseClient, currentProfile?.role || 'teacher');
     }
 
-    // ── Add Subject Modal ────────────────────────────────────────────────
-    function setupAddSubjectModal() {
-        const modal = getEl('addSubjectModal');
-        const openBtn = getEl('addSubjectBtn');
-        const cancelBtn = getEl('cancelAddSubjectBtn');
-        const saveBtn = getEl('saveAddSubjectBtn');
-        const form = getEl('addSubjectForm');
-        const catalogSelect = getEl('subCatalogSelect');
-        const datalist = getEl('curriculumDatalist');
-        const codeInput = getEl('subCode');
-        const matchNotice = getEl('subMatchNotice');
-
-        if (!modal || !openBtn) return;
-
-        function populateCurriculumOptions() {
-            if (catalogSelect && coursesCatalog.length) {
-                catalogSelect.innerHTML = '<option value="">— Choose a Subject (50+ available) —</option>' +
-                    coursesCatalog.map(c => {
-                        const units = (c.lec_units || 0) + (c.lab_units || 0) || c.units || 3.0;
-                        return `<option value="${escapeHtml(c.code)}">${escapeHtml(c.code)} — ${escapeHtml(c.title)} (${units} units)</option>`;
-                    }).join('');
-            }
-            if (datalist && coursesCatalog.length) {
-                datalist.innerHTML = coursesCatalog.map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.title)}</option>`).join('');
-            }
-        }
-
-        function applyCourseSelection(course) {
-            if (!course) return;
-            const units = (course.lec_units || 0) + (course.lab_units || 0) || course.units || 3.0;
-            const semStr = course.semester === 2 ? '2nd Semester' : (course.semester === 3 ? 'Summer' : (typeof course.semester === 'string' ? course.semester : '1st Semester'));
-            if (getEl('subCode')) getEl('subCode').value = course.code || '';
-            if (getEl('subTitle')) getEl('subTitle').value = course.title || '';
-            if (getEl('subUnits')) getEl('subUnits').value = units;
-            if (getEl('subProgram')) getEl('subProgram').value = course.program || 'BSIT';
-            if (getEl('subYear') && course.year_level) getEl('subYear').value = String(course.year_level);
-            if (getEl('subSemester')) getEl('subSemester').value = semStr;
-
-            if (catalogSelect) catalogSelect.value = course.code || '';
-
-            if (matchNotice) {
-                matchNotice.style.display = 'block';
-                matchNotice.textContent = `✓ Auto-filled: ${course.code} — ${course.title} (${units} Units, ${course.program || 'BSIT'})`;
-            }
-        }
-
-        catalogSelect?.addEventListener('change', (e) => {
-            const val = (e.target.value || '').trim().toLowerCase();
-            const matched = coursesCatalog.find(c => c.code.toLowerCase() === val);
-            if (matched) applyCourseSelection(matched);
-        });
-
-        codeInput?.addEventListener('input', (e) => {
-            const rawVal = (e.target.value || '').trim();
-            const normalized = rawVal.replace(/\s+/g, '').toLowerCase();
-            if (!normalized) {
-                if (matchNotice) matchNotice.style.display = 'none';
-                return;
-            }
-            const matched = coursesCatalog.find(c =>
-                c.code.toLowerCase() === rawVal.toLowerCase() ||
-                c.code.replace(/\s+/g, '').toLowerCase() === normalized
-            );
-            if (matched) {
-                applyCourseSelection(matched);
-            } else if (matchNotice) {
-                matchNotice.style.display = 'none';
-            }
-        });
-
-        function openModal() {
-            populateCurriculumOptions();
-            modal.classList.add('open');
-            getEl('subCode')?.focus();
-        }
-
-        function closeModal() {
-            modal.classList.remove('open');
-            if (form) form.reset();
-            if (matchNotice) matchNotice.style.display = 'none';
-        }
-
-        openBtn.addEventListener('click', openModal);
-        cancelBtn?.addEventListener('click', closeModal);
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) closeModal();
-        });
-
-        saveBtn?.addEventListener('click', async () => {
-            const code = getEl('subCode')?.value.trim();
-            const title = getEl('subTitle')?.value.trim();
-            const program = getEl('subProgram')?.value;
-            const units = Number(getEl('subUnits')?.value || 3.0);
-            const schedule = getEl('subSchedule')?.value.trim();
-            const year = Number(getEl('subYear')?.value || 1);
-            const semester = getEl('subSemester')?.value;
-            const school_year = getEl('subSchoolYear')?.value.trim() || '2026–2027';
-
-            if (!code || !title || !program || !semester || !school_year) {
-                showToast('Please fill out all required fields marked with *', true);
-                return;
-            }
-
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Saving...';
-
-            const payload = {
-                code,
-                title,
-                program,
-                units,
-                schedule: schedule || null,
-                year,
-                semester,
-                school_year,
-                instructor_id: currentUser.id,
-                instructor_name: currentProfile.full_name,
-            };
-
-            let { data: newOffering, error } = await supabaseClient.from('course_offerings').insert(payload).select().single();
-
-            if (error && error.message && error.message.includes('instructor_id')) {
-                // Fallback in case instructor_id column is not in DB yet
-                delete payload.instructor_id;
-                ({ data: newOffering, error } = await supabaseClient.from('course_offerings').insert(payload).select().single());
-            }
-
-            saveBtn.disabled = false;
-            saveBtn.textContent = 'Save Subject';
-
-            if (error) {
-                showToast('Failed to create subject: ' + error.message, true);
-                return;
-            }
-
-            showToast(`Subject "${code} — ${title}" created successfully!`);
-            closeModal();
-            await loadMyCourses();
-
-            // Automatically select the newly created offering so it displays immediately
-            if (newOffering) {
-                const targetBtn = document.querySelector(`#courseList .nav-item[data-id="${newOffering.id}"]`);
-                selectCourse(newOffering.id, targetBtn);
-            }
-        });
-    }
-
     // ── Logout ──────────────────────────────────────────────────────────
     getEl('signOutBtn').addEventListener('click', async () => {
         await supabaseClient.auth.signOut();
@@ -899,15 +756,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const ok = await checkFacultyAuth();
     if (!ok) return;
 
-    // Load curriculum master catalog for auto-fill
-    try {
-        const { data: cData } = await supabaseClient.from('courses').select('*').order('code');
-        coursesCatalog = cData || [];
-    } catch (e) {
-        console.warn('Could not pre-fetch courses catalog:', e);
-    }
-
-    setupAddSubjectModal();
     await loadMyCourses();
     await loadSSOLinks();
 

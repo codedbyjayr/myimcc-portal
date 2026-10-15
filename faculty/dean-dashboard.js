@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     /**
      * Load instructor options via the get_subject_instructor_options RPC.
-     * Returns approved, active profiles with role 'teacher' or 'faculty'.
+     * Returns approved active teachers/faculty and the signed-in dean.
      * Results are cached in state.instructorOptions so repeated calls are cheap.
      * @param {boolean} force - if true, bypasses the cache and re-fetches.
      */
@@ -108,9 +108,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.instructorOptions = [];
             state.instructorOptionsError = error.message || 'Unknown RPC error';
         } else {
-            // Accept both teacher and faculty roles (existing instructors may carry 'teacher').
+            // A dean may teach a subject themselves, alongside eligible teachers/faculty.
             state.instructorOptions = (data || []).filter(r =>
-                r.role === 'teacher' || r.role === 'faculty'
+                r.role === 'teacher' || r.role === 'faculty' || (r.role === 'dean' && r.id === currentUserId)
             );
             state.instructorOptionsError = null;
         }
@@ -129,14 +129,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadAllData() {
         const [{ data: profiles }, { data: offerings }, { data: gradeRows }, { data: enrollRows }, { data: courses }] = await Promise.all([
-            supabaseClient.from('profiles').select('*'),
+            supabaseClient.rpc('get_dean_student_directory'),
             supabaseClient.from('course_offerings').select('*'),
             supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)'),
             supabaseClient.from('enrollments').select('student_id, status, offering_id, course_offerings(school_year, semester)').eq('status', 'enrolled'),
             supabaseClient.from('courses').select('*').order('code'),
         ]);
 
-        state.profiles = profiles || [];
+        state.profiles = [currentProfile, ...(profiles || [])].filter(Boolean);
         state.offerings = offerings || [];
         state.grades = gradeRows || [];
         state.enrollments = enrollRows || [];
@@ -148,8 +148,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             p => ['teacher', 'faculty', 'dean'].includes(p.role) && p.status === 'approved'
         );
 
-        // Kick off the RPC load in parallel; don't block the rest of the UI.
-        loadInstructorOptions();
+        // Both assignment dropdowns need the complete list before the first render.
+        await loadInstructorOptions();
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -425,10 +425,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const offerings = offeringsForSelectedTerm();
         const byInstructor = {};
         offerings.forEach(o => {
+            const id = o.instructor_id || 'unassigned';
             const name = o.instructor_name || 'Unassigned';
-            if (!byInstructor[name]) byInstructor[name] = { name, sections: 0, units: 0 };
-            byInstructor[name].sections++;
-            byInstructor[name].units += Number(o.units || 0);
+            if (!byInstructor[id]) byInstructor[id] = { name, sections: 0, units: 0 };
+            byInstructor[id].sections++;
+            byInstructor[id].units += Number(o.units || 0);
         });
 
         const rows = Object.values(byInstructor).sort((a, b) => b.units - a.units);
@@ -462,10 +463,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Use RPC-based instructor list when available; fall back to profiles-derived facultyList.
         const instructorSource = (state.instructorOptions && state.instructorOptions.length)
             ? state.instructorOptions
-            : state.facultyList.filter(f => f.role === 'teacher' || f.role === 'faculty');
+            : state.facultyList.filter(f => f.role === 'teacher' || f.role === 'faculty' || (f.role === 'dean' && f.id === currentUserId));
         const facultyOptions = instructorSource
             .slice().sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
-            .map(f => `<option value="${f.id}">${escapeHtml(f.full_name)}</option>`).join('');
+            .map(f => `<option value="${f.id}">${escapeHtml(f.full_name)}${f.id === currentUserId ? ' (You)' : ''}</option>`).join('');
 
         body.innerHTML = offerings.map(o => `
       <tr>
@@ -527,55 +528,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function assignFaculty(sel) {
         const offeringId = sel.dataset.id;
+        const offering = state.offerings.find(o => String(o.id) === offeringId);
+        if (!offering || sel.disabled) return;
+        const previousId = offering.instructor_id || '';
         const facultyId = sel.value;
         const faculty = state.facultyList.find(f => f.id === facultyId);
-        const instructorName = faculty ? faculty.full_name : null;
-
-        // 1. Update course_offerings (instructor_id + instructor_name)
-        let { error } = await supabaseClient
-            .from('course_offerings')
-            .update({ instructor_id: facultyId || null, instructor_name: instructorName })
-            .eq('id', offeringId);
-
-        if (error) {
-            ({ error } = await supabaseClient
-                .from('course_offerings')
-                .update({ instructor_name: instructorName })
-                .eq('id', offeringId));
+        if (facultyId && !faculty) {
+            sel.value = previousId;
+            showToast('Selected instructor is unavailable. Refresh and try again.', true);
+            return;
         }
-
-        if (error) { showToast('Failed to update faculty assignment: ' + error.message, true); return; }
-
-        // 2. Sync teacher_assignments — deactivate all old assignments for this
-        //    offering, then upsert the new one so the teacher's dropdown shows it.
-        const offering = state.offerings.find(o => String(o.id) === offeringId);
-        const academicYear = offering?.school_year || '2026-2027';
-        const semester = offering?.semester || '1st Semester';
-
-        // Deactivate previous assignments for this offering
-        await supabaseClient
-            .from('teacher_assignments')
-            .update({ is_active: false })
-            .eq('offering_id', offeringId);
-
-        if (facultyId) {
-            // Upsert active assignment for the new teacher
-            const { error: taErr } = await supabaseClient
-                .from('teacher_assignments')
-                .upsert({
-                    teacher_id: facultyId,
-                    offering_id: Number(offeringId),
-                    academic_year: academicYear,
-                    semester: semester,
-                    is_active: true,
-                    assigned_by: currentUserId,
-                }, { onConflict: 'teacher_id,offering_id,academic_year,semester' });
-
-            if (taErr) console.warn('teacher_assignments sync warning:', taErr.message);
+        sel.disabled = true;
+        try {
+            // The database trigger synchronizes assignments in this same transaction.
+            const { data, error } = await supabaseClient.from('course_offerings')
+                .update({ instructor_id: facultyId || null, instructor_name: faculty?.full_name || null })
+                .eq('id', offeringId).select().single();
+            if (error) throw error;
+            if (!data) throw new Error('No subject offering was updated.');
+            Object.assign(offering, data);
+            sel.value = offering.instructor_id || '';
+        } catch (error) {
+            sel.value = previousId;
+            showToast('Failed to update faculty assignment: ' + error.message, true);
+            return;
+        } finally {
+            sel.disabled = false;
         }
-
-        showToast(instructorName ? `Assigned ${instructorName}.` : 'Unassigned faculty.');
-        if (offering) { offering.instructor_id = facultyId || null; offering.instructor_name = instructorName; }
+        showToast(offering.instructor_name ? 'Assigned ' + offering.instructor_name + '.' : 'Unassigned faculty.');
         renderWorkloads();
         renderConflicts();
         loadMyClasses();
@@ -586,7 +566,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const conflicts = [];
 
         const byInstructor = {};
-        offerings.forEach(o => { if (o.instructor_name) (byInstructor[o.instructor_name] ||= []).push(o); });
+        offerings.forEach(o => { if (o.instructor_id) (byInstructor[o.instructor_id] ||= []).push(o); });
         Object.values(byInstructor).forEach(list => {
             for (let i = 0; i < list.length; i++) {
                 for (let j = i + 1; j < list.length; j++) {
@@ -935,12 +915,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         getEl('selectedMyCourseTitle').textContent = `${selectedMyOffering.code} — ${selectedMyOffering.title}`;
         getEl('selectedMyCourseSub').textContent = `${selectedMyOffering.semester || ''} ${selectedMyOffering.school_year || ''} · ${selectedMyOffering.schedule || 'Schedule TBA'}${selectedMyOffering.instructor_name ? ` · Instructor: ${selectedMyOffering.instructor_name}` : ''}`;
-        getEl('saveMyGradesBtn').disabled = false;
+        getEl('saveMyGradesBtn').disabled = true;
 
-        const [{ data: enrollments }, { data: existingGrades }] = await Promise.all([
-            supabaseClient.from('enrollments').select('student_id, profiles(id, full_name, student_no, id_number)').eq('offering_id', offeringId).eq('status', 'enrolled'),
+        const [{ data: enrollments, error: rosterError }, { data: existingGrades }] = await Promise.all([
+            supabaseClient.rpc('get_class_roster', { p_offering_id: Number(offeringId) }),
             supabaseClient.from('grades').select('*').eq('offering_id', offeringId),
         ]);
+
+        if (rosterError) { myRoster = []; renderMyRoster(); showToast('Could not load class roster: ' + rosterError.message, true); return; }
 
         const gradeByStudent = {};
         (existingGrades || []).forEach(g => { gradeByStudent[g.student_id] = g; });
@@ -958,6 +940,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .sort((a, b) => (a.student.full_name || '').localeCompare(b.student.full_name || ''));
 
         renderMyRoster();
+        getEl('saveMyGradesBtn').disabled = myRoster.length === 0;
         if (getEl('deanClassAuditLogBtn')) getEl('deanClassAuditLogBtn').style.display = myRoster.length > 0 ? 'inline-flex' : 'none';
     }
 
@@ -1327,7 +1310,7 @@ document.addEventListener('DOMContentLoaded', async () => {
      * - Add mode (requires explicit selection, no preselection)
      * - Edit mode:
      *   * If current instructor is eligible: preselects them
-     *   * If current instructor is legacy/ineligible (e.g. dean or deactivated):
+     *   * If current instructor is legacy/ineligible (e.g. deactivated):
      *     shows a prominent legacy warning and requires explicit selection of a replacement before saving
      */
     function renderInstructorDropdown(existingInstructorId = null, existingInstructorName = null, isEdit = false) {
@@ -1370,7 +1353,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               <select id="${selId}" class="field-input" disabled>
                 <option value="">— No active instructors found —</option>
               </select>
-              <p style="color:var(--amber-700,#b45309);font-size:12px;margin-top:4px;">No approved, active teachers or faculty members are currently on file.</p>`;
+              <p style="color:var(--amber-700,#b45309);font-size:12px;margin-top:4px;">No eligible instructors are available. Refresh and try again.</p>`;
             return;
         }
 
@@ -1390,12 +1373,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (isEligible) {
                 placeholderOption = `<option value="" disabled>— Select Instructor —</option>`;
             } else {
-                // Legacy or ineligible assignment (e.g. dean or unassigned)
+                // Preserve visibility of an assignment outside the eligible options.
                 const legacyDisplay = existingInstructorName || (existingInstructorId ? 'Ineligible Profile' : 'Unassigned');
                 placeholderOption = `<option value="" disabled selected>⚠ Legacy assignment: ${escapeHtml(legacyDisplay)} (Choose replacement)</option>`;
                 warningHtml = `
                   <div class="legacy-assignment-alert" style="margin-top:6px;padding:8px 10px;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;font-size:12px;color:#92400e;line-height:1.4;">
-                    <strong>⚠ Legacy Assignment:</strong> Currently assigned to <strong>${escapeHtml(legacyDisplay)}</strong>. Existing offerings assigned to a dean or ineligible profile cannot be saved as-is. You must explicitly select an eligible teacher or faculty member before saving.
+                    <strong>⚠ Legacy Assignment:</strong> Currently assigned to <strong>${escapeHtml(legacyDisplay)}</strong>. Choose an eligible teacher, faculty member, or yourself before saving.
                   </div>`;
             }
         } else {
@@ -1406,7 +1389,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const optionsHtml = sorted
             .map(f => {
                 const selected = isEligible && String(f.id) === String(existingInstructorId);
-                const roleBadge = f.role ? ` (${f.role})` : '';
+                const roleBadge = f.id === currentUserId ? ' (You — Dean)' : f.role ? ` (${f.role})` : '';
                 return `<option value="${escapeHtml(f.id)}" ${selected ? 'selected' : ''}>${escapeHtml(f.full_name)}${escapeHtml(roleBadge)}</option>`;
             })
             .join('');
@@ -1616,12 +1599,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (!rpcErr) {
                     savedRow = rpcData;
                 } else {
-                    // Check if RPC is missing / not deployed; if so, execute client-side synchronized write
+                    // A direct offering write is also atomic through the database assignment trigger.
                     const isRpcMissing = rpcErr.code === 'PGRST202' ||
                         (rpcErr.message && rpcErr.message.includes('function') && rpcErr.message.includes('does not exist'));
 
                     if (isRpcMissing) {
-                        console.warn('save_course_offering_with_instructor RPC not found, falling back to synchronized write:', rpcErr.message);
+                        console.warn('save_course_offering_with_instructor RPC not found, falling back to trigger-synchronized offering write:', rpcErr.message);
                         const directPayload = {
                             code: values.code,
                             title: values.title,
@@ -1642,19 +1625,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 saveErr = error;
                             } else {
                                 savedRow = data;
-                                // Deactivate old assignments for this offering
-                                await supabaseClient.from('teacher_assignments')
-                                    .update({ is_active: false }).eq('offering_id', editingOfferingId);
-
-                                // Upsert active assignment for selected instructor
-                                await supabaseClient.from('teacher_assignments').upsert({
-                                    teacher_id: selectedInstructor.id,
-                                    offering_id: Number(editingOfferingId),
-                                    academic_year: directPayload.school_year,
-                                    semester: directPayload.semester,
-                                    is_active: true,
-                                    assigned_by: currentUserId,
-                                }, { onConflict: 'teacher_id,offering_id,academic_year,semester' });
                             }
                         } else {
                             const { data, error } = await supabaseClient.from('course_offerings')
@@ -1663,14 +1633,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 saveErr = error;
                             } else {
                                 savedRow = data;
-                                await supabaseClient.from('teacher_assignments').insert({
-                                    teacher_id: selectedInstructor.id,
-                                    offering_id: Number(savedRow.id),
-                                    academic_year: directPayload.school_year,
-                                    semester: directPayload.semester,
-                                    is_active: true,
-                                    assigned_by: currentUserId,
-                                });
                             }
                         }
                     } else {
