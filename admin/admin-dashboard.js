@@ -18,6 +18,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const searchInput = document.getElementById('searchInput');
     const courseFilter = document.getElementById('courseFilter');
     const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+    const previewControl = document.getElementById('developerPreviewControl');
+    const previewRole = document.getElementById('previewRole');
+    const previewPanel = document.getElementById('developerPreview');
+    const previewFrame = document.getElementById('previewFrame');
+    const previewStatus = document.getElementById('previewStatus');
+    const workspace = document.getElementById('adminWorkspace');
+    let previewChannel = null;
     if (window.imccTableSkeleton) {
         if (pendingTableBody) pendingTableBody.innerHTML = window.imccTableSkeleton(5, 2);
         if (approvedTableBody) approvedTableBody.innerHTML = window.imccTableSkeleton(5, 4);
@@ -53,11 +60,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const { data: profile } = await supabaseClient
             .from('profiles')
-            .select('role, status')
+            .select('role, status, is_active')
             .eq('id', user.id)
             .single();
 
-        if (!profile || profile.role !== 'admin' || profile.status !== 'approved') {
+        if (!profile || profile.role !== 'admin' || profile.status !== 'approved' || profile.is_active !== true) {
             alert("Unauthorized access. Admin privileges required.");
             await supabaseClient.auth.signOut();
             window.location.href = '../auth/login.html';
@@ -65,19 +72,160 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (adminEmailEl) adminEmailEl.textContent = user.email;
-        const previewLink = document.getElementById('developerPreviewLink');
-        if (previewLink && user.email?.toLowerCase() === 'jlm33405@imcc.edu.ph') {
+        if (user.email?.toLowerCase() === 'jlm33405@imcc.edu.ph') {
             try {
-                const { data: { session } } = await supabaseClient.auth.getSession();
-                if (session) {
-                    const response = await fetch('/api/developer-preview', {
-                        headers: { Authorization: 'Bearer ' + session.access_token }, cache: 'no-store',
-                    });
-                    previewLink.hidden = !response.ok;
-                }
-            } catch { previewLink.hidden = true; }
+                await previewRequest();
+                previewControl.hidden = false;
+                previewRole.disabled = false;
+            } catch { previewControl.hidden = true; }
         }
+        return true;
     }
+
+    async function previewRequest(resource, headers = {}) {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        if (error || !session) throw new Error('Sign in with your developer account first.');
+        const response = await fetch('/api/developer-preview' + (resource ? '?resource=' + encodeURIComponent(resource) : ''), {
+            headers: { ...headers, Authorization: 'Bearer ' + session.access_token }, cache: 'no-store',
+        });
+        if (!resource && !response.ok) throw new Error((await response.json()).error || 'Developer view is unavailable.');
+        return resource ? response : response.json();
+    }
+
+    function closePreview() {
+        previewChannel = null;
+        previewFrame.hidden = true;
+        previewFrame.removeAttribute('srcdoc');
+        previewPanel.hidden = true;
+        workspace.hidden = false;
+        previewRole.value = 'admin';
+    }
+
+    // This runs inside the opaque frame. No admin token or parent storage is given to it.
+    function startReadOnlyDashboard(channel, user, theme) {
+        window.IMCC_DEVELOPER_VIEW = true;
+        const storage = new Map([['myimcc_theme', theme]]);
+        Object.defineProperty(window, 'localStorage', { value: {
+            getItem: key => storage.get(key) ?? null,
+            setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key),
+        } });
+        const readOnlyFetch = async (input, options) => {
+            const request = new Request(input, options);
+            if (!['GET', 'HEAD'].includes(request.method)) {
+                return new Response(JSON.stringify({ code: '25006', message: 'Developer view is read only.' }), { status: 405 });
+            }
+            const id = crypto.randomUUID();
+            return new Promise(resolve => {
+                const timeout = setTimeout(() => finish({ status: 504, body: '{"message":"Developer view request timed out."}' }), 20000);
+                function finish(result) {
+                    clearTimeout(timeout);
+                    window.removeEventListener('message', receive);
+                    resolve(new Response(request.method === 'HEAD' ? null : result.body, { status: result.status, headers: result.headers }));
+                }
+                function receive(event) {
+                    if (event.source === parent && event.data?.channel === channel && event.data.id === id) finish(event.data);
+                }
+                window.addEventListener('message', receive);
+                const url = new URL(request.url);
+                parent.postMessage({ channel, id, resource: url.pathname + url.search,
+                    accept: request.headers.get('accept'), prefer: request.headers.get('prefer'), range: request.headers.get('range') }, '*');
+            });
+        };
+        const client = supabase.createClient('https://developer-preview.invalid', 'read-only', {
+            auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+            global: { fetch: readOnlyFetch },
+        });
+        client.auth.getUser = async () => ({ data: { user }, error: null });
+        client.auth.getSession = async () => ({ data: { session: { user, access_token: 'read-only' } }, error: null });
+        client.auth.onAuthStateChange = () => ({ data: { subscription: { unsubscribe() {} } } });
+        client.channel = () => ({ on() { return this; }, subscribe() { return this; } });
+        const rpc = client.rpc.bind(client);
+        client.rpc = (name, args) => rpc(name, args, { get: true });
+        window.supabaseClient = window.__myimcc_supabase_client__ = client;
+        window.getSupabaseClientAsync = async () => client;
+        document.addEventListener('click', event => {
+            if (event.target.closest('a[href],#logoutBtn,#signOutBtn')) {
+                event.preventDefault(); event.stopImmediatePropagation();
+            }
+        }, true);
+    }
+
+    async function showPreview() {
+        if (previewRole.value === 'admin') { closePreview(); return; }
+        const channel = previewChannel = crypto.randomUUID();
+        previewRole.disabled = true;
+        previewPanel.hidden = false;
+        workspace.hidden = true;
+        previewStatus.textContent = 'Loading dashboard…';
+        try {
+            const { dashboards, user } = await previewRequest();
+            const path = dashboards[previewRole.value];
+            if (!path) throw new Error('Unknown dashboard role.');
+            const response = await fetch(path, { cache: 'no-store' });
+            if (!response.ok) throw new Error('Dashboard could not be loaded.');
+            const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+            doc.querySelectorAll('base,meta[http-equiv],#developerPreview,#developerPreviewControl').forEach(el => el.remove());
+            doc.querySelectorAll('script[src]').forEach(el => {
+                if (new URL(el.getAttribute('src'), new URL(path, location.origin)).pathname === '/env-config.js') el.remove();
+            });
+            let theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            try { theme = localStorage.getItem('myimcc_theme') || theme; } catch {}
+            doc.documentElement.dataset.theme = doc.body.dataset.theme = theme;
+            const script = doc.createElement('script');
+            script.textContent = `(${startReadOnlyDashboard.toString()})(${JSON.stringify(channel)},${JSON.stringify(user).replaceAll('<', '\\u003c')},${JSON.stringify(theme)});`.replace(/\r\n?/g, '\n');
+            const config = doc.querySelector('script[src$="/shared/supabase-config.js"]');
+            if (!config) throw new Error('Dashboard configuration was not found.');
+            config.replaceWith(script);
+            const base = doc.createElement('base');
+            base.href = new URL(path, location.origin).href;
+            doc.head.prepend(base);
+            const hashes = await Promise.all([...doc.querySelectorAll('script:not([src])')].map(async el => {
+                const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(el.textContent));
+                return "'sha256-" + btoa(String.fromCharCode(...new Uint8Array(digest))) + "'";
+            }));
+            const sources = [...doc.querySelectorAll('script[src]')].map(el => new URL(el.getAttribute('src'), base.href).href);
+            const csp = doc.createElement('meta');
+            csp.httpEquiv = 'Content-Security-Policy';
+            const imageOrigin = new URL(window.__ENV__?.SUPABASE_URL || location.origin).origin;
+            csp.content = `default-src 'none'; script-src ${[...hashes, ...sources].join(' ')}; connect-src 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; style-src ${location.origin} https://fonts.googleapis.com 'unsafe-inline'; font-src ${location.origin} https://fonts.gstatic.com; img-src ${location.origin} ${imageOrigin} https://lh3.googleusercontent.com data:; base-uri ${location.origin}`;
+            doc.head.prepend(csp);
+            if (previewChannel !== channel) return;
+            previewFrame.srcdoc = '<!doctype html>' + doc.documentElement.outerHTML;
+            previewFrame.title = previewRole.selectedOptions[0].textContent + ' dashboard';
+            previewFrame.hidden = false;
+            previewStatus.textContent = 'Viewing as ' + previewRole.selectedOptions[0].textContent + ' — read only';
+        } catch (error) {
+            if (previewChannel !== channel) return;
+            closePreview();
+            previewPanel.hidden = false;
+            previewStatus.textContent = error.message;
+        } finally { previewRole.disabled = previewControl.hidden; }
+    }
+
+    window.addEventListener('message', async event => {
+        const request = event.data;
+        if (!previewChannel || event.source !== previewFrame.contentWindow || request?.channel !== previewChannel
+            || typeof request.id !== 'string' || typeof request.resource !== 'string') return;
+        const channel = previewChannel;
+        let result;
+        try {
+            const response = await previewRequest(request.resource, {
+                'X-Preview-Accept': request.accept || 'application/json',
+                'X-Preview-Prefer': request.prefer || '', 'X-Preview-Range': request.range || '',
+            });
+            result = { status: response.status, body: await response.text(), headers: {
+                'Content-Type': 'application/json', ...(response.headers.has('content-range') ? { 'Content-Range': response.headers.get('content-range') } : {}),
+            } };
+        } catch { result = { status: 503, body: '{"message":"Developer view is unavailable."}' }; }
+        if (previewChannel === channel) previewFrame.contentWindow.postMessage({ ...result, channel, id: request.id }, '*');
+    });
+    previewRole.addEventListener('change', showPreview);
+    document.getElementById('exitPreview').addEventListener('click', closePreview);
+    supabaseClient.auth.onAuthStateChange(event => {
+        if (['SIGNED_OUT', 'USER_UPDATED', 'SIGNED_IN'].includes(event)) {
+            closePreview(); previewControl.hidden = true; previewRole.disabled = true;
+        }
+    });
 
     // 2. Fetch Pending Requests
     async function loadPendingUsers() {
@@ -399,7 +547,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    await checkAdminAuth();
+    if (!await checkAdminAuth()) return;
     await loadPendingUsers();
     await loadApprovedUsers();
 

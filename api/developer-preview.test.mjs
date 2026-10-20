@@ -7,23 +7,34 @@ const originalKey = process.env.SUPABASE_ANON_KEY;
 process.env.SUPABASE_URL = 'https://preview-test.supabase.co';
 process.env.SUPABASE_ANON_KEY = 'public-test-key';
 const token = aal => 'header.' + Buffer.from(JSON.stringify({ aal })).toString('base64url') + '.signature';
-let user, profile, authStatus, profileStatus;
+let user, profile, authStatus, profileStatus, dataStatus = 200;
 let requests = [];
 globalThis.fetch = async (input, options) => {
   const url = String(input);
   assert.equal(options.method, 'GET', 'Preview must never write to Supabase');
   requests.push(url);
   if (url.endsWith('/auth/v1/user')) return new Response(JSON.stringify(user), { status: authStatus });
-  assert(url.startsWith('https://preview-test.supabase.co/rest/v1/profiles?'));
-  assert(url.includes('id=eq.developer-id'));
-  return new Response(JSON.stringify(profile), { status: profileStatus });
+  const target = new URL(url);
+  assert.equal(target.origin, 'https://preview-test.supabase.co', 'Never forward to another host');
+  if (target.pathname === '/rest/v1/profiles' && target.searchParams.get('select') === 'role,status,is_active') {
+    assert.equal(target.searchParams.get('id'), 'eq.developer-id');
+    return new Response(JSON.stringify(profile), { status: profileStatus });
+  }
+  assert.equal(new Headers(options.headers).get('authorization'), 'Bearer ' + token('aal2'));
+  assert.equal(options.redirect, 'error');
+  assert.equal(new Headers(options.headers).get('accept-profile'), null);
+  if (dataStatus === 500) throw new Error('Database unavailable');
+  return new Response(JSON.stringify(dataStatus === 403 ? { message: 'Permission denied' } : [{ id: 42, title: 'Permitted data' }]), {
+    status: dataStatus, headers: { 'content-range': '0-0/1', 'content-type': 'application/json' },
+  });
 };
 
-async function request({ method = 'GET', authorization = 'Bearer ' + token('aal2') } = {}) {
+async function request({ method = 'GET', authorization = 'Bearer ' + token('aal2'), resource, headers = {} } = {}) {
   const result = { headers: {}, setHeader(k, v) { this.headers[k] = v; },
-    status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } };
+    status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; },
+    send(body) { this.body = body; return this; } };
   requests = [];
-  await handler({ method, headers: { authorization } }, result);
+  await handler({ method, url: '/api/developer-preview' + (resource === undefined ? '' : '?resource=' + encodeURIComponent(resource)), headers: { ...headers, authorization } }, result);
   assert.equal(result.headers['Cache-Control'], 'no-store');
   return result;
 }
@@ -67,8 +78,26 @@ try {
   const allowed = await request();
   assert.equal(allowed.code, 200);
   assert.deepEqual(Object.keys(allowed.body.dashboards), ['student', 'faculty', 'dean', 'registrar', 'staff', 'admin']);
-  assert.deepEqual(Object.keys(allowed.body), ['dashboards'], 'No personal records or credentials in the response');
-  console.log('Developer preview: account allowlist, MFA, approval, active role, GET-only access and configuration checks passed.');
+  assert.deepEqual(allowed.body.user, { id: 'developer-id', email: 'jlm33405@imcc.edu.ph' });
+  assert.deepEqual(Object.keys(allowed.body), ['dashboards', 'user'], 'Never return an access token');
+  for (const resource of ['/rest/v1/course_offerings?select=*', '/rest/v1/rpc/get_class_roster?p_offering_id=42']) {
+    const data = await request({ resource });
+    assert.equal(data.code, 200);
+    assert.deepEqual(JSON.parse(data.body), [{ id: 42, title: 'Permitted data' }]);
+    assert.equal(data.headers['Content-Range'], '0-0/1');
+    assert.equal(requests.length, 3, 'Recheck user and profile before each data request');
+  }
+  for (const resource of ['https://attacker.example/rest/v1/profiles', '//attacker.example/rest/v1/profiles',
+    '/auth/v1/user', '/rest/v1/rpc/set_user_role', '/rest/v1/rpc/initialize_student_clearances',
+    '/rest/v1/../../auth/v1/user', '/rest/v1/%2e%2e/auth/v1/user', '/rest/v1/profiles\\..\\auth']) {
+    assert.equal((await request({ resource })).code, 400, resource);
+    assert.equal(requests.length, 2, 'Reject invalid targets before forwarding');
+  }
+  dataStatus = 403;
+  assert.equal((await request({ resource: '/rest/v1/profiles?select=*' })).code, 403, 'Keep database permission denials');
+  dataStatus = 500;
+  assert.equal((await request({ resource: '/rest/v1/profiles?select=*' })).code, 503, 'Fail closed on network errors');
+  console.log('Developer view: account/MFA checks, caller JWT, GET-only reads, RPC allowlist, permission errors and target restrictions passed.');
 } finally {
   globalThis.fetch = originalFetch;
   if (originalUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = originalUrl;

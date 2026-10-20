@@ -2,25 +2,34 @@
 
 ## Developer dashboard preview
 
-Only the verified account `jlm33405@imcc.edu.ph` may open
-`/admin/role-preview.html`. It must remain an approved, active admin and complete
+Only the verified account `jlm33405@imcc.edu.ph` receives the **View as role** selector
+in `/admin/admin-dashboard.html`. It must remain an approved, active admin and complete
 MFA. Configure `SUPABASE_URL` and `SUPABASE_ANON_KEY` on the Vercel server to match
 the frontend's project. No service-role key is needed. Missing configuration
 denies access. Other admin accounts are not granted this feature.
 
-After deployment, the admin dashboard shows **Preview dashboards** when the
-server confirms access. The viewer includes Student, Faculty, Dean, Registrar,
-Staff and Admin. Select a role and use its sidebar to inspect the available
-sections. **Exit preview** returns to the admin dashboard.
+After deployment, select Student, Faculty, Dean, Registrar or Staff in the admin
+header. The original dashboard runs inside the existing admin page, keeping its
+HTML, styles, scripts and saved theme. Select **Admin** or **Back to Admin** to
+restore the normal admin workspace. There is no separate viewer page.
 
-The viewer uses the current dashboard HTML and styles, with all original scripts
-removed. It is a layout preview: dynamic charts, records, dialogs, and actions
-need actual-user testing. Empty tables are labelled as preview content. It does
-not impersonate a person, change a role, or fetch personal records. External
-page links are disabled. The sandbox has no same-origin access, forms, popups,
-or top navigation; its content security policy blocks API requests and permits
-only the viewer's navigation script. The preview API accepts GET only and reads
-only the requesting admin's identity and account status.
+The original dashboard loads real data through the developer's existing admin
+permissions. It does not impersonate a person or change roles. Student and
+faculty queries scoped to the current account may be empty if the admin has no
+enrollment or teaching assignments. This is not the same as viewing another
+student's account or verifying their permissions.
+
+The sandbox receives no real access token and cannot access the parent page.
+Its Supabase reads are relayed to `/api/developer-preview`. Every request checks
+the developer's identity, MFA, approval and active admin status. The server uses
+the caller's JWT, never a service-role key. Only GET requests to the project's
+PostgREST tables/views and four dashboard read RPCs are forwarded. PostgREST
+executes GET in a read-only transaction; write methods, Auth/Storage/Edge Function
+calls, other RPCs and external targets are blocked. Direct frame networking and
+forms are blocked by its content security policy. Realtime is disabled in the
+view. Switch roles or reopen it to refresh data. Buttons that save or submit
+cannot write and may show a read-only error. External navigation and sign-out
+controls inside the frame are disabled; use the main admin header to exit.
 
 This grants no new database privileges. The developer's ordinary admin session
 still has its existing permissions outside the viewer. The viewer is not a way
@@ -77,8 +86,8 @@ issue. Use fictional academic/financial records in the review environment.
   remain inaccessible.
 - Admin: approve the intended roles, suspend and restore a tester, and verify
   ordinary users cannot perform those operations.
-- Developer: all six preview layouts open; navigation works; no write actions or
-  personal records load. A different admin, inactive account and session without
+- Developer: the five role views load permitted data and keep their real design;
+  Admin restores the actual admin workspace. Writes are rejected. A different admin, inactive account and session without
   MFA are refused by `/api/developer-preview`.
 
 Retest fixes with the same steps. Before defense, rehearse the approved release

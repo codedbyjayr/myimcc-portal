@@ -868,7 +868,7 @@
       }
     });
 
-    on(getEl('msgRecipientList'), 'click', (event, node) => {
+    on(getEl('msgRecipientList'), 'click', '[data-id]', (event, node) => {
       if (!node.dataset.id) return;
       getEl('msgRecipient').value = node.dataset.id;
       getEl('msgRecipientSearch').value = peerName(node.dataset.id);

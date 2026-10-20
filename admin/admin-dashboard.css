@@ -335,4 +335,9 @@ td {
   .header { margin-bottom: 24px; }
   .card-title { font-size: 16px; }
 }
-#developerPreviewLink[hidden] { display: none; }
+#developerPreviewControl[hidden], #developerPreview[hidden], #adminWorkspace[hidden], #previewFrame[hidden] { display: none; }
+#developerPreviewControl { font-size: 12px; }
+#developerPreviewControl select { margin-left: 6px; }
+.preview-note { color: var(--text-muted); font-size: 12px; margin-bottom: 12px; }
+#previewFrame { display: block; width: 100%; height: 80vh; border: 1px solid var(--surface-border); border-radius: 8px; }
+.user-info { flex-wrap: wrap; }

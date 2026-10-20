@@ -1,107 +1,140 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import { readFile } from 'node:fs/promises';
 import { server } from './test-portal.mjs';
 
-// Use an existing Playwright installation; this check adds no app dependency.
+// Use the existing browser tooling and actual Supabase SDK; no app dependency is added.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const sdk = await readFile(new URL('../node_modules/@supabase/supabase-js/dist/umd/supabase.js', import.meta.url), 'utf8');
 const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge' });
 server.listen(0, '127.0.0.1');
 await once(server, 'listening');
 const origin = `http://127.0.0.1:${server.address().port}`;
+const user = { id: 'developer-id', email: 'jlm33405@imcc.edu.ph' };
+const profile = { ...user, full_name: 'Developer Tester', role: 'admin', status: 'approved', is_active: true, program: 'BSN', year_level: '1', section: 'A' };
+const paths = {
+  student: '/student/dashboard.html', faculty: '/faculty/teacher-dashboard.html', dean: '/faculty/dean-dashboard.html',
+  registrar: '/staff/registrar-dashboard.html', staff: '/staff/staff-dashboard.html', admin: '/admin/admin-dashboard.html',
+};
+const offering = { id: 42, code: 'PILOT101', title: 'Pilot course', units: 3, fee: 1000, program: 'BSN', year_level: '1',
+  section: 'A', instructor_id: user.id, instructor_name: profile.full_name, school_year: '2026-2027', semester: '1st Semester' };
+function rowsFor(url) {
+  const table = url.pathname.split('/').pop();
+  if (table === 'profiles') return url.searchParams.get('status') === 'eq.pending' ? [] : [profile];
+  if (table === 'course_offerings') return [offering];
+  if (table === 'clearances') return [{ id: 1, student_id: user.id, department_code: 'LIB', department_name: 'Library', status: 'pending', profiles: profile }];
+  if (table === 'student_semesters') return [{ student_id: user.id, semester: offering.semester, school_year: offering.school_year, units_enrolled: 3 }];
+  return [];
+}
+function dataResponse(url, headers = {}) {
+  const rows = rowsFor(url);
+  return { status: 200, contentType: 'application/json', headers: { 'content-range': `0-${Math.max(0, rows.length - 1)}/${rows.length}` },
+    body: JSON.stringify(headers.accept?.includes('object+json') ? rows[0] || null : rows) };
+}
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-  const browserErrors = [];
-  page.on('pageerror', error => browserErrors.push(error.message));
-  await page.route('**/*', route => route.request().url().startsWith(origin)
-    ? route.continue() : route.abort());
-  // A plain document lets us exercise the builder without signing in or mocking a session.
-  await page.goto(origin + '/env-config.js');
-  const paths = {
-    Student: '/student/dashboard.html', Faculty: '/faculty/teacher-dashboard.html',
-    Dean: '/faculty/dean-dashboard.html', Registrar: '/staff/registrar-dashboard.html',
-    Staff: '/staff/staff-dashboard.html', Admin: '/admin/admin-dashboard.html',
-  };
-  for (const [role, path] of Object.entries(paths)) {
-    await page.evaluate(async ({ path, role }) => {
-      const { buildPreview } = await import('/admin/role-preview.js');
-      const source = await (await fetch(path)).text();
-      document.querySelectorAll('iframe').forEach(el => el.remove());
-      const iframe = document.createElement('iframe');
-      iframe.setAttribute('sandbox', 'allow-scripts');
-      iframe.style.cssText = 'width:100%;height:900px;border:0';
-      iframe.srcdoc = buildPreview(source, new URL(path, location.origin).href, role);
-      document.body.replaceChildren(iframe);
-    }, { path, role });
-    const frameElement = await page.locator('iframe').elementHandle();
-    const frame = await frameElement.contentFrame();
-    await frame.waitForSelector('[role="status"]');
-    await frame.waitForLoadState('load');
-    assert((await frame.locator('[role="status"]').last().textContent()).includes('READ ONLY'));
-    assert.equal(await frame.locator('script').count(), 1, 'Only preview navigation script remains');
-    assert.equal(await frame.locator('a[href]').count(), 0);
-    assert.equal(await frame.locator('input:enabled,select:enabled,textarea:enabled').count(), 0);
-    const isolation = await frame.evaluate(async () => {
-      let parentBlocked = false, storageBlocked = false, networkBlocked = false;
-      try { void parent.document; } catch { parentBlocked = true; }
-      try { void localStorage.length; } catch { storageBlocked = true; }
-      try { await fetch('/api/should-never-run', { method: 'POST' }); } catch { networkBlocked = true; }
-      return { parentBlocked, storageBlocked, networkBlocked };
-    });
-    assert.deepEqual(isolation, { parentBlocked: true, storageBlocked: true, networkBlocked: true });
-    const buttons = frame.locator('[data-page],[data-view]');
-    for (let i = 0; i < await buttons.count(); i++) {
-      const button = buttons.nth(i);
-      const name = await button.getAttribute('data-page') || await button.getAttribute('data-view');
-      const panel = frame.locator('#page-' + name + ',#view-' + name);
-      if (await panel.count() !== 1) continue;
-      await button.click();
-      assert(await panel.isVisible(), `${role}: ${name} navigation must show its section: ${JSON.stringify(await panel.evaluate(el => ({ class: el.className, hidden: el.hidden, style: el.getAttribute('style'), display: getComputedStyle(el).display })))}`);
-    }
-    await page.setViewportSize({ width: 390, height: 844 });
-    const mobile = frame.locator('#menuToggle');
-    if (await mobile.count()) {
-      await mobile.click();
-      assert((await frame.locator('#sidebar').getAttribute('class')).includes('open'));
-    }
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    console.log(`${role}: layout, section navigation and sandbox isolation passed.`);
-  }
-  await page.route('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2', route => route.fulfill({
-    contentType: 'text/javascript', body: `window.supabase = { createClient() { return { auth: {
-      getSession: async () => ({ data: { session: { access_token: 'local-browser-test' } } }),
-      onAuthStateChange() {}
-    } }; } };`,
-  }));
+  const errors = [], reads = [], writes = [];
   let denyAccess = false;
-  await page.route(origin + '/api/developer-preview', route => route.fulfill({
-    status: denyAccess ? 403 : 200, contentType: 'application/json',
-    body: JSON.stringify(denyAccess ? { error: 'Preview access denied.' } : {
-      dashboards: Object.fromEntries(Object.entries(paths).map(([role, path]) => [role.toLowerCase(), path])),
-    }),
-  }));
-  await page.goto(origin + '/admin/role-preview.html');
-  await page.locator('#previewFrame').waitFor({ state: 'visible' });
-  assert((await page.locator('#previewStatus').textContent()).includes('Viewing as Student'));
-  await page.frameLocator('#previewFrame').getByText('Viewing as Student — READ ONLY · No personal records', { exact: true }).waitFor();
-  for (const role of Object.keys(paths)) {
-    await page.selectOption('#previewRole', role.toLowerCase());
-    await page.getByText('Viewing as ' + role + ' — read only', { exact: true }).waitFor();
+  page.on('pageerror', error => { errors.push(error.message); console.error('Browser error:', error.message); });
+  page.on('console', message => { if (message.type() === 'error' && message.text().includes('Executing inline script')) console.error(message.text()); });
+  await page.route('**/*', async route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.hostname === 'cdn.jsdelivr.net') return route.fulfill({ contentType: 'text/javascript', body: sdk });
+    if (url.origin === origin && url.pathname === '/shared/supabase-config.js' && request.frame() === page.mainFrame()) {
+      return route.fulfill({ contentType: 'text/javascript', body: `
+        const client = supabase.createClient('https://preview-db.invalid', 'test-key', { auth: { persistSession: false, autoRefreshToken: false } });
+        client.auth.getUser = async () => ({ data: { user: ${JSON.stringify(user)} } });
+        client.auth.getSession = async () => ({ data: { session: { access_token: 'private-parent-token' } } });
+        client.auth.onAuthStateChange = callback => { window.testAuthChange = callback; return { data: { subscription: { unsubscribe() {} } } }; };
+        window.supabaseClient = window.__myimcc_supabase_client__ = client;
+        window.getSupabaseClientAsync = async () => client;` });
+    }
+    if (url.hostname === 'preview-db.invalid') {
+      if (request.method() !== 'GET') writes.push(request.url());
+      return route.fulfill(dataResponse(url, request.headers()));
+    }
+    if (url.origin === origin && url.pathname === '/api/developer-preview') {
+      assert.equal(request.headers().authorization, 'Bearer private-parent-token');
+      assert.equal(request.method(), 'GET');
+      if (denyAccess) return route.fulfill({ status: 403, json: { error: 'Preview access denied.' } });
+      const resource = url.searchParams.get('resource');
+      if (!resource) return route.fulfill({ json: { dashboards: paths, user } });
+      reads.push(resource);
+      const target = new URL(resource, origin);
+      if (target.pathname.startsWith('/rest/v1/rpc/') && !['get_class_roster', 'get_subject_instructor_options', 'get_dean_student_directory', 'helpdesk_recipient_id'].includes(target.pathname.split('/').pop())) {
+        return route.fulfill({ status: 400, json: { message: 'Only dashboard data reads are allowed.' } });
+      }
+      return route.fulfill(dataResponse(target, { accept: request.headers()['x-preview-accept'] }));
+    }
+    return url.origin === origin ? route.continue() : route.abort();
+  });
+  await page.addInitScript(() => { if (window === top) localStorage.setItem('myimcc_theme', 'dark'); });
+  await page.goto(origin + '/admin/admin-dashboard.html');
+  await page.locator('#developerPreviewControl').waitFor({ state: 'visible' });
+  assert(await page.locator('#adminWorkspace').isVisible());
+  for (const role of Object.keys(paths).filter(role => role !== 'admin')) {
+    const before = reads.length;
+    await page.selectOption('#previewRole', role);
     await page.locator('#previewFrame').waitFor({ state: 'visible' });
-    assert((await page.locator('#previewStatus').textContent()).includes('Viewing as ' + role));
-    await page.frameLocator('#previewFrame').getByText(`Viewing as ${role} — READ ONLY · No personal records`, { exact: true }).waitFor();
+    await page.getByText(`Viewing as ${role[0].toUpperCase() + role.slice(1)} — read only`, { exact: true }).waitFor();
+    const frame = await (await page.locator('#previewFrame').elementHandle()).contentFrame();
+    await frame.waitForFunction(expected => document.baseURI === expected, origin + paths[role]);
+    await frame.waitForLoadState('load');
+    await frame.waitForFunction(() => !!window.__myimcc_supabase_client__);
+    const probe = await frame.evaluate(() => window.__myimcc_supabase_client__.from('profiles').select('*').eq('id', 'developer-id').single());
+    assert(probe.data, `${role}: ${JSON.stringify(probe)}; requests: ${reads.slice(-3).join(', ')}`);
+    assert(reads.length > before, `${role}: original scripts must request real data`);
+    assert(await page.locator('#adminWorkspace').isHidden());
+    assert.equal(await frame.locator('html').getAttribute('data-theme'), 'dark');
+    assert(!await page.locator('#previewFrame').getAttribute('srcdoc').then(source => source.includes('private-parent-token')));
+    assert.equal(await frame.evaluate(() => window.__myimcc_supabase_client__.auth.getSession().then(result => result.data.session.access_token)), 'read-only');
+    const denied = await frame.evaluate(async () => {
+      let parentBlocked = false, networkBlocked = false;
+      try { void parent.document; } catch { parentBlocked = true; }
+      try { await fetch('/api/should-never-run', { method: 'POST' }); } catch { networkBlocked = true; }
+      const { error } = await window.__myimcc_supabase_client__.from('profiles').update({ role: 'student' }).eq('id', 'developer-id');
+      return { parentBlocked, networkBlocked, message: error.message, token: localStorage.getItem('myimcc-auth-token') };
+    });
+    assert.deepEqual(denied, { parentBlocked: true, networkBlocked: true, message: 'Developer view is read only.', token: null });
+    const nav = frame.locator('[data-page="profile"],[data-view="prospectus"]');
+    if (await nav.count()) {
+      await nav.first().click();
+      await frame.locator('#page-profile,#view-prospectus').waitFor({ state: 'visible' });
+    }
+    if (role === 'faculty') {
+      await frame.locator('[data-page="classes"]').click();
+      await frame.getByText('PILOT101', { exact: true }).first().waitFor();
+    }
+    await page.selectOption('#previewRole', 'admin');
+    assert(await page.locator('#adminWorkspace').isVisible());
+    assert(await page.locator('#developerPreview').isHidden());
+    assert.equal(await page.locator('#previewFrame').getAttribute('srcdoc'), null);
+    console.log(`${role}: original scripts, permitted data, saved theme, navigation and blocked writes passed.`);
   }
-  await page.selectOption('#previewRole', 'student');
-  await page.getByText('Viewing as Student — read only', { exact: true }).waitFor();
-  await page.locator('#previewFrame').waitFor({ state: 'visible' });
-  await page.frameLocator('#previewFrame').getByText('Viewing as Student — READ ONLY · No personal records', { exact: true }).waitFor();
+  await page.selectOption('#previewRole', 'staff');
+  await page.getByText('Viewing as Staff — read only', { exact: true }).waitFor();
+  const staff = await (await page.locator('#previewFrame').elementHandle()).contentFrame();
+  await staff.getByText('Developer Tester', { exact: true }).first().waitFor();
   if (process.env.PREVIEW_SCREENSHOT) await page.screenshot({ path: process.env.PREVIEW_SCREENSHOT });
+  await page.locator('#exitPreview').click();
+  assert(await page.locator('#adminWorkspace').isVisible());
   denyAccess = true;
-  await page.reload();
+  await page.selectOption('#previewRole', 'student');
   await page.getByText('Preview access denied.', { exact: true }).waitFor();
   assert(await page.locator('#previewFrame').isHidden());
+  assert(await page.locator('#adminWorkspace').isVisible());
+  denyAccess = false;
+  await page.selectOption('#previewRole', 'staff');
+  await page.getByText('Viewing as Staff — read only', { exact: true }).waitFor();
+  await page.evaluate(() => window.testAuthChange('SIGNED_OUT'));
+  assert(await page.locator('#developerPreviewControl').isHidden());
   assert.equal(await page.locator('#previewFrame').getAttribute('srcdoc'), null);
-  console.log('Viewer: all role selections, read-only status, and denied-access behavior passed.');
-  assert.deepEqual(browserErrors, [], 'No uncaught browser errors');
+  assert.deepEqual(writes, []);
+  assert.deepEqual(errors, [], 'No uncaught browser errors');
+  for (const path of ['/admin/role-preview.html', '/admin/role-preview.js', '/admin/role-preview.css', '/admin/role-preview-navigation.js']) {
+    assert.equal((await page.request.get(origin + path)).status(), 404, 'Retired viewer files must be gone');
+  }
+  console.log('Main admin restoration, exit, denied access, session cleanup and removed-file checks passed.');
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

@@ -40,8 +40,28 @@ export default async function handler(req, res) {
       || profile.status !== 'approved' || profile.is_active !== true) {
       return res.status(403).json({ error: 'An approved, active admin account is required.' });
     }
-    // Preview serves layout locations only. No user records, write calls or role changes.
-    return res.status(200).json({ dashboards });
+    const resource = new URL(req.url, 'http://localhost').searchParams.get('resource');
+    if (resource !== null) {
+      const target = new URL(resource, url);
+      const readRpc = 'get_class_roster|get_subject_instructor_options|get_dean_student_directory|helpdesk_recipient_id';
+      if (!resource.startsWith('/rest/v1/') || resource.includes('\\')
+        || target.origin !== new URL(url).origin
+        || !new RegExp(`^/rest/v1/(?:[a-z_][a-z_0-9]*|rpc/(?:${readRpc}))$`).test(target.pathname)) {
+        return res.status(400).json({ message: 'Only dashboard data reads are allowed.' });
+      }
+      const headers = { apikey: key, Authorization: `Bearer ${token}`, Accept: 'application/json' };
+      if (['application/vnd.pgrst.object+json', 'application/vnd.pgrst.array+json'].includes(req.headers['x-preview-accept'])) {
+        headers.Accept = req.headers['x-preview-accept'];
+      }
+      if (/^count=(exact|planned|estimated)$/.test(req.headers['x-preview-prefer'] || '')) headers.Prefer = req.headers['x-preview-prefer'];
+      if (/^\d+-\d*$/.test(req.headers['x-preview-range'] || '')) headers.Range = req.headers['x-preview-range'];
+      // PostgREST runs GET inside a READ ONLY transaction; the caller's JWT keeps existing RLS in force.
+      const response = await fetch(target.href, { method: 'GET', headers, redirect: 'error', signal: AbortSignal.timeout(15000) });
+      res.setHeader('Content-Type', 'application/json');
+      if (response.headers.has('content-range')) res.setHeader('Content-Range', response.headers.get('content-range'));
+      return res.status(response.status).send(await response.text());
+    }
+    return res.status(200).json({ dashboards, user: { id: user.id, email: user.email } });
   } catch {
     return res.status(503).json({ error: 'Dashboard preview is temporarily unavailable.' });
   }

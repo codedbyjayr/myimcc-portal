@@ -126,7 +126,9 @@
 
   function on(root, type, selector, handler) {
     if (!root) return;
-    if (selector) {
+    if (typeof selector === 'function') {
+      root.addEventListener(type, event => selector(event, root));
+    } else if (selector) {
       root.addEventListener(type, function (event) {
         const target = event.target instanceof Element ? event.target.closest(selector) : null;
         if (target && root.contains(target)) handler(event, target);

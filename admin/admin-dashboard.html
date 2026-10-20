@@ -34,12 +34,28 @@
       </div>
     </div>
     <div class="user-info">
-      <a id="developerPreviewLink" class="btn-logout" href="role-preview.html" hidden>Preview dashboards</a>
+      <label id="developerPreviewControl" hidden>View as role
+        <select id="previewRole" class="role-select" aria-controls="developerPreview" disabled>
+          <option value="admin">Admin</option><option value="student">Student</option>
+          <option value="faculty">Faculty</option><option value="dean">Dean</option>
+          <option value="registrar">Registrar</option><option value="staff">Staff</option>
+        </select>
+      </label>
       <span id="adminEmail" style="color: var(--text-muted); font-size: 14px;"><span class="imcc-skel imcc-skel-inline" style="width:140px;height:14px;vertical-align:middle;"></span></span>
       <button id="logoutBtn" class="btn-logout">Sign Out</button>
     </div>
   </div>
 
+  <section id="developerPreview" class="dashboard-card" aria-label="Developer role view" hidden>
+    <div class="card-title">
+      <span id="previewStatus" role="status"></span>
+      <button id="exitPreview" class="btn-logout" type="button">Back to Admin</button>
+    </div>
+    <p class="preview-note">Read only · Uses your admin account's permitted data. No role changes or user impersonation.</p>
+    <iframe id="previewFrame" title="Role dashboard" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>
+  </section>
+
+  <main id="adminWorkspace">
   <!-- FILTER & SEARCH TOOLBAR -->
   <div class="filter-bar">
     <div class="filter-search">
@@ -102,6 +118,7 @@
     <div id="noApprovedMsg" class="empty-state" style="display: none;">No users match your search or filter.</div>
   </div>
 
+  </main>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../env-config.js"></script>
   <script src="../shared/supabase-config.js"></script>

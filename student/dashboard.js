@@ -97,7 +97,7 @@ async function getCurrentStudent() {
 
   // Role guard — redirect non-students to their correct dashboard
   const role = (profile.role || '').toLowerCase();
-  if (role !== 'student') {
+  if (role !== 'student' && !(window.IMCC_DEVELOPER_VIEW && role === 'admin')) {
     const target = ROLE_REDIRECTS[role] || '../auth/login.html';
     console.warn(`Role "${role}" is not a student — redirecting to ${target}`);
     window.location.href = target;

@@ -149,6 +149,23 @@ eq(formatDate('2026-09-26T00:00:00Z').length > 0, true, 'valid date formats to a
 eq(formatDateTime(null), '', 'null datetime is empty');
 eq(formatDateTime('garbage'), '', 'invalid datetime is empty');
 
+// ── Direct and delegated events used by the registrar ────────────────
+const listeners = new Map();
+const root = { addEventListener: (type, handler) => listeners.set(type, handler), contains: () => true };
+const option = new sandbox.Element();
+option.closest = selector => selector === '[data-id]' ? option : null;
+const event = { target: option };
+U.on(root, 'submit', (received, form) => {
+  eq(received, event, 'direct handler receives the event');
+  eq(form, root, 'direct form handler receives its root');
+});
+listeners.get('submit')(event);
+U.on(root, 'click', '[data-id]', (received, target) => {
+  eq(received, event, 'delegated handler receives the event');
+  eq(target, option, 'recipient selection receives the matching option');
+});
+listeners.get('click')(event);
+
 // ── Report ───────────────────────────────────────────────────────────
 console.log(`\nui.js: ${passed} passed, ${failures.length} failed`);
 if (failures.length) {
