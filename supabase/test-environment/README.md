@@ -8,7 +8,7 @@ npm run test:portal
 
 Open http://localhost:3080. Stop with Ctrl+C. The server binds only to this computer.
 
-Select an account and enter the password you created in the test project's Supabase Auth dashboard:
+Enter your individual approved test account email and password. The following existing demo accounts are offered as suggestions:
 
 | Account | Role |
 | --- | --- |
@@ -17,6 +17,11 @@ Select an account and enter the password you created in the test project's Supab
 | dean.demo@imcc.edu.ph | Dean |
 
 Passwords are not stored in the source code. This local login uses Supabase password authentication and the normal portal role guards. It does not need Google OAuth configuration.
+
+Real participants can use individual accounts for any existing role after those
+accounts are created and approved in the test project. This login creates no
+accounts and grants no roles. See [the pilot checklist](../../docs/pilot-testing.md)
+for hosted adviser testing and the separate developer-only dashboard viewer.
 
 The server pins the database to `ycziiezfrwnzouilutum`, rejects missing test configuration, and uses a separate browser session key. It never reads the root `.env` or serves config, database, or script files. Every dashboard displays a TEST PORTAL label. The main Vercel deployment keeps its existing configuration.
 

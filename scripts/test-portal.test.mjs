@@ -28,6 +28,8 @@ try {
   for (const path of ['/', '/auth/login.html']) {
     const page = await (await fetch(origin + path)).text();
     assert(page.includes('signInWithPassword'));
+    assert(page.includes('id="email" type="email"'), 'Individual testers must be able to enter their own email');
+    assert(page.includes('profile.status !== \'approved\' || profile.is_active !== true'));
     assert(!page.includes('signInWithOAuth'));
     for (const [, script] of page.matchAll(/<script>([\s\S]*?)<\/script>/g)) new vm.Script(script);
   }

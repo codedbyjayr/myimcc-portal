@@ -335,3 +335,4 @@ td {
   .header { margin-bottom: 24px; }
   .card-title { font-size: 16px; }
 }
+#developerPreviewLink[hidden] { display: none; }

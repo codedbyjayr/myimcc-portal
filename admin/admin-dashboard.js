@@ -65,6 +65,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (adminEmailEl) adminEmailEl.textContent = user.email;
+        const previewLink = document.getElementById('developerPreviewLink');
+        if (previewLink && user.email?.toLowerCase() === 'jlm33405@imcc.edu.ph') {
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (session) {
+                    const response = await fetch('/api/developer-preview', {
+                        headers: { Authorization: 'Bearer ' + session.access_token }, cache: 'no-store',
+                    });
+                    previewLink.hidden = !response.ok;
+                }
+            } catch { previewLink.hidden = true; }
+        }
     }
 
     // 2. Fetch Pending Requests

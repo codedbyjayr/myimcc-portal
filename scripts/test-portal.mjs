@@ -17,10 +17,11 @@ const login = `<!doctype html><html lang="en"><meta charset="utf-8">
 <style>body{font:16px system-ui;background:#f8fafc;color:#172033;max-width:440px;margin:8vh auto;padding:24px}
 label,input,select,button{display:block;box-sizing:border-box;width:100%;margin:12px 0}input,select,button{padding:12px;font:inherit}
 button{background:#b51f6b;color:white;border:0;border-radius:8px}#message{color:#a31515}</style>
-<h1>MyIMCC test portal</h1><p>Fictional records in the separate test database. Use the password you created for each dummy account.</p>
-<form id="login"><label for="email">Account</label><select id="email">
-<option>student.demo@imcc.edu.ph</option><option>teacher.demo@imcc.edu.ph</option><option>dean.demo@imcc.edu.ph</option>
-</select><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required>
+<h1>MyIMCC test portal</h1><p>Use your individual approved test account. Changes affect the separate test database, not official school records.</p>
+<form id="login"><label for="email">Test account email</label>
+<input id="email" type="email" list="demoAccounts" autocomplete="username" required>
+<datalist id="demoAccounts"><option value="student.demo@imcc.edu.ph"><option value="teacher.demo@imcc.edu.ph"><option value="dean.demo@imcc.edu.ph"></datalist>
+<label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required>
 <button id="submit">Sign in to test portal</button><p id="message" role="alert"></p></form>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/env-config.js"></script><script src="/shared/supabase-config.js"></script><script src="/shared/identity.js"></script>
