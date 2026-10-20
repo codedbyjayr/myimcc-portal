@@ -1,6 +1,7 @@
--- Production migration for enrollment, reviewer, assignment, and roster workflows.
+-- Production migration: promote role workflows verified in the isolated test project.
+-- No demo accounts, test rows, or assistant/Edge Function changes are included.
 
--- Student enrollment requests and secure staff review.
+-- Source: supabase\migrations\20261015144016_enrollment_request_approval.sql
 -- Students request; approved active staff/deans finalize through the existing review RPC.
 CREATE TABLE public.enrollment_requests (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -143,7 +144,7 @@ REVOKE ALL ON FUNCTION private.list_enrollment_requests(),public.list_enrollment
 GRANT EXECUTE ON FUNCTION private.list_enrollment_requests(),public.list_enrollment_requests() TO authenticated;
 
 
--- Add current-enrollment context to the reviewer queue.
+-- Source: supabase\migrations\20261015150353_enrollment_review_student_groups.sql
 -- Enrich the existing reviewer-only queue without widening table access.
 CREATE OR REPLACE FUNCTION private.list_enrollment_requests() RETURNS jsonb
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
@@ -172,7 +173,7 @@ REVOKE ALL ON FUNCTION private.list_enrollment_requests() FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION private.list_enrollment_requests() TO authenticated;
 
 
--- Allow a dean to assign themselves as an instructor.
+-- Source: supabase\migrations\20261015152431_dean_self_teaching.sql
 CREATE OR REPLACE FUNCTION public.get_subject_instructor_options()
  RETURNS TABLE(id uuid, full_name text, role text)
  LANGUAGE plpgsql
@@ -351,7 +352,7 @@ END;
 $function$;
 
 
--- Restrict assignment management and provide scoped class rosters.
+-- Source: supabase\migrations\20261015154210_assignment_managers_and_rosters.sql
 -- Restrictive policies also cover any remaining permissive offering-write policies.
 CREATE POLICY offering_insert_managers ON public.course_offerings AS RESTRICTIVE FOR INSERT TO authenticated WITH CHECK (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id=(SELECT auth.uid()) AND p.role IN ('dean','admin') AND p.status='approved' AND p.is_active IS TRUE));
 CREATE POLICY offering_update_managers ON public.course_offerings AS RESTRICTIVE FOR UPDATE TO authenticated USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id=(SELECT auth.uid()) AND p.role IN ('dean','admin') AND p.status='approved' AND p.is_active IS TRUE)) WITH CHECK (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id=(SELECT auth.uid()) AND p.role IN ('dean','admin') AND p.status='approved' AND p.is_active IS TRUE));
@@ -450,7 +451,7 @@ REVOKE ALL ON FUNCTION private.get_class_roster(integer), public.get_class_roste
 GRANT EXECUTE ON FUNCTION private.get_class_roster(integer), public.get_class_roster(integer), private.get_dean_student_directory(), public.get_dean_student_directory() TO authenticated;
 
 
--- Enforce student eligibility and preserve offerings referenced by records.
+-- Source: supabase\migrations\20261015155745_test_roster_course_access.sql
 -- Protect instructor selection at the database boundary; deans use the existing save RPC.
 CREATE OR REPLACE FUNCTION private.prevent_teacher_assignment_edits() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$

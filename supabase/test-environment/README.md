@@ -21,7 +21,7 @@ Passwords are not stored in the source code. This local login uses Supabase pass
 Real participants can use individual accounts for any existing role after those
 accounts are created and approved in the test project. This login creates no
 accounts and grants no roles. See [the pilot checklist](../../docs/pilot-testing.md)
-for hosted adviser testing and the separate developer-only dashboard viewer.
+for hosted adviser testing and the developer role selector in the admin dashboard.
 
 The server pins the database to `ycziiezfrwnzouilutum`, rejects missing test configuration, and uses a separate browser session key. It never reads the root `.env` or serves config, database, or script files. Every dashboard displays a TEST PORTAL label. The main Vercel deployment keeps its existing configuration.
 
@@ -37,8 +37,14 @@ node scripts/test-portal.test.mjs
 
 The test database includes the enrollment, roster access, instructor assignment, eligibility, and reviewer-history fixes listed below. Hosted Edge Functions, OAuth provider settings, Storage objects, and Realtime publication configuration were not copied. Their features need separate setup before end-to-end testing.
 
-When recreating this environment, apply ../migrations/20261015144016_enrollment_request_approval.sql and ../migrations/20261015150353_enrollment_review_student_groups.sql after schema.sql. check.sql checks the initial state before requests.
+The five incremental test-only migrations are in this directory's `migrations/`
+folder. They are outside `supabase/migrations/` so the production integration
+cannot automatically run them. Their changes were promoted together in
+`../migrations/20261015164009_production_role_workflows.sql`; do not apply both
+the test increments and that production migration to the same database.
 
-Also apply ../migrations/20261015152431_dean_self_teaching.sql to let the signed-in dean select themselves as an instructor. Verify with node faculty/dean-self-teaching.test.mjs and supabase/tests/dean_self_teaching.sql (the SQL test rolls back).
+When recreating this environment, apply migrations/20261015144016_enrollment_request_approval.sql and migrations/20261015150353_enrollment_review_student_groups.sql after schema.sql. check.sql checks the initial state before requests.
 
-Apply ../migrations/20261015154210_assignment_managers_and_rosters.sql and ../migrations/20261015155745_test_roster_course_access.sql for scoped student rosters, program/year enrollment checks, protected academic records, and reviewer history. `supabase/tests/test_only_audit_fixes.sql` checks these test-only rules and rolls back its fixtures.
+Also apply migrations/20261015152431_dean_self_teaching.sql to let the signed-in dean select themselves as an instructor. Verify with node faculty/dean-self-teaching.test.mjs and supabase/tests/dean_self_teaching.sql (the SQL test rolls back).
+
+Apply migrations/20261015154210_assignment_managers_and_rosters.sql and migrations/20261015155745_test_roster_course_access.sql for scoped student rosters, program/year enrollment checks, protected academic records, and reviewer history. `supabase/tests/test_only_audit_fixes.sql` checks these test-only rules and rolls back its fixtures.
