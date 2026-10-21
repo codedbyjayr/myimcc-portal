@@ -9,7 +9,7 @@ school table. Grade estimates may fall between its discrete input values.
 ## Rollout
 
 Production was promoted through the connected Supabase migration tool on
-2026-10-21. The source is `supabase/migrations/20261021034941_production_school_grading.sql`.
+2026-10-21. The source is `supabase/migrations/20261021035015_production_school_grading.sql`.
 The post-migration checksum confirmed all 11 original grade records were unchanged;
 `calculate_equivalent(98)` returned 1.10. Apply the equivalent test source
 `supabase/test-environment/migrations/20261021032724_school_grade_entry.sql`
