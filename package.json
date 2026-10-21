@@ -1,6 +1,7 @@
 {
   "type": "module",
   "scripts": {
+    "test": "node scripts/test.mjs",
     "test:portal": "node scripts/test-portal.mjs",
     "backup": "node scripts/backup-supabase.js",
     "check:edge": "tsc -p supabase/functions",

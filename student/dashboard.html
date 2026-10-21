@@ -346,7 +346,7 @@
                 </svg>
               </div>
               <div class="t">Grades</div>
-              <div class="d">Grades &amp; AI prediction</div>
+              <div class="d">Grades &amp; Grade estimate</div>
             </button>
             <button class="quick-card" data-goto="clearance">
               <div class="quick-icon">
@@ -523,9 +523,9 @@
               <div class="stat-sub" id="grade-highest-course">Loading…</div>
             </div>
             <div class="stat c3">
-              <div class="stat-top"><span class="stat-label">AI PREDICTED GWA</span></div>
+              <div class="stat-top"><span class="stat-label">ESTIMATED GWA</span></div>
               <div class="stat-value" id="grade-ai">—</div>
-              <div class="stat-sub">Based on grading periods so far</div>
+              <div class="stat-sub">Available school grades · weighted by units</div>
             </div>
             <div class="stat" style="border-left-color:var(--blue);">
               <div class="stat-top"><span class="stat-label">SUBJECTS COMPLETED</span></div>
@@ -558,7 +558,7 @@
                     <th>SEMI-FINALS</th>
                     <th>FINALS</th>
                     <th>EQUIVALENT</th>
-                    <th>AI PREDICTION</th>
+                    <th>GRADE ESTIMATE</th>
                     <th>REMARK</th>
                   </tr>
                 </thead>
@@ -576,11 +576,11 @@
                 </svg>
               </div>
               <div>
-                <h4 style="margin:0 0 4px;font-size:14px;font-weight:700;">AI Grade Prediction Insights</h4>
-                <p id="aiInsightText" style="margin:0;font-size:13px;color:var(--ink-700);">Loading AI prediction
+                <h4 style="margin:0 0 4px;font-size:14px;font-weight:700;">Grade Estimate Insights</h4>
+                <p id="aiInsightText" style="margin:0;font-size:13px;color:var(--ink-700);">Loading grade estimate
                   insights…</p>
-                <div class="note" style="margin-top:8px;font-size:11px;color:var(--ink-500);">AI predictions are based
-                  on historical grade patterns and grading-period scores recorded so far. Actual results may vary.</div>
+                <div class="note" style="margin-top:8px;font-size:11px;color:var(--ink-500);">Grade estimates are based
+                  on the equal-weight average of available school grades. Conditional grades and legacy percentage records are excluded. This is an estimate, not a validated AI prediction or an official result.</div>
               </div>
             </div>
           </div>
@@ -1134,6 +1134,7 @@
 <script src="../shared/identity.js"></script>
 <script src="../shared/datetime.js"></script>
 <script src="../shared/loading.js"></script>
+<script src="../shared/grading.js"></script>
   <script src="dashboard.js"></script>
 </body>
 

@@ -355,7 +355,6 @@ async function loadDashboard() {
       schoolYear: sem?.school_year ? sem.school_year.replace(/[\u2013\u2014]/g, '-') : '2026-2027',
       semester: sem?.semester || '1st Semester',
     },
-    gwa: sem?.gwa ?? '—',
     unitsEnrolled: sem?.units_enrolled ?? 0,
     subjectsEnrolled: sem?.subjects_enrolled ?? 0,
     balance: sem?.balance ?? 0,
@@ -407,7 +406,8 @@ function renderDashboard() {
   if (topAvatar) topAvatar.innerHTML = avatarContent;
   if (topName) topName.textContent = firstName;
 
-  setText('stat-gwa', d.gwa);
+  const currentGrades = (state.grades || []).filter(g => g.school_year.replace(/[\u2013\u2014]/g, '-') === d.student.schoolYear && g.semester === d.student.semester);
+  setText('stat-gwa', Grading.weightedGwa(currentGrades)?.toFixed(2) ?? '—');
   setText('stat-units', d.unitsEnrolled);
   setText('stat-subjects', `${d.subjectsEnrolled} subject${d.subjectsEnrolled === 1 ? '' : 's'}`);
   setText('stat-balance', peso(d.balance));
@@ -1134,10 +1134,12 @@ async function loadGrades() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  const { data: rows } = await supabaseClient
+  const { data: rows, error } = await supabaseClient
     .from('grades')
     .select('*, course_offerings(code, title, units, instructor_name, semester, school_year)')
     .eq('student_id', profile.id);
+
+  if (error) { showToast('Could not load grades. Please try again.', true); return; }
 
   state.grades = (rows || []).map(g => ({
     code: g.course_offerings?.code || '—',
@@ -1150,11 +1152,14 @@ async function loadGrades() {
     midterm: g.midterm,
     semifinal: g.semifinal,
     final: g.final,
+    grade_scale: g.grade_scale || 'percentage',
     equivalent: g.equivalent,
     ai_predicted_grade: g.ai_predicted_grade,
     ai_predicted_equivalent: g.ai_predicted_equivalent,
     remark: g.remark || 'Pending',
   }));
+
+  if (state.dashboard) renderDashboard();
 
   buildGradesTermDropdown();
   renderGrades();
@@ -1164,22 +1169,26 @@ async function loadGrades() {
 }
 
 
+function predictedGwa(rows) {
+  return Grading.weightedGwa(rows.filter(g => g.grade_scale === 'school').map(g => ({ ...g, final: g.final ?? Grading.estimate(g), equivalent: g.final != null ? g.equivalent : Grading.estimate(g) })));
+}
+
 function renderGradeStats() {
   const termGrades = gradesForSelectedTerm();
   const withFinal = termGrades.filter(g => g.final !== null && g.final !== undefined);
-  const avg = withFinal.length ? (withFinal.reduce((s, g) => s + Number(g.equivalent || 0), 0) / withFinal.length).toFixed(2) : '—';
-  const highest = withFinal.length ? Math.max(...withFinal.map(g => Number(g.final))) : '—';
-  const highestCourse = withFinal.find(g => Number(g.final) === highest);
+  const avg = Grading.weightedGwa(withFinal)?.toFixed(2) ?? '—';
+  const eligible = withFinal.filter(g => g.remark !== 'Dropped' && Grading.isSchoolGrade(g.equivalent) && Number(g.equivalent) !== 4);
+  const highest = eligible.length ? Math.min(...eligible.map(g => Number(g.equivalent))) : null;
+  const highestCourse = eligible.find(g => Number(g.equivalent) === highest);
   const completed = withFinal.length;
   const total = termGrades.length;
 
   setText('grade-gwa', avg);
   setText('grade-gwa-sub', `${completed} subject${completed === 1 ? '' : 's'} with final grades`);
-  setText('grade-highest', highest);
+  setText('grade-highest', Grading.formatGrade(highest));
   setText('grade-highest-course', highestCourse ? `${highestCourse.code} — Final` : '—');
 
-  const withAi = state.grades.filter(g => g.ai_predicted_equivalent !== null && g.ai_predicted_equivalent !== undefined);
-  const aiAvg = withAi.length ? (withAi.reduce((s, g) => s + Number(g.ai_predicted_equivalent), 0) / withAi.length).toFixed(2) : '—';
+  const aiAvg = predictedGwa(termGrades)?.toFixed(2) ?? '—';
   setText('grade-ai', aiAvg);
   setText('grade-completed', `${completed}/${total}`);
 }
@@ -1188,7 +1197,7 @@ function renderGrades() {
   const target = getEl('gradesBody');
   if (!target) return;
   const periodCell = (val) => val !== null && val !== undefined
-    ? `<span style="color:var(--blue);font-weight:700;">${val}</span>`
+    ? `<span style="color:var(--blue);font-weight:700;">${Grading.formatGrade(val)}</span>`
     : `<span style="font-style:italic;color:var(--ink-300);">—</span>`;
 
   const termGrades = gradesForSelectedTerm();
@@ -1203,12 +1212,12 @@ function renderGrades() {
       <td>${escapeHtml(g.title)}</td>
       <td style="color:var(--ink-500);">${escapeHtml(g.instructor_name || 'TBA')}</td>
       <td>${g.units || '—'}</td>
-      <td>${periodCell(g.prelim)}</td>
-      <td>${periodCell(g.midterm)}</td>
-      <td>${periodCell(g.semifinal)}</td>
-      <td style="${g.final !== null && g.final !== undefined ? 'color:var(--green);font-weight:700;' : 'font-style:italic;color:var(--ink-300);'}">${g.final ?? 'Pending'}</td>
-      <td style="font-weight:800;">${g.equivalent ?? '–'}</td>
-      <td><span class="pred-chip" style="background:var(--pink-50, #fdf2f8);color:var(--pink-600, #db2777);padding:2px 8px;border-radius:12px;font-weight:600;font-size:12px;">~ ${g.ai_predicted_grade ?? '–'} <small>(${g.ai_predicted_equivalent ?? '–'})</small></span></td>
+      <td>${periodCell(g.grade_scale === 'school' ? g.prelim : null)}</td>
+      <td>${periodCell(g.grade_scale === 'school' ? g.midterm : null)}</td>
+      <td>${periodCell(g.grade_scale === 'school' ? g.semifinal : null)}</td>
+      <td style="${g.final !== null && g.final !== undefined ? 'color:var(--green);font-weight:700;' : 'font-style:italic;color:var(--ink-300);'}">${g.final != null ? Grading.formatGrade(g.grade_scale === 'school' ? g.final : g.equivalent) : 'Pending'}</td>
+      <td style="font-weight:800;">${Grading.formatGrade(g.equivalent)}${g.grade_scale === 'percentage' ? '<small> Legacy · under review</small>' : ''}</td>
+      <td><span class="pred-chip" style="background:var(--pink-50, #fdf2f8);color:var(--pink-600, #db2777);padding:2px 8px;border-radius:12px;font-weight:600;font-size:12px;">${Grading.estimate(g) != null ? '~ ' + Grading.formatGrade(Grading.estimate(g)) : '—'}</span></td>
       <td><span class="badge ${g.remark === 'Passed' ? 'badge-green' : 'badge-blue'}">${escapeHtml(g.remark)}</span></td>
     </tr>`).join('');
 }
@@ -1236,16 +1245,16 @@ function renderGradesHeader() {
   const termGrades = gradesForSelectedTerm();
   const aiEl = getEl('aiInsightText');
   if (aiEl) {
-    const withAi = termGrades.filter(g => g.ai_predicted_equivalent !== null && g.ai_predicted_equivalent !== undefined);
-    const aiAvg = withAi.length ? (withAi.reduce((s, g) => s + Number(g.ai_predicted_equivalent), 0) / withAi.length) : null;
+    const withAi = termGrades.filter(g => Grading.estimate(g) != null);
+    const aiAvg = withAi.length ? predictedGwa(termGrades) : null;
 
     if (aiAvg !== null) {
-      const track = aiAvg <= 1.75 ? "Dean's List" : aiAvg <= 2.5 ? 'Good Standing' : 'At Risk';
-      const weakest = withAi.reduce((min, g) => Number(g.ai_predicted_equivalent) < Number(min.ai_predicted_equivalent) ? g : min, withAi[0]);
-      const weakTxt = weakest ? ` Focus on ${weakest.code} (${weakest.title}) for improvement.` : '';
-      aiEl.innerHTML = `Predicted GWA of <b>${aiAvg.toFixed(2)}</b> — <b>${track}</b> track.${weakTxt}`;
+      const track = aiAvg <= 3 ? 'Estimated passing average' : 'Estimated average below passing';
+      const weakest = withAi.reduce((min, g) => Grading.estimate(g) > Grading.estimate(min) ? g : min, withAi[0]);
+      const weakTxt = weakest ? ` Focus on ${escapeHtml(weakest.code)} (${escapeHtml(weakest.title)}) for improvement.` : '';
+      aiEl.innerHTML = `Estimated unit-weighted GWA of <b>${aiAvg.toFixed(2)}</b> — <b>${track}</b>.${weakTxt}`;
     } else {
-      aiEl.textContent = 'AI predictions will appear once Pre-Lim or Midterm grade data is available.';
+      aiEl.textContent = 'Estimates need school grades from completed periods and valid subject units. Legacy records require review.';
     }
   }
 }
@@ -1339,7 +1348,7 @@ async function viewProspectus() {
       if (code) {
         const isPassed = g.remark === 'Passed' || (g.equivalent && Number(g.equivalent) <= 3.0 && Number(g.equivalent) > 0);
         completedMap[code.trim().toUpperCase()] = {
-          grade: g.final || g.equivalent,
+          grade: Grading.formatGrade(g.equivalent),
           isPassed: isPassed,
           status: isPassed ? 'completed' : 'enrolled',
         };
@@ -1930,7 +1939,7 @@ function getLocalFaqAnswer(q) {
   const lower = q.toLowerCase();
   if (lower.includes('enroll')) return { text: 'Enrollment is open until the deadline shown in your dashboard. Settle balances first, then select courses under the Enrollment tab.', sources: [] };
   if (lower.includes('balance') || lower.includes('pay')) return { text: 'You can view your assessed balance and any published installment schedule under Billing & History. Payments are recorded by Cashier staff; there is no online payment button on this page.', sources: [] };
-  if (lower.includes('grade')) return { text: 'Grades are posted under Grades & Evaluation. AI predictions are estimates based on midterm performance, not official grades.', sources: [] };
+  if (lower.includes('grade')) return { text: 'Grades are posted under Grades & Evaluation. Grade estimates use an equal-weight average of available school grades and are not official results.', sources: [] };
   if (lower.includes('clearance')) return { text: 'Clearance requires all departments to mark you as cleared. Pay any balances with the Cashier and complete any outstanding requirements.', sources: [] };
   return { text: 'I can help with enrollment, billing, grades, and clearance. For official answers, email registrar@imcc.edu.ph.', sources: [] };
 }

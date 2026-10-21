@@ -1,16 +1,19 @@
 // shared/grading.js
 //
-// Philippine collegiate grading: 0–100 raw → 1.00–5.00 equivalent.
+// School grades are stored directly; legacy percentages await school review.
 // Single source of truth — replaces the identical hardcoded functions
 // in teacher-dashboard.js and dean-dashboard.js.
 (function (global) {
   'use strict';
 
-  // ponytail: hardcoded scale matching the grading_scale table rows.
-  // If grading_scale ever needs to be admin-editable at runtime,
-  // fetch the table once at init and build this map dynamically.
+  const schoolGrades = [1, 1.1, 1.2, 1.25, 1.3, 1.4, 1.5, 1.6, 1.7, 1.75, 1.8, 1.9, 2, 2.1, 2.2, 2.25, 2.3, 2.4, 2.5, 2.6, 2.7, 2.75, 2.8, 2.9, 3, 4, 5];
+  function isSchoolGrade(value) {
+    return value !== null && value !== undefined && value !== '' && schoolGrades.includes(Number(value));
+  }
+  // Legacy percentage records keep their original calculation until school review.
   function computeEquivalent(avg) {
     if (avg === null || avg === undefined || isNaN(avg)) return null;
+    if (avg === 98) return 1.10;
     if (avg >= 96) return 1.00;
     if (avg >= 94) return 1.25;
     if (avg >= 92) return 1.50;
@@ -33,22 +36,40 @@
   }
 
   function previewEquivalent(r) {
-    var eq = computeEquivalent(periodAverage(r));
-    return eq === null ? '—' : eq.toFixed(2);
+    var eq = r.grade_scale === 'percentage' ? r.equivalent : (isSchoolGrade(r.final) ? Number(r.final) : null);
+    return eq == null ? '—' : Number(eq).toFixed(2);
   }
 
   function previewRemarkBadge(r) {
     if (r.final === null || r.final === undefined) return '<span class="badge badge-amber">Pending</span>';
-    var eq = computeEquivalent(periodAverage(r));
-    var remark = eq !== null && eq <= 3.00 ? 'Passed' : 'Failed';
-    return '<span class="badge ' + (remark === 'Passed' ? 'badge-green' : 'badge-red') + '">' + remark + '</span>';
+    var remark = computeRemark(r);
+    return '<span class="badge ' + (remark === 'Passed' ? 'badge-green' : remark === 'Failed' ? 'badge-red' : 'badge-amber') + '">' + remark + '</span>';
   }
 
   /** Build the remark string for a grade save payload. */
   function computeRemark(r) {
+    if (r.remark === 'Dropped') return 'Dropped';
     if (r.final === null || r.final === undefined) return 'Pending';
-    var eq = computeEquivalent(periodAverage(r));
+    if (r.grade_scale === 'percentage') return r.remark || 'Pending';
+    var eq = isSchoolGrade(r.final) ? Number(r.final) : null;
+    if (eq === 4) return 'Conditional';
     return eq !== null && eq <= 3.00 ? 'Passed' : 'Failed';
+  }
+
+  function estimate(r) {
+    if (r.grade_scale !== 'school' || r.final != null || r.remark === 'Dropped') return null;
+    const values = [r.prelim, r.midterm, r.semifinal].filter(v => isSchoolGrade(v) && Number(v) !== 4);
+    return values.length ? Number((values.reduce((sum, v) => sum + Number(v), 0) / values.length).toFixed(2)) : null;
+  }
+
+  function weightedGwa(rows) {
+    const eligible = rows.filter(r => r.final != null && r.remark !== 'Dropped' && Number(r.equivalent) >= 1 && Number(r.equivalent) <= 5 && Number(r.equivalent) !== 4);
+    if (!eligible.length || eligible.some(r => !(Number(r.units) > 0))) return null;
+    return eligible.reduce((sum, r) => sum + Number(r.equivalent) * Number(r.units), 0) / eligible.reduce((sum, r) => sum + Number(r.units), 0);
+  }
+
+  function formatGrade(value) {
+    return value != null && Number.isFinite(Number(value)) && Number(value) >= 1 && Number(value) <= 5 ? Number(value).toFixed(2) : '—';
   }
 
   function escapeHtml(str) {
@@ -153,14 +174,126 @@
       studentRosterItem.final = histEntry.final != null ? Number(histEntry.final) : null;
       studentRosterItem.equivalent = histEntry.equivalent != null ? Number(histEntry.equivalent) : null;
       studentRosterItem.remark = histEntry.remark || 'Pending';
+      studentRosterItem.grade_scale = res.data?.grade_scale || histEntry.grade_scale || 'percentage';
       if (res.data && res.data.id) studentRosterItem.gradeId = res.data.id;
     }
 
     if (onDone) onDone(res.data, studentRosterItem);
   }
 
+  // Both faculty pages keep their existing selection/save handlers and share this workspace UI.
+  function initWorkspace() {
+    const page = document.getElementById('page-classes');
+    const picker = page.querySelector('.grading-class-select');
+    const list = page.querySelector('.grading-course-list');
+    const card = page.querySelector('.grading-card');
+    const status = page.querySelector('.grading-save-status');
+    const actions = page.querySelector('.grading-actions');
+    const saveButton = actions.querySelector('button');
+    const period = page.querySelector('.grading-period');
+    const details = page.querySelector('.grading-class-details');
+    const compact = global.matchMedia('(max-width: 1199px)');
+    const syncDetails = () => { details.open = !compact.matches; };
+    compact.addEventListener('change', syncDetails);
+    syncDetails();
+    const showPeriod = () => { page.dataset.gradingPeriod = period.value; };
+    period.addEventListener('change', showPeriod);
+    showPeriod();
+    const readOnly = !!global.IMCC_DEVELOPER_VIEW;
+    let baseline = '', saving = false, selectedId = '', courses = [], saveError = false;
+    const inputs = () => [...card.querySelectorAll('tbody input[type="number"]')];
+    const snapshot = () => JSON.stringify(inputs().map(input => input.value));
+    const dirty = () => !readOnly && snapshot() !== baseline;
+    function updateStatus() {
+      status.textContent = readOnly ? 'Read-only preview' : saving ? 'Saving…' : saveError ? 'Save failed · changes kept' : dirty() ? 'Unsaved changes' : 'No unsaved changes';
+      saveButton.disabled = readOnly || saving || !dirty() || !inputs().length;
+    }
+    function markClean() { baseline = snapshot(); saveError = false; updateStatus(); }
+    function canLeave() {
+      if (saving) return false;
+      return !dirty() || global.confirm('Discard unsaved grade changes?');
+    }
+    picker.addEventListener('change', () => {
+      const id = picker.value;
+      picker.value = selectedId;
+      [...list.querySelectorAll('[data-id]')].find(button => button.dataset.id === id)?.click();
+    });
+    page.addEventListener('input', () => { saveError = false; updateStatus(); });
+    document.addEventListener('click', event => {
+      const target = event.target.closest('[data-page], [data-goto], a[href], #signOutBtn, .revert-btn');
+      if (!target) return;
+      if (!canLeave()) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+      if (dirty()) {
+        const saved = JSON.parse(baseline);
+        inputs().forEach((input, index) => { input.value = saved[index]; input.dispatchEvent(new Event('input', { bubbles: true })); });
+        markClean();
+      }
+    }, true);
+    global.addEventListener('beforeunload', event => {
+      if (dirty() || saving) { event.preventDefault(); event.returnValue = ''; }
+    });
+    markClean();
+    return {
+      canLeave, markClean, refresh: updateStatus,
+      saveFailed() { saveError = true; updateStatus(); },
+      setCourses(offerings, selected) {
+        courses = offerings;
+        picker.replaceChildren(new Option('Select a class', ''));
+        for (const course of courses) {
+          picker.add(new Option(`${course.code || '—'} — ${course.title || 'Untitled'} · Section ${course.section || '—'}`, String(course.id)));
+        }
+        picker.disabled = !courses.length;
+        picker.value = selected == null ? '' : String(selected);
+        if (!courses.length) { card.hidden = true; card.querySelector('tbody').replaceChildren(); markClean(); }
+      },
+      startClass(id) {
+        selectedId = String(id);
+        picker.value = selectedId;
+        card.hidden = false;
+        card.querySelector('tbody').replaceChildren();
+        card.querySelector('table').style.display = 'none';
+        const empty = card.querySelector('.empty-state');
+        empty.style.display = 'block'; empty.textContent = 'Loading class roster…';
+        actions.hidden = true;
+        markClean();
+      },
+      setRosterCount(count) {
+        let label = card.querySelector('.grading-student-count');
+        if (!label) { label = document.createElement('p'); label.className = 'sub grading-student-count'; card.querySelector('.card-head').after(label); }
+        const course = courses.find(course => String(course.id) === selectedId);
+        label.textContent = `Section ${course?.section || '—'} · ${count} student${count === 1 ? '' : 's'}`;
+        actions.hidden = !count;
+        card.querySelectorAll('.grading-help, .grading-period-control').forEach(el => { el.hidden = !count; });
+        if (readOnly) inputs().forEach(input => { input.readOnly = true; });
+      },
+      setSaving(value) {
+        saving = value;
+        saveError = false;
+        inputs().forEach(input => { input.disabled = value; });
+        picker.disabled = value;
+        updateStatus();
+      },
+      validate() {
+        if (readOnly || saving) return false;
+        inputs().forEach(input => input.setCustomValidity(input.readOnly || input.value === '' || isSchoolGrade(input.value) ? '' : 'Choose a school grade from 1.00 to 3.00, 4.00, or 5.00.'));
+        const invalid = inputs().find(input => !input.validity.valid);
+        if (invalid) {
+          period.value = String(invalid.closest('td').cellIndex + 1);
+          showPeriod();
+          invalid.reportValidity();
+        }
+        return !invalid;
+      }
+    };
+  }
+
   var api = {
+    initWorkspace: initWorkspace,
     computeEquivalent: computeEquivalent,
+    isSchoolGrade: isSchoolGrade,
+    estimate: estimate,
+    weightedGwa: weightedGwa,
+    formatGrade: formatGrade,
     periodAverage: periodAverage,
     previewEquivalent: previewEquivalent,
     previewRemarkBadge: previewRemarkBadge,

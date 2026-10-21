@@ -819,11 +819,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     let myRoster = [];
 
     // Grade helpers — delegated to shared/grading.js
-    const computeEquivalent = Grading.computeEquivalent;
+    const gradingWorkspace = Grading.initWorkspace();
 
     let deanCourseScope = 'my';
 
     getEl('deanScopeMyBtn')?.addEventListener('click', () => {
+        if (!gradingWorkspace.canLeave()) return;
+        gradingWorkspace.markClean();
         deanCourseScope = 'my';
         if (getEl('deanScopeMyBtn')) getEl('deanScopeMyBtn').className = 'btn btn-primary';
         if (getEl('deanScopeAllBtn')) getEl('deanScopeAllBtn').className = 'btn btn-ghost';
@@ -831,6 +833,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     getEl('deanScopeAllBtn')?.addEventListener('click', () => {
+        if (!gradingWorkspace.canLeave()) return;
+        gradingWorkspace.markClean();
         deanCourseScope = 'all';
         if (getEl('deanScopeMyBtn')) getEl('deanScopeMyBtn').className = 'btn btn-ghost';
         if (getEl('deanScopeAllBtn')) getEl('deanScopeAllBtn').className = 'btn btn-primary';
@@ -859,19 +863,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        const notice = getEl('myClassesNotice');
-        if (notice) notice.style.display = (deanCourseScope === 'my' && !myOfferings.length) ? 'block' : 'none';
-
         myOfferings.sort((a, b) => (b.school_year || '').localeCompare(a.school_year || ''));
         renderMyCourseList(autoSelectId);
     }
 
     function renderMyCourseList(autoSelectId = null) {
+        gradingWorkspace.setCourses(myOfferings, selectedMyOffering?.id);
         const wrap = getEl('myCourseList');
         const msg = getEl('noMyCoursesMsg');
         if (!myOfferings.length) {
             if (wrap) wrap.innerHTML = '';
-            if (msg) msg.style.display = 'block';
+            if (msg) { msg.style.display = 'block'; msg.textContent = deanCourseScope === 'my' ? 'No classes assigned. Switch to All Classes, or assign yourself under Faculty & Schedule.' : 'No course offerings found.'; }
             if (getEl('selectedMyCourseTitle')) getEl('selectedMyCourseTitle').textContent = 'Select a class';
             if (getEl('selectedMyCourseSub')) getEl('selectedMyCourseSub').textContent = '';
             if (getEl('saveMyGradesBtn')) getEl('saveMyGradesBtn').disabled = true;
@@ -907,6 +909,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function selectMyCourse(offeringId, btnEl) {
+        if (!gradingWorkspace.canLeave()) return;
+        gradingWorkspace.startClass(offeringId);
         document.querySelectorAll('#myCourseList .nav-item').forEach(b => b.classList.remove('active'));
         if (btnEl) btnEl.classList.add('active');
 
@@ -914,7 +918,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!selectedMyOffering) return;
 
         getEl('selectedMyCourseTitle').textContent = `${selectedMyOffering.code} — ${selectedMyOffering.title}`;
-        getEl('selectedMyCourseSub').textContent = `${selectedMyOffering.semester || ''} ${selectedMyOffering.school_year || ''} · ${selectedMyOffering.schedule || 'Schedule TBA'}${selectedMyOffering.instructor_name ? ` · Instructor: ${selectedMyOffering.instructor_name}` : ''}`;
+        getEl('selectedMyCourseSub').textContent = `Section ${selectedMyOffering.section || '—'} · ${selectedMyOffering.semester || ''} ${selectedMyOffering.school_year || ''} · ${selectedMyOffering.schedule || 'Schedule TBA'}${selectedMyOffering.instructor_name ? ` · Instructor: ${selectedMyOffering.instructor_name}` : ''}`;
         getEl('saveMyGradesBtn').disabled = true;
 
         const [{ data: enrollments, error: rosterError }, { data: existingGrades }] = await Promise.all([
@@ -922,6 +926,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             supabaseClient.from('grades').select('*').eq('offering_id', offeringId),
         ]);
 
+        if (String(selectedMyOffering?.id) !== String(offeringId)) return;
         if (rosterError) { myRoster = []; renderMyRoster(); showToast('Could not load class roster: ' + rosterError.message, true); return; }
 
         const gradeByStudent = {};
@@ -931,7 +936,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .map(e => {
                 const g = gradeByStudent[e.student_id];
                 return {
-                    student: e.profiles, gradeId: g?.id || null,
+                    student: e.profiles, gradeId: g?.id || null, grade_scale: g ? (g.grade_scale || 'percentage') : 'school', equivalent: g?.equivalent == null ? null : Number(g.equivalent), remark: g?.remark,
                     prelim: g?.prelim ?? null, midterm: g?.midterm ?? null,
                     semifinal: g?.semifinal ?? null, final: g?.final ?? null,
                 };
@@ -940,7 +945,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             .sort((a, b) => (a.student.full_name || '').localeCompare(b.student.full_name || ''));
 
         renderMyRoster();
-        getEl('saveMyGradesBtn').disabled = myRoster.length === 0;
+        gradingWorkspace.markClean();
+        gradingWorkspace.refresh();
         if (getEl('deanClassAuditLogBtn')) getEl('deanClassAuditLogBtn').style.display = myRoster.length > 0 ? 'inline-flex' : 'none';
     }
 
@@ -948,6 +954,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const table = getEl('myRosterTable');
         const body = getEl('myRosterBody');
         const msg = getEl('noMyRosterMsg');
+        gradingWorkspace.setRosterCount(myRoster.length);
 
         if (!myRoster.length) {
             table.style.display = 'none';
@@ -961,12 +968,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (getEl('deanClassAuditLogBtn')) getEl('deanClassAuditLogBtn').style.display = 'inline-flex';
 
         const periodInput = (r, idx, field, cls) =>
-            `<input type="number" min="0" max="100" step="0.01" class="field-input ${cls}" style="width:72px;" data-idx="${idx}" value="${r[field] ?? ''}">`;
+            `<input type="number" min="1" max="${r.grade_scale === 'percentage' ? 100 : 5}" step="0.01" class="field-input ${cls}" style="width:72px;" data-idx="${idx}" ${window.IMCC_DEVELOPER_VIEW || r.grade_scale === 'percentage' ? 'readonly' : ''} aria-label="${escapeHtml(r.student.full_name || 'Student')} ${field} school grade" value="${r[field] ?? ''}">`;
 
         body.innerHTML = myRoster.map((r, idx) => `
       <tr>
-        <td><b>${escapeHtml(r.student.full_name || 'N/A')}</b></td>
-        <td>${escapeHtml(r.student.student_no || r.student.id_number || '—')}</td>
+        <td><b>${escapeHtml(r.student.full_name || 'N/A')}</b><small class="student-number">${escapeHtml(r.student.student_no || r.student.id_number || '—')}</small></td>
         <td>${periodInput(r, idx, 'prelim', 'my-prelim-input')}</td>
         <td>${periodInput(r, idx, 'midterm', 'my-mid-input')}</td>
         <td>${periodInput(r, idx, 'semifinal', 'my-semifinal-input')}</td>
@@ -1004,39 +1010,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Grade preview — delegated to shared/grading.js
-    function myPeriodAverage(r) { return Grading.periodAverage(r); }
     function previewMyEquivalent(r) { return Grading.previewEquivalent(r); }
     function previewMyRemarkBadge(r) { return Grading.previewRemarkBadge(r); }
 
     getEl('saveMyGradesBtn').addEventListener('click', async () => {
         if (!selectedMyOffering || !myRoster.length) return;
         const btn = getEl('saveMyGradesBtn');
+        if (!gradingWorkspace.validate()) return;
+        gradingWorkspace.setSaving(true);
         btn.disabled = true;
         btn.textContent = 'Saving…';
 
         let successCount = 0, failCount = 0;
 
-        for (const r of myRoster) {
-            const equivalent = computeEquivalent(myPeriodAverage(r));
-            const remark = Grading.computeRemark(r);
+        try {
+            for (const r of myRoster) {
+                if (r.grade_scale === 'percentage') continue;
+                const equivalent = r.final;
+                const remark = Grading.computeRemark(r);
 
-            const payload = {
-                student_id: r.student.id, offering_id: selectedMyOffering.id,
-                prelim: r.prelim, midterm: r.midterm, semifinal: r.semifinal, final: r.final,
-                equivalent, remark,
-                graded_by: currentUserId, graded_at: new Date().toISOString(),
-            };
+                const payload = {
+                    student_id: r.student.id, offering_id: selectedMyOffering.id,
+                    prelim: r.prelim, midterm: r.midterm, semifinal: r.semifinal, final: r.final,
+                    equivalent, remark, grade_scale: 'school',
+                    graded_by: currentUserId, graded_at: new Date().toISOString(),
+                };
 
-            const { data, error } = await supabaseClient
-                .from('grades')
-                .upsert(payload, { onConflict: 'student_id,offering_id' })
-                .select()
-                .single();
-            if (!error && data) r.gradeId = data.id;
-            if (error) failCount++; else successCount++;
+                const { data, error } = await supabaseClient
+                    .from('grades')
+                    .upsert(payload, { onConflict: 'student_id,offering_id' })
+                    .select()
+                    .single();
+                if (!error && data) r.gradeId = data.id;
+                if (error) failCount++; else successCount++;
+            }
+
+        } catch (error) {
+            failCount++;
+            showToast('Could not save grades: ' + error.message, true);
+        } finally {
+            gradingWorkspace.setSaving(false);
         }
-
-        btn.disabled = false;
+        if (failCount === 0) gradingWorkspace.markClean();
+        else gradingWorkspace.saveFailed();
         btn.textContent = 'Save Grades';
 
         if (failCount === 0) showToast(`Saved grades for ${successCount} student${successCount === 1 ? '' : 's'}.`);

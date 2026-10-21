@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const fmtDate = FC.fmtDate;
     const showToast = FC.showToast;
     const isMissingTableError = FC.isMissingTableError;
-    const computeEquivalent = Grading.computeEquivalent;
+    const gradingWorkspace = Grading.initWorkspace();
 
     // ── State ───────────────────────────────────────────────────────────
     let currentUser = null;
@@ -128,6 +128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function renderCourseList() {
+        gradingWorkspace.setCourses(offerings, selectedOffering?.id);
         const wrap = getEl('courseList');
         const msg = getEl('noCoursesMsg');
         if (!offerings.length) { wrap.innerHTML = ''; msg.style.display = 'block'; return; }
@@ -150,6 +151,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ── Roster + grade entry ─────────────────────────────────────────────
     async function selectCourse(offeringId, btnEl) {
+        if (!gradingWorkspace.canLeave()) return;
+        gradingWorkspace.startClass(offeringId);
         document.querySelectorAll('#courseList .nav-item').forEach(b => b.classList.remove('active'));
         if (btnEl) btnEl.classList.add('active');
 
@@ -157,7 +160,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!selectedOffering) return;
 
         getEl('selectedCourseTitle').textContent = `${selectedOffering.code} — ${selectedOffering.title}`;
-        getEl('selectedCourseSub').textContent = `${selectedOffering.semester || ''} ${selectedOffering.school_year || ''} · ${selectedOffering.schedule || 'Schedule TBA'}`;
+        getEl('selectedCourseSub').textContent = `Section ${selectedOffering.section || '—'} · ${selectedOffering.semester || ''} ${selectedOffering.school_year || ''} · ${selectedOffering.schedule || 'Schedule TBA'}`;
         getEl('saveGradesBtn').disabled = true;
 
         const [{ data: enrollments, error: rosterError }, { data: existingGrades }] = await Promise.all([
@@ -165,6 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             supabaseClient.from('grades').select('*').eq('offering_id', offeringId),
         ]);
 
+        if (String(selectedOffering?.id) !== String(offeringId)) return;
         if (rosterError) { roster = []; renderRoster(); showToast('Could not load class roster: ' + rosterError.message, true); return; }
 
         const gradeByStudent = {};
@@ -174,7 +178,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .map(e => {
                 const g = gradeByStudent[e.student_id];
                 return {
-                    student: e.profiles, gradeId: g?.id || null,
+                    student: e.profiles, gradeId: g?.id || null, grade_scale: g ? (g.grade_scale || 'percentage') : 'school', equivalent: g?.equivalent == null ? null : Number(g.equivalent), remark: g?.remark,
                     prelim: g?.prelim ?? null, midterm: g?.midterm ?? null,
                     semifinal: g?.semifinal ?? null, final: g?.final ?? null,
                 };
@@ -183,7 +187,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             .sort((a, b) => (a.student.full_name || '').localeCompare(b.student.full_name || ''));
 
         renderRoster();
-        getEl('saveGradesBtn').disabled = roster.length === 0;
+        gradingWorkspace.markClean();
+        gradingWorkspace.refresh();
         if (getEl('classAuditLogBtn')) getEl('classAuditLogBtn').style.display = roster.length > 0 ? 'inline-flex' : 'none';
     }
 
@@ -191,6 +196,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const table = getEl('rosterTable');
         const body = getEl('rosterBody');
         const msg = getEl('noRosterMsg');
+        gradingWorkspace.setRosterCount(roster.length);
 
         if (!roster.length) {
             table.style.display = 'none';
@@ -202,12 +208,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         table.style.display = 'table';
 
         const periodInput = (r, idx, field, cls) =>
-            `<input type="number" min="0" max="100" step="0.01" class="field-input ${cls}" style="width:72px;" data-idx="${idx}" value="${r[field] ?? ''}">`;
+            `<input type="number" min="1" max="${r.grade_scale === 'percentage' ? 100 : 5}" step="0.01" class="field-input ${cls}" style="width:72px;" data-idx="${idx}" ${window.IMCC_DEVELOPER_VIEW || r.grade_scale === 'percentage' ? 'readonly' : ''} aria-label="${escapeHtml(r.student.full_name || 'Student')} ${field} school grade" value="${r[field] ?? ''}">`;
 
         body.innerHTML = roster.map((r, idx) => `
       <tr data-idx="${idx}">
-        <td><b>${escapeHtml(r.student.full_name || 'N/A')}</b></td>
-        <td>${escapeHtml(r.student.student_no || r.student.id_number || '—')}</td>
+        <td><b>${escapeHtml(r.student.full_name || 'N/A')}</b><small class="student-number">${escapeHtml(r.student.student_no || r.student.id_number || '—')}</small></td>
         <td>${periodInput(r, idx, 'prelim', 'prelim-input')}</td>
         <td>${periodInput(r, idx, 'midterm', 'mid-input')}</td>
         <td>${periodInput(r, idx, 'semifinal', 'semifinal-input')}</td>
@@ -245,39 +250,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Grading helpers — delegated to shared/grading.js
-    const periodAverage = Grading.periodAverage;
     const previewEquivalent = Grading.previewEquivalent;
     const previewRemarkBadge = Grading.previewRemarkBadge;
 
     getEl('saveGradesBtn').addEventListener('click', async () => {
         if (!selectedOffering || !roster.length) return;
         const btn = getEl('saveGradesBtn');
+        if (!gradingWorkspace.validate()) return;
+        gradingWorkspace.setSaving(true);
         btn.disabled = true;
         btn.textContent = 'Saving…';
 
         let successCount = 0, failCount = 0;
 
-        for (const r of roster) {
-            const equivalent = computeEquivalent(periodAverage(r));
-            const remark = Grading.computeRemark(r);
+        try {
+            for (const r of roster) {
+                if (r.grade_scale === 'percentage') continue;
+                const equivalent = r.final;
+                const remark = Grading.computeRemark(r);
 
-            const payload = {
-                student_id: r.student.id, offering_id: selectedOffering.id,
-                prelim: r.prelim, midterm: r.midterm, semifinal: r.semifinal, final: r.final,
-                equivalent, remark,
-                graded_by: currentUser.id, graded_at: new Date().toISOString(),
-            };
+                const payload = {
+                    student_id: r.student.id, offering_id: selectedOffering.id,
+                    prelim: r.prelim, midterm: r.midterm, semifinal: r.semifinal, final: r.final,
+                    equivalent, remark, grade_scale: 'school',
+                    graded_by: currentUser.id, graded_at: new Date().toISOString(),
+                };
 
-            const { data, error } = await supabaseClient
-                .from('grades')
-                .upsert(payload, { onConflict: 'student_id,offering_id' })
-                .select()
-                .single();
-            if (!error && data) r.gradeId = data.id;
-            if (error) failCount++; else successCount++;
+                const { data, error } = await supabaseClient
+                    .from('grades')
+                    .upsert(payload, { onConflict: 'student_id,offering_id' })
+                    .select()
+                    .single();
+                if (!error && data) r.gradeId = data.id;
+                if (error) failCount++; else successCount++;
+            }
+
+        } catch (error) {
+            failCount++;
+            showToast('Could not save grades: ' + error.message, true);
+        } finally {
+            gradingWorkspace.setSaving(false);
         }
-
-        btn.disabled = false;
+        if (failCount === 0) gradingWorkspace.markClean();
+        else gradingWorkspace.saveFailed();
         btn.textContent = 'Save Grades';
 
         if (failCount === 0) showToast(`Saved grades for ${successCount} student${successCount === 1 ? '' : 's'}.`);

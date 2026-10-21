@@ -239,11 +239,8 @@
 
         <!-- ================= MY CLASSES (grade entry for courses the dean personally handles) ================= -->
         <section class="page" id="page-classes">
-          <div class="notice" id="myClassesNotice" style="display:none;">You aren't currently assigned as the instructor
-            for any course offering, so there's nothing to grade here yet. Assign yourself a course under Faculty &amp;
-            Schedule to use this page, or switch to "All Classes" to manage any class.</div>
-          <div class="grid-2">
-            <div class="card card-pad">
+          <div class="grid-2 grading-layout">
+            <div class="card card-pad class-picker">
               <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;">
                 <h3>Course Offerings</h3>
                 <button class="btn btn-primary" id="deanAddClassBtn" style="padding:6px 12px;font-size:12px;">+ Add
@@ -253,43 +250,45 @@
                 <button type="button" class="btn btn-primary" id="deanScopeMyBtn" style="flex:1;font-size:12px;padding:6px;">My Classes</button>
                 <button type="button" class="btn btn-ghost" id="deanScopeAllBtn" style="flex:1;font-size:12px;padding:6px;">All Classes</button>
               </div>
-              <div id="myCourseList"></div>
+              <label class="mobile-class-picker">Class<select class="field-input grading-class-select" aria-label="Select class"></select></label>
+              <div id="myCourseList" class="grading-course-list"></div>
               <div id="noMyCoursesMsg" class="empty-state" style="display:none;">No course offerings found.</div>
             </div>
-            <div class="card card-pad">
+            <div class="card card-pad grading-card" hidden>
               <div class="card-head">
                 <div>
                   <h3 id="selectedMyCourseTitle">Select a class</h3>
-                  <div class="sub" id="selectedMyCourseSub"></div>
+
                 </div>
-                <div style="display:flex;gap:8px;align-items:center;">
+                <details class="grading-class-details"><summary>Class details</summary><div class="sub" id="selectedMyCourseSub"></div>
                   <button type="button" class="btn btn-ghost" id="deanClassAuditLogBtn" style="display:none;align-items:center;gap:6px;font-size:12px;padding:6px 12px;" title="View all grade changes for this class">
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     Class Grade History
                   </button>
-                  <button class="btn btn-primary" id="saveMyGradesBtn" disabled>Save Grades</button>
-                </div>
+
+                </details>
               </div>
-              <div class="notice">Enter prelim, midterm, semifinal, and final scores on a 0–100 scale. As Dean, you can input, update, and revert grades with full audit trail logging across all offerings. Use the History button on any student to revert mistakes.</div>
-              <div class="table-responsive">
+              <details class="grading-help"><summary>Grading help</summary><p>Enter school grades directly, such as 1.00, 1.10, or 2.75. The final grade is official; 4.00 is conditional and 5.00 is failed. Legacy percentage records are read-only pending school review. Use History beside a student to view saved revisions or revert a mistake. Save your changes before switching classes.</p></details>
+              <label class="grading-period-control">Grading period<select class="field-input grading-period" aria-label="Grading period"><option value="2">Prelim</option><option value="3">Midterm</option><option value="4">Semifinal</option><option value="5">Final</option></select></label>
+              <div class="table-responsive grading-table-wrap" tabindex="0" role="region" aria-label="Class grade table">
                 <table id="myRosterTable" style="display:none;">
                   <thead>
                     <tr>
                       <th>Student</th>
-                      <th>Student No.</th>
                       <th>Pre-Lim</th>
                       <th>Midterm</th>
                       <th>Semi-Final</th>
                       <th>Final</th>
                       <th>Equivalent</th>
                       <th>Remark</th>
-                      <th style="text-align:center;">Action &amp; History</th>
+                      <th style="text-align:center;">History</th>
                     </tr>
                   </thead>
                   <tbody id="myRosterBody"></tbody>
                 </table>
               </div>
               <div id="noMyRosterMsg" class="empty-state">Pick a class from the left to view its roster.</div>
+              <div class="grading-actions"><span class="grading-save-status" role="status">No unsaved changes</span><button class="btn btn-primary" id="saveMyGradesBtn" disabled>Save Grades</button></div>
             </div>
           </div>
         </section>

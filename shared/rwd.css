@@ -258,3 +258,78 @@ h1.display { font-size: clamp(22px, 4.5vw, 32px); line-height: 1.15; }
   .table-responsive table { min-width: 0 !important; }
   .sidebar, .topbar, .menu-toggle, .chat-fab, .chat-panel, .toast { display: none !important; }
 }
+/* My Classes: keep the course picker compact and give grade entry the workspace. */
+#page-classes .grading-layout { align-items: start; }
+#page-classes .class-picker .card-head { flex-wrap: wrap; gap: 10px; }
+#page-classes .class-picker .nav-item { width: 100%; min-height: 44px; }
+#page-classes .grading-card[hidden],
+#page-classes [hidden] { display: none !important; }
+#page-classes .mobile-class-picker { display: block; font-size: 12px; font-weight: 700; }
+#page-classes .grading-class-select { width: 100%; margin-top: 8px; min-height: 44px; }
+#page-classes .grading-course-list { display: none; }
+#page-classes .grading-card .card-head { align-items: start; flex-wrap: wrap; gap: 12px; }
+#page-classes .grading-card .card-head > div { min-width: 0; }
+#page-classes .grading-card h3 { overflow-wrap: anywhere; }
+#page-classes .grading-card .card-head button { white-space: normal; min-height: 44px; }
+#page-classes .grading-hint, #page-classes .grading-help { font-size: 12px; line-height: 1.6; color: var(--ink-700); }
+#page-classes .grading-help { margin-bottom: 16px; }
+#page-classes .grading-help summary { cursor: pointer; padding: 8px 0; color: var(--blue); }
+#page-classes .grading-table-wrap { overflow: auto; max-height: 65vh; border: 1px solid var(--line); border-radius: 8px; }
+#page-classes .grading-table-wrap table { min-width: 850px; border-collapse: separate; border-spacing: 0; }
+#page-classes .grading-table-wrap th { position: sticky; top: 0; z-index: 2; padding: 12px 10px; background: var(--card); color: var(--ink-700); }
+#page-classes .grading-table-wrap td { background: var(--card); }
+#page-classes .grading-table-wrap tr:nth-child(even) td { background: var(--bg); }
+#page-classes .grading-table-wrap :is(th, td):first-child { position: sticky; left: 0; z-index: 1; min-width: 155px; max-width: 200px; overflow-wrap: anywhere; border-right: 1px solid var(--line); }
+#page-classes .grading-table-wrap th:first-child { z-index: 3; }
+#page-classes .student-number { display: block; margin-top: 4px; color: var(--ink-500); }
+#page-classes .grading-table-wrap input { min-height: 44px; font-size: 16px; }
+#page-classes .grading-actions { position: sticky; bottom: 0; z-index: 4; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0 max(12px, env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); }
+#page-classes .grading-actions button { min-height: 44px; flex-shrink: 0; }
+#page-classes .grading-save-status { font-size: 12px; color: var(--ink-700); }
+#page-classes .grading-class-details { font-size: 12px; line-height: 1.6; }
+#page-classes .grading-class-details summary { cursor: pointer; padding: 8px 0; color: var(--ink-700); }
+#page-classes .grading-period-control { display: none; }
+#page-classes :is(input, select, button, summary, [tabindex]):focus-visible { outline: 2px solid var(--pink-500); outline-offset: 3px; }
+@media (max-width: 1199px) {
+    #page-classes.active { animation: none; transform: none; }
+    #page-classes .grading-card { padding-bottom: 90px; }
+    #page-classes .grading-actions { position: fixed; left: 0; right: 0; padding-left: 20px; padding-right: 20px; box-shadow: 0 -4px 16px #0002; }
+    body:has(#page-classes.active) .toast { bottom: 90px !important; }
+    #page-classes .grading-card .card-head { margin-bottom: 4px; }
+    #page-classes .grading-card .card-head > div:first-child { display: none; }
+    #page-classes .grading-class-details { width: 100%; }
+    #page-classes .grading-student-count { margin: 4px 0 8px; }
+    #page-classes .grading-help { margin: 0 0 12px; }
+}
+@media (max-width: 767px) {
+    #page-classes .card-pad { padding: 14px; }
+    #page-classes .class-picker .card-head .sub { display: none; }
+    #page-classes .grading-period-control { display: block; font-size: 12px; font-weight: 700; margin-bottom: 12px; }
+    #page-classes .grading-period { width: 100%; min-height: 44px; font-size: 16px; margin-top: 6px; }
+    #page-classes .grading-table-wrap table { min-width: 0; table-layout: fixed; }
+    #page-classes .grading-table-wrap :is(th, td) { padding: 10px 6px; }
+    #page-classes .grading-table-wrap :is(th, td):first-child { min-width: 0; max-width: none; width: 44%; }
+    #page-classes .grading-table-wrap :is(th, td):nth-child(n+2):nth-child(-n+7) { display: none; }
+    #page-classes[data-grading-period="2"] .grading-table-wrap :is(th, td):nth-child(2),
+    #page-classes[data-grading-period="3"] .grading-table-wrap :is(th, td):nth-child(3),
+    #page-classes[data-grading-period="4"] .grading-table-wrap :is(th, td):nth-child(4),
+    #page-classes[data-grading-period="5"] .grading-table-wrap :is(th, td):nth-child(5) { display: table-cell; width: 28%; }
+    #page-classes .grading-table-wrap :is(th, td):last-child { width: 28%; }
+    #page-classes .grading-table-wrap input { width: 100% !important; min-width: 0; padding: 8px; }
+    #page-classes .grading-table-wrap td:last-child button { padding: 6px !important; min-height: 44px; max-width: 100%; }
+    #page-classes .grading-table-wrap td:last-child svg { display: none; }
+}
+@media (min-width: 1200px) {
+    #page-classes .grading-layout { grid-template-columns: 280px minmax(0, 1fr); }
+    #page-classes .mobile-class-picker { display: none; }
+    #page-classes .grading-course-list { display: block; max-height: 70vh; overflow-y: auto; }
+    #page-classes .grading-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; }
+    #page-classes .grading-card > * { grid-column: 1 / -1; min-width: 0; }
+    #page-classes .grading-card > .card-head { grid-column: 1; grid-row: 1; }
+    #page-classes .grading-actions { position: static; grid-column: 2; grid-row: 1; border: 0; padding: 0; flex-direction: column-reverse; gap: 4px; align-self: start; }
+    #page-classes .grading-class-details > summary { display: none; }
+}
+@media (min-width: 1024px) and (max-width: 1199px) {
+    #page-classes .grading-layout { grid-template-columns: minmax(0, 1fr); }
+    #page-classes .grading-actions { left: 264px; }
+}

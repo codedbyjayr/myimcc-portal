@@ -72,10 +72,7 @@ export const server = createServer(async (req, res) => {
       type = types[extname(file)];
       body = await readFile(file);
       if (pathname === '/shared/supabase-config.js') {
-        body = body.toString()
-          .replace(/^const DEFAULT_SUPABASE_URL = .*;$/m, 'const DEFAULT_SUPABASE_URL = ' + JSON.stringify(testUrl) + ';')
-          .replace(/^const DEFAULT_SUPABASE_ANON_KEY = .*;$/m, 'const DEFAULT_SUPABASE_ANON_KEY = ' + JSON.stringify(testKey) + ';')
-          .replace("storageKey: 'myimcc-auth-token'", "storageKey: 'myimcc-test-auth-token'");
+        body = body.toString().replace("storageKey: 'myimcc-auth-token'", "storageKey: 'myimcc-test-auth-token'");
         body = 'if (window.__ENV__?.SUPABASE_URL !== ' + JSON.stringify(testUrl) + ') throw new Error("Test configuration missing; login stopped.");\n' + body;
       }
       if (type === 'text/html') {
