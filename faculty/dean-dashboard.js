@@ -1168,6 +1168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             title: 'Add Subject / Course Offering',
             table: 'course_offerings',
             fields: [
+                { name: 'catalog_search', label: 'Search subjects', type: 'search', required: false, placeholder: 'Subject code or title' },
                 { name: 'catalog_course', label: 'Quick Select Subject from Curriculum (Auto-fills details)', type: 'select', required: false, optionsFn: () => [{ value: '', label: '— Choose from Curriculum (50+ Subjects) —' }, ...state.courses.map(c => ({ value: c.code, label: `${c.code} — ${c.title} (${(c.lec_units || 0) + (c.lab_units || 0) || c.units || 3.0} units)` }))] },
                 { name: 'code', label: 'Subject Code', type: 'text', required: true, placeholder: 'e.g. CAP 102 or CC 101' },
                 { name: 'title', label: 'Course Title', type: 'text', required: true, placeholder: 'e.g. Capstone Project and Research 2' },
@@ -1377,7 +1378,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         // If courseOffering, bind catalog course auto-fill and populate instructor dropdown.
         if (key === 'courseOffering') {
             const codeInput = getEl('field_code');
+            const search = getEl('field_catalog_search');
             const catalogSelect = getEl('field_catalog_course');
+            catalogSelect.size = 5;
+            catalogSelect.style.cssText = 'height:auto;max-width:100%;white-space:normal';
+            const insights = document.createElement('p');
+            insights.className = 'sub'; insights.id = 'subjectInsights'; insights.setAttribute('role', 'status');
+            catalogSelect.after(insights);
+            search.setAttribute('aria-controls', catalogSelect.id);
+            const filterSubjects = () => {
+                const selected = catalogSelect.value;
+                const query = search.value.trim().toLowerCase();
+                const matches = state.courses.filter(c => (c.code + ' ' + c.title).toLowerCase().includes(query));
+                catalogSelect.replaceChildren(new Option(matches.length ? 'Choose a subject' : 'No subjects found — clear your search', ''));
+                matches.forEach(c => catalogSelect.add(new Option(c.code + ' — ' + c.title + ' (' + ((c.lec_units || 0) + (c.lab_units || 0) || c.units || 3) + ' units)', c.code)));
+                catalogSelect.value = matches.some(c => c.code === selected) ? selected : '';
+                insights.textContent = matches.length + ' matching subject(s). Select one to autofill the fields below.';
+            };
+            search.addEventListener('input', filterSubjects);
+            filterSubjects();
+
 
             const isEdit = Boolean(editingOfferingId);
             const existingInstructorId = (initialValues && initialValues.instructor_id) ? initialValues.instructor_id : null;
@@ -1409,6 +1429,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const applyCourse = (c) => {
                 if (!c) return;
+                insights.textContent = [c.code + ' — ' + c.title, 'Year ' + (c.year_level || '—'), c.semester === 3 ? 'Summer' : c.semester === 2 ? '2nd Semester' : '1st Semester', ((c.lec_units || 0) + (c.lab_units || 0) || c.units || 3) + ' units', 'Prerequisites: ' + (c.prerequisites || 'None')].join(' · ');
                 const units = (c.lec_units || 0) + (c.lab_units || 0) || c.units || 3.0;
                 const semStr = c.semester === 2 ? '2nd Semester' : (c.semester === 3 ? 'Summer' : '1st Semester');
                 if (getEl('field_code')) getEl('field_code').value = c.code || '';
@@ -1453,7 +1474,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         for (const f of cfg.fields) {
             // Skip the catalog auto-fill helper and the instructor_select placeholder
             // (instructor_select is validated and read specifically below).
-            if (f.name === 'catalog_course') continue;
+            if (f.name === 'catalog_course' || f.name === 'catalog_search') continue;
             if (f.type === 'instructor_select') continue;
 
             const el = getEl(`field_${f.name}`);
