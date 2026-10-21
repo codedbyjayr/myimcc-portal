@@ -180,6 +180,7 @@ try {
   await demoFrame.getByRole('button',{name:'Reject',exact:true}).click();
   await demoFrame.locator('dialog textarea').fill('Demo prerequisite missing');
   await demoFrame.locator('dialog').getByRole('button',{name:'Continue',exact:true}).click();
+  await demoFrame.locator('summary').filter({hasText:"Finalize a student's enrollment"}).click();
   await demoFrame.getByRole('button',{name:'Finalize Enrollment',exact:true}).click();
   await demoFrame.locator('dialog').getByRole('button',{name:'Continue',exact:true}).click();
   await demoFrame.locator('dialog').waitFor({state:'detached'});

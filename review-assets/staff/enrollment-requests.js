@@ -60,28 +60,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         const pendingUnits = requests.filter(r => r.status === 'pending').reduce((total, r) => total + Number(r.units || 0), 0);
         const enrolledUnits = Number(student.enrolled_units || 0);
         return UIM.html`<section class="student-request">
-          <h2>${student.student_name} <small>${student.student_no || 'No student number'}</small></h2>
-          <p>${student.program || 'Program not set'} · ${student.year_level || 'Year not set'} · Section ${student.section || 'not set'}</p>
-          <p>${student.semester} · ${student.school_year}</p>
-          <p class="load-summary"><strong>${pendingUnits} pending units</strong> · ${enrolledUnits} enrolled units · ${pendingUnits + enrolledUnits} units if all pending subjects are approved</p>
+          <header class="student-header"><div><h2>${student.student_name} <small>${student.student_no || 'No student number'}</small></h2>
+          <p class="student-meta">${student.program || 'Program not set'} · ${student.year_level || 'Year not set'} · Section ${student.section || 'not set'}</p></div>
+          <p class="term-label">${student.semester} · ${student.school_year}</p></header>
+          <div class="load-summary"><div><strong>${pendingUnits} pending units</strong><span>Awaiting a decision</span></div><div><strong>${enrolledUnits} enrolled units</strong><span>Current approved load</span></div><div><strong>${pendingUnits + enrolledUnits} units if all pending subjects are approved</strong><span>Proposed semester load</span></div></div>
           <div class="table-wrap"><table>
             <caption>Subjects for ${student.semester} ${student.school_year}</caption>
             <thead><tr><th>Subject</th><th>Schedule</th><th>Units</th><th>Status / Decision</th></tr></thead>
             <tbody>${requests.map(r => UIM.html`<tr>
               <td>${r.code} — ${r.title}</td><td>${r.schedule || 'Schedule TBA'}</td><td>${r.units}</td>
-              <td><span class="pending-status">${r.status}</span>${r.review_note ? UIM.html`<span>${r.review_note}</span>` : ''}${r.status === 'pending' ? UIM.html`<button data-id="${r.id}" data-decision="approved">Approve</button><button data-id="${r.id}" data-decision="rejected">Reject</button>` : ''}</td></tr>`)}
+              <td><span class="status-badge status-${r.status}">${r.status}</span>${r.review_note ? UIM.html`<span class="review-note">${r.review_note}</span>` : ''}${r.status === 'pending' ? UIM.html`<div class="decision-actions"><button data-id="${r.id}" data-decision="approved">Approve</button><button data-id="${r.id}" data-decision="rejected">Reject</button></div>` : ''}</td></tr>`)}
             ${(student.enrolled_courses || []).map(c => UIM.html`<tr>
-              <td>${c.code} — ${c.title}</td><td>${c.schedule || 'Schedule TBA'}</td><td>${c.units}</td><td>Enrolled</td></tr>`)}</tbody>
+              <td>${c.code} — ${c.title}</td><td>${c.schedule || 'Schedule TBA'}</td><td>${c.units}</td><td><span class="status-badge status-enrolled">Enrolled</span></td></tr>`)}</tbody>
           </table></div>
         </section>`;
-      }).join('');
+      }).join('') || UIM.html`<section class="request-empty"><div class="empty-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H5a2 2 0 0 0-2 2v14h18V6a2 2 0 0 0-2-2h-3M8 2h8v5H8zM8 13l3 3 5-5"/></svg></div><h2>${statusFilter.value === 'pending' ? 'Nothing waiting for review' : 'No matching requests'}</h2><p>${statusFilter.value === 'pending' ? 'New subject requests will appear here when students submit their proposed load. You can still review previous decisions.' : 'There are no requests in this view. Change the status filter or refresh to check for updates.'}</p>${statusFilter.value !== 'all' ? UIM.html`<button type="button" data-history="all">View decision history</button>` : ''}</section>`;
       message.textContent = data?.length ? `${data.length} ${statusFilter.value === 'all' ? 'subject request(s)' : `${statusFilter.value} subject request(s)`} across ${groups.size} student/term group(s).` : `No ${statusFilter.value === 'all' ? 'requests' : statusFilter.value + ' requests'} found.`;
     } catch (err) { message.textContent = 'Could not load requests: ' + err.message; }
     finally { refresh.disabled = false; }
   }
   rows.addEventListener('click', async event => {
-    const button = event.target.closest('button[data-id]');
+    const button = event.target.closest('button[data-id],button[data-history]');
     if (!button || refresh.disabled) return;
+    if (button.dataset.history === 'all') { statusFilter.value = 'all'; await load(); return; }
     const row = button.closest('tr');
     let reviewNote = null;
     if (button.dataset.decision === 'rejected') {

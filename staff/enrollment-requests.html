@@ -4,30 +4,23 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Enrollment Requests — MyIMCC</title>
   <link rel="stylesheet" href="../shared/portal.css">
-  <style>
-    main{max-width:1100px;margin:32px auto;padding:20px}
-    .student-request{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin:20px 0}
-    h2{font-size:20px;margin:0 0 12px}small{font-size:14px;font-weight:400;color:var(--ink-500)}
-    .load-summary{background:var(--pink-50);padding:12px;border-radius:8px}
-    table{width:100%;border-collapse:collapse}caption{text-align:left;padding:12px 0;font-weight:600}
-    th,td{text-align:left;padding:12px;border-bottom:1px solid var(--line)}
-    button{margin:4px;padding:10px;cursor:pointer}button:disabled{cursor:wait}
-    .pending-status{display:block;color:var(--ink-500)}.table-wrap{overflow-x:auto}#message{min-height:24px}
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="enrollment-requests.css">
+  <script>(function(){try{var t=localStorage.getItem('myimcc_theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=t;}catch(_){}})();</script>
 </head>
-<body><main>
-  <a id="back" href="../index.html">Back to portal</a>
-  <h1>Enrollment Requests</h1>
-  <p>Review each student's proposed semester load, then approve or reject individual subjects.</p>
-  <label for="statusFilter">Show </label>
+<body><main class="enrollment-workspace">
+  <a id="back" class="back-link" href="../index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 5-7 7 7 7M5 12h14"/></svg>Back to portal</a>
+  <header class="workspace-heading"><span class="heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h4"/></svg></span><div><p class="eyebrow">MyIMCC · Academic Services</p><h1>Enrollment Requests</h1><p>Review proposed subject loads, make enrollment decisions, and keep track of each student's progress.</p></div></header>
+<section class="review-toolbar" aria-label="Request filters"><div class="filter-field"><label for="statusFilter">Request status</label>
   <select id="statusFilter">
     <option value="pending">Pending requests</option>
     <option value="approved">Approved history</option>
     <option value="rejected">Rejected history</option>
     <option value="all">All decisions</option>
   </select>
-  <button id="refresh" type="button">Refresh requests</button>
-  <p id="message" role="status" aria-live="polite"></p>
+  </div><button id="refresh" class="refresh-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 11-1l3 6M4 12l3 6a7 7 0 0 0 11-1"/></svg>Refresh requests</button></section>
+  <p id="message" class="request-message" role="status" aria-live="polite"></p>
   <div id="requests"></div>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>

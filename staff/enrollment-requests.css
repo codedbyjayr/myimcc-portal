@@ -1,0 +1,69 @@
+.enrollment-workspace{max-width:1180px;margin:0 auto;padding:32px 28px 64px}
+.enrollment-workspace svg{width:20px;height:20px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.back-link{display:inline-flex;align-items:center;gap:8px;color:var(--ink-500);font-size:13px;font-weight:600;text-decoration:none;margin-bottom:28px;min-height:36px}
+.back-link:hover{color:var(--pink-600)}
+.workspace-heading{display:flex;align-items:flex-start;gap:16px;margin-bottom:28px}
+.heading-icon{display:grid;place-items:center;width:52px;height:52px;border:1px solid var(--pink-200);border-radius:14px;background:var(--pink-50);color:var(--pink-600);flex-shrink:0}
+.heading-icon svg{width:26px;height:26px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-500);margin:0 0 7px}
+.workspace-heading h1{font-size:clamp(25px,3vw,32px);letter-spacing:-.035em;margin:0 0 10px;line-height:1.2}
+.workspace-heading p:last-child{margin:0;color:var(--ink-500);font-size:14px;line-height:1.7;max-width:660px}
+.review-toolbar{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:18px 20px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.filter-field{display:grid;gap:8px;min-width:220px}
+.filter-field label{font-size:12px;font-weight:700;color:var(--ink-700)}
+.enrollment-workspace select,.enrollment-workspace textarea{font:inherit;font-size:14px;color:var(--ink-900);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:11px 12px;min-height:44px}
+.enrollment-workspace select:focus-visible,.enrollment-workspace textarea:focus-visible{outline:2px solid var(--pink-500);outline-offset:2px}
+.enrollment-workspace button{font:inherit;font-size:13px;font-weight:600;min-height:42px;border-radius:8px;border:1px solid var(--line);padding:10px 14px;cursor:pointer;background:var(--card);color:var(--ink-700)}
+.enrollment-workspace button:hover:not(:disabled){border-color:var(--pink-500);color:var(--pink-600)}
+.enrollment-workspace button:disabled{opacity:.55;cursor:wait}
+.enrollment-workspace .refresh-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px}
+.request-message{margin:18px 2px;color:var(--ink-500);font-size:13px;line-height:1.6;min-height:21px}
+.student-request{background:var(--card);border:1px solid var(--line);border-radius:14px;margin:0 0 20px;overflow:hidden;box-shadow:var(--shadow)}
+.student-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:22px 22px 16px}
+.student-header h2{font-size:17px;line-height:1.5;margin:0 0 6px;overflow-wrap:anywhere}
+.student-header small{display:block;font-family:Inter,sans-serif;font-size:12px;font-weight:500;color:var(--ink-500);margin-top:4px}
+.student-meta{font-size:13px;color:var(--ink-500);line-height:1.7;margin:0}
+.term-label{font-size:12px;font-weight:600;color:var(--ink-700);background:var(--bg);border:1px solid var(--line);padding:8px 10px;border-radius:8px;margin:0;flex-shrink:0;max-width:45%}
+.load-summary{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:0;background:var(--bg);border:1px solid var(--line);border-radius:10px;margin:0 22px 18px}
+.load-summary>div{padding:14px 16px;min-width:0}
+.load-summary>div+div{border-left:1px solid var(--line)}
+.load-summary strong{display:block;font-size:13px;line-height:1.5;color:var(--ink-900)}
+.load-summary span{display:block;font-size:11px;color:var(--ink-500);margin-top:4px}
+.load-summary>div:first-child strong{color:var(--pink-600)}
+.table-wrap{overflow-x:auto;padding:0 22px 14px}
+.student-request table{width:100%;min-width:650px;border-collapse:collapse;font-size:13px}
+.student-request caption{text-align:left;padding:0 0 14px;font-size:12px;font-weight:600;color:var(--ink-500)}
+.student-request th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-500);padding:12px;background:var(--bg)}
+.student-request td{padding:14px 12px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.6}
+.student-request tr:last-child td{border-bottom:0}
+.student-request tbody tr:hover{background:var(--bg)}
+.student-request td:first-child{font-weight:500;width:43%}
+.status-badge{display:inline-block;font-size:11px;font-weight:700;line-height:1.6;border-radius:6px;padding:4px 9px;text-transform:capitalize;color:var(--ink-500);background:var(--bg)}
+.status-pending{color:var(--amber);background:var(--amber-bg)}
+.status-approved,.status-enrolled{color:var(--green);background:var(--green-bg)}
+.status-rejected{color:var(--red);background:var(--red-bg)}
+.review-note{display:block;color:var(--ink-500);font-size:12px;margin-top:6px;max-width:240px;overflow-wrap:anywhere}
+.decision-actions{display:flex;gap:7px;margin-top:9px}
+.enrollment-workspace button[data-decision=approved]{background:var(--green-bg);border-color:transparent;color:var(--green)}
+.enrollment-workspace button[data-decision=rejected]{background:transparent;color:var(--red)}
+.request-empty{text-align:center;padding:52px 20px;background:var(--card);border:1px dashed var(--line);border-radius:14px}
+.empty-icon{display:grid;place-items:center;width:60px;height:60px;background:var(--pink-50);border-radius:50%;margin:0 auto 18px;color:var(--pink-600)}
+.empty-icon svg{width:28px;height:28px}
+.request-empty h2{font-size:18px;margin:0 0 10px}
+.request-empty p{color:var(--ink-500);font-size:13px;line-height:1.7;max-width:450px;margin:0 auto 20px}
+.enrollment-tools{display:grid;gap:12px;margin:0 0 24px}
+.enrollment-tools details{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:16px 20px}
+.enrollment-tools summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--ink-700)}
+.enrollment-tools p{font-size:13px;color:var(--ink-500);line-height:1.7}
+.enrollment-tools .load-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;padding:12px;font-size:13px;flex-wrap:wrap}
+.enrollment-tools select{max-width:100%;margin:0 8px 8px 0}
+[hidden]{display:none!important}
+@media(max-width:640px){
+ .enrollment-workspace{padding:20px 16px 40px}.back-link{margin-bottom:20px}
+ .workspace-heading{gap:12px}.heading-icon{width:44px;height:44px;border-radius:12px}
+ .review-toolbar{padding:16px;align-items:stretch}.filter-field{min-width:0;flex:1 1 100%}.refresh-button{width:100%}
+ .student-header{padding:18px 16px 14px;flex-direction:column;gap:10px}.term-label{max-width:100%}
+ .load-summary{margin:0 16px 16px;grid-template-columns:1fr 1fr}.load-summary>div{padding:12px}
+ .load-summary>div:last-child{grid-column:1/-1;border-left:0;border-top:1px solid var(--line)}
+ .table-wrap{padding:0 16px 10px}.request-empty{padding:36px 20px}
+}

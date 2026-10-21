@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const nodes = {};
-for (const id of ['back', 'requests', 'message', 'refresh', 'statusFilter']) {
+for (const id of ['back', 'requests', 'message', 'refresh', 'statusFilter', 'finalizationGroups', 'enrollmentTermSelect', 'termManager', 'openTerm', 'closeTerm']) {
   nodes[id] = { innerHTML: '', textContent: '', addEventListener(event, handler) { this[event] = handler; } };
 }
 nodes.statusFilter.value = 'pending';
+nodes.enrollmentTermSelect.options = [];
 let ready, failure = null;
 const calls = [];
 const first = { student_id: 'student-a', student_name: '<script>bad</script>', student_no: 'TEST-1', program: 'BSIT', year_level: '1st Year', section: 'TEST-1A', school_year: '2026-2027', semester: '1st Semester', enrolled_units: 3, enrolled_courses: [{ code: 'EXISTING', title: 'Existing subject', units: 3, schedule: 'Wed 11:00-12:30' }] };
@@ -23,6 +24,7 @@ const context = vm.createContext({
   supabaseClient: { rpc: async (name, args) => {
     calls.push({ name, args });
     if (name === 'list_enrollment_request_history') return { data: queue };
+    if (name === 'get_enrollment_workspace') return { data: { groups: [], terms: [] } };
     return { error: failure };
   } },
 });
@@ -44,9 +46,8 @@ const buttons = [{}, {}];
 const row = { querySelectorAll: () => buttons };
 const button = { dataset: { id: 'request', decision: 'approved' }, closest: () => row };
 await nodes.requests.click({ target: { closest: () => button } });
-assert.equal(calls[1].name, 'review_enrollment_request');
-assert.equal(calls[1].args.p_decision, 'approved');
-assert.equal(calls[2].name, 'list_enrollment_request_history');
+assert.equal(calls.find(c => c.name === 'review_enrollment_request').args.p_decision, 'approved');
+assert.equal(calls.filter(c => c.name === 'list_enrollment_request_history').length, 2);
 button.dataset.decision = 'rejected';
 failure = { message: 'Access denied' };
 await nodes.requests.click({ target: { closest: () => button } });
@@ -62,6 +63,9 @@ assert(nodes.requests.innerHTML.includes('rejected'));
 assert(!nodes.requests.innerHTML.includes('data-decision='), 'History rows cannot be reviewed a second time');
 queue = [];
 await nodes.refresh.click();
-assert.equal(nodes.requests.innerHTML, '');
+assert(nodes.requests.innerHTML.includes('No matching requests'));
 assert(nodes.message.textContent.startsWith('No rejected requests found.'));
+await nodes.requests.click({target:{closest:()=>({dataset:{history:'all'}})}});
+assert.equal(nodes.statusFilter.value,'all');
+assert(nodes.message.textContent.startsWith('No requests found.'));
 console.log('Enrollment review: student/term grouping, unit totals, escaping, approval, empty state and failure recovery passed');
