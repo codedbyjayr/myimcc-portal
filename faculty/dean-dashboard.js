@@ -1339,6 +1339,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         editingOfferingId = (initialValues && initialValues.id) ? initialValues.id : null;
         getEl('modalTitle').textContent = editingOfferingId ? `Edit ${cfg.title.replace(/^Add\s+/i, '')}` : cfg.title;
 
+        getEl('modalOverlay').classList.toggle('course-offering-modal', key === 'courseOffering');
+        getEl('modalSaveBtn').textContent = key === 'courseOffering' ? (editingOfferingId ? 'Save changes' : 'Add course offering') : 'Save';
         const form = getEl('modalForm');
         form.innerHTML = cfg.fields.map(f => {
             const id = `field_${f.name}`;
@@ -1380,24 +1382,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const codeInput = getEl('field_code');
             const search = getEl('field_catalog_search');
             const catalogSelect = getEl('field_catalog_course');
-            catalogSelect.size = 5;
-            catalogSelect.style.cssText = 'height:auto;max-width:100%;white-space:normal';
-            const insights = document.createElement('p');
-            insights.className = 'sub'; insights.id = 'subjectInsights'; insights.setAttribute('role', 'status');
-            catalogSelect.after(insights);
-            search.setAttribute('aria-controls', catalogSelect.id);
-            const filterSubjects = () => {
-                const selected = catalogSelect.value;
-                const query = search.value.trim().toLowerCase();
-                const matches = state.courses.filter(c => (c.code + ' ' + c.title).toLowerCase().includes(query));
-                catalogSelect.replaceChildren(new Option(matches.length ? 'Choose a subject' : 'No subjects found — clear your search', ''));
-                matches.forEach(c => catalogSelect.add(new Option(c.code + ' — ' + c.title + ' (' + ((c.lec_units || 0) + (c.lab_units || 0) || c.units || 3) + ' units)', c.code)));
-                catalogSelect.value = matches.some(c => c.code === selected) ? selected : '';
-                insights.textContent = matches.length + ' matching subject(s). Select one to autofill the fields below.';
-            };
-            search.addEventListener('input', filterSubjects);
-            filterSubjects();
-
+            const insights = window.imccSubjectPicker(catalogSelect, search, state.courses, form);
 
             const isEdit = Boolean(editingOfferingId);
             const existingInstructorId = (initialValues && initialValues.instructor_id) ? initialValues.instructor_id : null;
@@ -1480,7 +1465,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const el = getEl(`field_${f.name}`);
             if (!el) continue;
             const val = el.value.trim();
-            if (f.required && !val) { showToast(`${f.label} is required.`, true); el.focus(); return; }
+            if (f.required && !val) { showToast(`${f.label} is required.`, true); if (el.closest('details')) el.closest('details').open = true; el.focus(); return; }
             values[f.name] = f.type === 'number' ? (val === '' ? null : Number(val)) : (val || null);
         }
 

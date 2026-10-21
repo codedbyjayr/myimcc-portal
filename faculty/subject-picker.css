@@ -1,0 +1,18 @@
+#modalOverlay.course-offering-modal .modal-box{width:min(760px,calc(100vw - 32px));max-width:760px;max-height:calc(100dvh - 40px);display:flex;flex-direction:column;padding:0;overflow:hidden}
+#modalOverlay.course-offering-modal #modalTitle{padding:24px 28px 18px;margin:0;border-bottom:1px solid var(--line)}
+#modalOverlay.course-offering-modal #modalForm{padding:22px 28px;overflow:auto;min-height:0}
+#modalOverlay.course-offering-modal .modal-actions{padding:16px 28px;margin:0;border-top:1px solid var(--line);flex-shrink:0;background:var(--card)}
+.course-offering-modal [hidden]{display:none!important}
+.subject-count{font-size:12px;color:var(--ink-500);margin:10px 0}
+.subject-results{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:12px;margin-bottom:20px}
+.subject-result{display:grid;grid-template-columns:90px 1fr;gap:5px 14px;width:100%;padding:14px 16px;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;color:var(--ink-900);font:inherit;cursor:pointer}
+.subject-result:last-child{border-bottom:0}.subject-result:hover{background:var(--bg)}
+.subject-result:focus-visible,.selected-subject button:focus-visible{outline:2px solid var(--red);outline-offset:-3px}
+.subject-result strong{font-size:13px}.subject-result span{font-size:14px;line-height:1.5;overflow-wrap:anywhere}.subject-result small{grid-column:2;color:var(--ink-500);font-size:12px}
+.subject-results>p{padding:20px;color:var(--ink-500)}
+.selected-subject{padding:18px;background:var(--bg);border:1px solid var(--line);border-radius:12px;margin-bottom:16px}
+.selected-subject p{font-size:14px;line-height:1.7;margin:0 0 12px;color:var(--ink-900)}
+.subject-details{border-bottom:1px solid var(--line);padding:0 0 18px;margin:0 0 22px}.subject-details summary{cursor:pointer;font-size:13px;color:var(--ink-500);padding:6px 0 12px}
+.offering-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}.offering-grid .form-row{min-width:0}.offering-grid input,.offering-grid select{width:100%}
+.course-offering-modal h4{margin:0 0 18px;font-size:15px}
+@media(max-width:600px){#modalOverlay.course-offering-modal .modal-box{width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}#modalOverlay.course-offering-modal #modalTitle,#modalOverlay.course-offering-modal #modalForm,#modalOverlay.course-offering-modal .modal-actions{padding:18px}.offering-grid{grid-template-columns:1fr}.subject-result{grid-template-columns:1fr}.subject-result small{grid-column:1}}
