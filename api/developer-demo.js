@@ -15,7 +15,7 @@ async function provisionDemo(access) {
   try {
     for (const role of [...Object.keys(paths),'pending']) {
       const email = 'review.'+role+'.'+randomBytes(8).toString('hex')+'@example.invalid';
-      const password = randomBytes(32).toString('hex');
+      const password = 'Review!A7-' + randomBytes(32).toString('hex');
       const {data,error} = await service.auth.admin.createUser({email,password,email_confirm:true,
         user_metadata:{full_name:'DEMO '+role},app_metadata:{imcc_review:true}});
       if (error || !data.user) throw Error('Demo account setup failed');
