@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import process from 'node:process';
+import { Buffer } from 'node:buffer';
 
 const dashboards = Object.freeze({
   student: '/student/dashboard.html',
@@ -9,17 +11,13 @@ const dashboards = Object.freeze({
   admin: '/admin/admin-dashboard.html',
 });
 
-export default async function handler(req, res) {
-  res.setHeader('Cache-Control', 'no-store');
-  if (req.method !== 'GET') {
-    res.setHeader('Allow', 'GET');
-    return res.status(405).json({ error: 'Only GET is allowed.' });
-  }
+export async function verifyDeveloperAccess(req, res) {
+  const deny = (status, error) => { res.status(status).json({ error }); return null; };
   const token = req.headers.authorization?.match(/^Bearer (\S+)$/i)?.[1];
-  if (!token) return res.status(401).json({ error: 'Sign in to use dashboard preview.' });
+  if (!token) return deny(401, 'Sign in to use dashboard preview.');
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) return res.status(503).json({ error: 'Dashboard preview is not configured.' });
+  if (!url || !key) return deny(503, 'Dashboard preview is not configured.');
 
   try {
     const client = createClient(url, key, {
@@ -27,23 +25,39 @@ export default async function handler(req, res) {
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
     const { data: { user }, error } = await client.auth.getUser(token);
-    if (error || !user) return res.status(401).json({ error: 'Your session has expired. Sign in again.' });
+    if (error || !user) return deny(401, 'Your session has expired. Sign in again.');
     if (user.email?.toLowerCase() !== 'jlm33405@imcc.edu.ph' || !user.email_confirmed_at) {
-      return res.status(403).json({ error: 'Developer preview access is not enabled for this account.' });
+      return deny(403, 'Developer preview access is not enabled for this account.');
     }
     // Decode assurance only after Auth has verified this exact token.
     const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
-    if (claims.aal !== 'aal2') return res.status(403).json({ error: 'Complete MFA before opening developer preview.' });
+    if (claims.aal !== 'aal2') return deny(403, 'Complete MFA before opening developer preview.');
     const { data: profile, error: profileError } = await client.from('profiles')
       .select('role,status,is_active').eq('id', user.id).single();
     if (profileError || !profile || profile.role !== 'admin'
       || profile.status !== 'approved' || profile.is_active !== true) {
-      return res.status(403).json({ error: 'An approved, active admin account is required.' });
+      return deny(403, 'An approved, active admin account is required.');
     }
+    return { client, user, token, url, key };
+  } catch {
+    res.status(503).json({ error: 'Dashboard preview is temporarily unavailable.' });
+  }
+}
+
+export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET');
+    return res.status(405).json({ error: 'Only GET is allowed.' });
+  }
+  const access = await verifyDeveloperAccess(req, res);
+  if (!access) return;
+  const { user, token, url, key } = access;
+  try {
     const resource = new URL(req.url, 'http://localhost').searchParams.get('resource');
     if (resource !== null) {
       const target = new URL(resource, url);
-      const readRpc = 'get_class_roster|get_subject_instructor_options|get_dean_student_directory|helpdesk_recipient_id';
+      const readRpc = 'get_class_roster|get_subject_instructor_options|get_dean_student_directory|list_student_records|get_student_record|helpdesk_recipient_id';
       if (!resource.startsWith('/rest/v1/') || resource.includes('\\')
         || target.origin !== new URL(url).origin
         || !new RegExp(`^/rest/v1/(?:[a-z_][a-z_0-9]*|rpc/(?:${readRpc}))$`).test(target.pathname)) {

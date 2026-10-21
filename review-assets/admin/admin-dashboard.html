@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyIMCC — Admin Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="admin-dashboard.css">
+  <link rel="stylesheet" href="../shared/loading.css">
+  <link rel="stylesheet" href="../shared/rwd.css">
+</head>
+
+<body>
+
+  <div class="header">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 42 42" class="brand-mark-svg" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="42" height="42" rx="10" fill="#E32B4F"/>
+          <circle cx="21" cy="11.5" r="2.2" fill="#FFFFFF"/>
+          <path d="M21 15V28.5" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"/>
+          <path d="M9.5 27.5V14L19.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M32.5 27.5V14L22.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M9.5 27.5C13.5 25 17.5 25.5 21 28.5C24.5 25.5 28.5 25 32.5 27.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-text">MyIMCC</div>
+        <div class="brand-sub-text">ADMIN PORTAL</div>
+      </div>
+    </div>
+    <div class="user-info">
+      <label id="developerPreviewControl" hidden>View as role
+        <select id="previewRole" class="role-select" aria-controls="developerPreview" disabled>
+          <option value="admin">Admin</option><option value="student">Student</option>
+          <option value="faculty">Faculty</option><option value="dean">Dean</option>
+          <option value="registrar">Registrar</option><option value="staff">Staff</option>
+        </select>
+      </label>
+      <button id="temporaryRoleTest" class="btn-logout" type="button" hidden>Try selected role (demo)</button>
+      <span id="adminEmail" style="color: var(--text-muted); font-size: 14px;"><span class="imcc-skel imcc-skel-inline" style="width:140px;height:14px;vertical-align:middle;"></span></span>
+      <button id="logoutBtn" class="btn-logout">Sign Out</button>
+    </div>
+  </div>
+
+  <section id="developerPreview" class="dashboard-card" aria-label="Developer role view" hidden>
+    <div class="card-title">
+      <span id="previewStatus" role="status"></span>
+      <button id="exitPreview" class="btn-logout" type="button">Back to Admin</button>
+    </div>
+    <p class="preview-note">Read only · Uses your admin account's permitted data. No role changes or user impersonation.</p>
+    <iframe id="previewFrame" title="Role dashboard" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>
+  </section>
+
+  <main id="adminWorkspace">
+  <p><a href="../staff/enrollment-requests.html">Enrollment / Advising</a> · <a href="../faculty/dean-dashboard.html">Student Records &amp; Academic Management</a></p>
+  <!-- FILTER & SEARCH TOOLBAR -->
+  <div class="filter-bar">
+    <div class="filter-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="7" />
+        <path d="M21 21l-4-4" />
+      </svg>
+      <input type="text" id="searchInput" placeholder="Search by name, email, ID number, or role…" autocomplete="off" aria-label="Search users" title="Search users">
+    </div>
+    <select id="courseFilter" class="role-select" aria-label="Filter by course" title="Filter by course">
+      <option value="">All Courses</option>
+    </select>
+    <button type="button" id="clearFiltersBtn" class="btn-logout" style="display:none;">Clear Filters</button>
+  </div>
+
+  <!-- PENDING ACCESS REQUESTS -->
+  <div class="dashboard-card">
+    <div class="card-title">
+      <span>Pending Access Requests</span>
+      <span id="pendingCount" class="badge badge-pending">0 Pending</span>
+    </div>
+
+    <div id="pendingTableWrap" class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Full Name</th>
+            <th>Email</th>
+            <th>ID Number</th>
+            <th>Course</th>
+            <th>Assign Role</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="pendingTableBody"></tbody>
+      </table>
+      <div id="noPendingMsg" class="empty-state" style="display: none;">No pending registration requests found.</div>
+    </div>
+  </div>
+
+  <!-- APPROVED USERS (WITH EDITABLE ROLES) -->
+  <div class="dashboard-card">
+    <div class="card-title">Approved Portal Users & Role Management</div>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Full Name</th>
+            <th>Email</th>
+            <th>ID Number</th>
+            <th>Course</th>
+            <th>Assigned Role</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="approvedTableBody"></tbody>
+      </table>
+    </div>
+    <div id="noApprovedMsg" class="empty-state" style="display: none;">No users match your search or filter.</div>
+  </div>
+
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../env-config.js"></script>
+  <script src="../shared/supabase-config.js"></script>
+<script src="../shared/identity.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="admin-dashboard.js"></script>
+</body>
+
+</html>

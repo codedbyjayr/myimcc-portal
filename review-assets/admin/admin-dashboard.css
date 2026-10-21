@@ -1,0 +1,348 @@
+/* ======================================================================
+   MyIMCC Admin Portal — Stylesheet
+   Extracted from inline <style> block. Dark-mode only; collegiate wine
+   accent matches the rest of the portal.
+   ====================================================================== */
+
+:root {
+  --primary: #E32B4F;
+  --primary-dark: #7A132C;
+  --primary-hover: #9D1F3A;
+  --bg-dark: #141019;
+  --surface: #1D1724;
+  --surface-2: #231B2E;
+  --surface-border: #312A3B;
+  --text-main: #F3EEF7;
+  --text-muted: #A79FB5;
+  --danger: #D6274A;
+  --success: #1B9C63;
+  --amber: #C77A08;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  min-height: 100vh;
+  padding: 12px 10px;
+}
+
+/* ---- Header ---- */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, #3A1220 0%, #1D1724 100%);
+  border: 1px solid var(--surface-border);
+  border-radius: 14px;
+  margin-bottom: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-mark-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.brand-text {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--text-main);
+  line-height: 1.15;
+}
+
+.brand-sub-text {
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.btn-logout {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--surface-border);
+  color: var(--text-main);
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.18s ease;
+}
+
+.btn-logout:hover {
+  background: rgba(227, 43, 79, 0.14);
+  border-color: rgba(227, 43, 79, 0.35);
+  color: #fbb;
+}
+
+/* ---- Cards ---- */
+.dashboard-card {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 14px;
+  padding: 18px 16px;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---- Table ---- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  text-align: left;
+  font-size: 13px;
+}
+
+th {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+td {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--surface-border);
+  font-size: 13px;
+}
+
+/* ---- Badges ---- */
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.badge-pending {
+  background: rgba(199, 122, 8, 0.18);
+  color: var(--amber);
+}
+
+.badge-approved {
+  background: rgba(27, 156, 99, 0.18);
+  color: var(--success);
+}
+
+/* ---- Action Buttons ---- */
+.btn-action {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.18s ease, transform 0.12s ease;
+}
+
+.btn-action:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.btn-approve {
+  background: var(--success);
+  color: #fff;
+  margin-right: 6px;
+}
+
+.btn-reject,
+.btn-revoke {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* ---- Role Select ---- */
+.role-select {
+  background: var(--bg-dark);
+  border: 1px solid var(--surface-border);
+  color: var(--text-main);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.role-select:focus {
+  border-color: var(--primary);
+}
+
+/* ---- Empty State ---- */
+.empty-state {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 32px;
+  font-size: 13.5px;
+}
+
+/* ---- Filter Toolbar ---- */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filter-search {
+  position: relative;
+  flex: 1 1 100%;
+  min-width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.filter-search svg {
+  position: absolute;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.filter-search input {
+  width: 100%;
+  background: var(--bg-dark);
+  border: 1px solid var(--surface-border);
+  color: var(--text-main);
+  padding: 11px 12px 11px 36px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.filter-search input:focus {
+  border-color: var(--primary);
+}
+
+.filter-search input::placeholder {
+  color: var(--text-muted);
+}
+
+#courseFilter {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+#clearFiltersBtn {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+}
+
+.highlight {
+  background: rgba(227, 43, 79, 0.3);
+  color: #fff;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+/* ---- Responsive Table ---- */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: 12px;
+}
+
+.table-responsive table {
+  min-width: 640px;
+  margin-top: 0;
+}
+
+/* ---- Responsive Breakpoints ---- */
+@media (min-width: 640px) {
+  body { padding: 16px 14px; }
+  .header {
+    flex-direction: row;
+    align-items: center;
+    padding: 18px 22px;
+    margin-bottom: 20px;
+  }
+  .user-info { width: auto; justify-content: flex-start; }
+  .dashboard-card { padding: 22px; margin-bottom: 20px; }
+  .filter-bar { gap: 12px; padding: 14px 16px; margin-bottom: 20px; }
+  .filter-search { flex: 1 1 280px; min-width: 220px; }
+  #courseFilter { flex: 0 0 auto; min-width: 170px; width: auto; }
+  th { padding: 12px; }
+  td { padding: 14px 12px; font-size: 13.5px; }
+}
+
+@media (min-width: 768px) {
+  body { padding: 20px; }
+  .header { margin-bottom: 24px; }
+  .card-title { font-size: 16px; }
+}
+#developerPreviewControl[hidden], #developerPreview[hidden], #adminWorkspace[hidden], #previewFrame[hidden] { display: none; }
+#developerPreviewControl { font-size: 12px; }
+#developerPreviewControl select { margin-left: 6px; }
+.preview-note { color: var(--text-muted); font-size: 12px; margin-bottom: 12px; }
+#previewFrame { display: block; width: 100%; height: 80vh; border: 1px solid var(--surface-border); border-radius: 8px; }
+@media (max-width: 600px) {
+  #developerPreview { padding: 10px; }
+  #developerPreview .preview-note { font-size: 11px; margin: 8px 0; }
+  #previewFrame { height: 85vh; }
+}
+.user-info { flex-wrap: wrap; }

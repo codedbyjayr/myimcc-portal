@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyIMCC — Dean Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="sharedstyle.css">
+  <link rel="stylesheet" href="../shared/loading.css">
+  <link rel="stylesheet" href="../shared/rwd.css">
+  <script>(function(){try{var t=localStorage.getItem('myimcc_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(_){}})();</script>
+</head>
+
+<body>
+  <div class="app">
+
+    <!-- Mobile Drawer Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">
+          <svg viewBox="0 0 42 42" class="brand-mark-svg" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect width="42" height="42" rx="10" fill="#E32B4F"/>
+            <circle cx="21" cy="11.5" r="2.2" fill="#FFFFFF"/>
+            <path d="M21 15V28.5" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M9.5 27.5V14L19.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M32.5 27.5V14L22.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M9.5 27.5C13.5 25 17.5 25.5 21 28.5C24.5 25.5 28.5 25 32.5 27.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-name">MyIMCC</div>
+          <div class="brand-sub">Dean Portal</div>
+        </div>
+        <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close Navigation" type="button">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="user-chip">
+        <div class="avatar" id="sidebarAvatar"></div>
+        <div>
+          <div class="name" id="sidebarName"><span class="imcc-skel imcc-skel-inline" style="width:110px;height:16px;"></span></div>
+          <div class="id" id="sidebarDept"><span class="imcc-skel imcc-skel-inline" style="width:70px;height:12px;"></span></div>
+        </div>
+      </div>
+
+      <div class="nav-label">Main Menu</div>
+      <a class="nav-item" href="../staff/enrollment-requests.html">Enrollment / Advising</a>
+      <button class="nav-item" data-page="records">View Records</button>
+      <button class="nav-item active" data-page="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="9" rx="1.5" />
+          <rect x="14" y="3" width="7" height="5" rx="1.5" />
+          <rect x="14" y="12" width="7" height="9" rx="1.5" />
+          <rect x="3" y="16" width="7" height="5" rx="1.5" />
+        </svg>
+        Dashboard
+      </button>
+      <button class="nav-item" data-page="classes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z" />
+          <path d="M6 12v5c0 1.5 3 3 6 3s6-1.5 6-3v-5" />
+        </svg>
+        My Classes
+      </button>
+      <button class="nav-item" data-page="faculty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="9" cy="8" r="3.2" />
+          <path d="M3 20a6 6 0 0112 0" />
+          <circle cx="18" cy="8" r="2.6" />
+          <path d="M15.5 13.2A5 5 0 0121 20" />
+        </svg>
+        Faculty &amp; Schedule
+      </button>
+      <button class="nav-item" data-page="compliance">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z" />
+          <path d="M9 12l2 2 4-4" />
+        </svg>
+        Student Compliance
+      </button>
+
+      <div class="nav-label">Quick Links</div>
+      <div id="ssoLinksNav"></div>
+
+      <div class="nav-label">Account</div>
+      <button class="nav-item" data-page="profile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="8" r="5" />
+          <path d="M20 21a8 8 0 00-16 0" />
+        </svg>
+        My Profile
+      </button>
+
+      <div class="sidebar-foot">
+        MyIMCC Portal<br>Dean Access
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div class="main">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="menu-toggle" id="menuToggle" aria-label="Open Navigation" type="button">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2"
+              stroke-linecap="round">
+              <line x1="4" y1="6" x2="20" y2="6"></line>
+              <line x1="4" y1="12" x2="20" y2="12"></line>
+              <line x1="4" y1="18" x2="20" y2="18"></line>
+            </svg>
+          </button>
+          <div class="page-title" id="pageTitle">Dashboard</div>
+        </div>
+        <div class="topbar-right">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4-4" />
+            </svg>
+            Search portal...
+          </div>
+          <button class="theme-toggle" id="themeToggle">
+            <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z" />
+            </svg>
+            <span id="themeLabel">Dark</span>
+          </button>
+          <div class="user-menu-wrap">
+            <button class="user-btn" id="userBtn">
+              <div class="avatar" id="topAvatar" style="width:30px;height:30px;font-size:11px;"></div>
+              <span id="topName">Dean</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+            <div class="dropdown" id="userDropdown">
+              <button class="ddi" type="button" data-goto="profile">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" />
+                </svg>
+                My Profile</button>
+              <button class="ddi" id="signOutBtn"
+                style="color:var(--red);border-top:1px solid var(--line);margin-top:4px;padding-top:10px;">Sign
+                Out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+
+        <!-- ================= DASHBOARD (Strategic Analytics) ================= -->
+        <section class="page active" id="page-dashboard">
+          <div class="card card-pad" style="margin-bottom:16px"><div class="card-head"><h3>Enrollment Notifications</h3><button type="button" class="btn btn-ghost" id="refreshEnrollmentNotifications">Refresh</button></div><div id="enrollmentNotifications" aria-live="polite">Loading notifications…</div></div>
+          <div class="hero">
+            <div>
+              <h2>Welcome!</h2>
+              <p>Enrollment, academic performance, and department health at a glance.</p>
+            </div>
+            <div class="hero-actions">
+              <button class="btn btn-solid-w" data-goto="faculty">Assign Faculty</button>
+            </div>
+          </div>
+
+          <div class="grid-4" id="enrollmentStats"></div>
+
+          <div class="grid-2">
+            <div class="card card-pad">
+              <div class="card-head">
+                <div>
+                  <h3>Enrollment by Program</h3>
+                  <div class="sub">Approved students per program</div>
+                </div>
+              </div>
+              <div id="programBars"></div>
+            </div>
+            <div class="card card-pad">
+              <div class="card-head">
+                <div>
+                  <h3>Semester Enrollment Trend</h3>
+                  <div class="sub">Distinct enrolled students per term</div>
+                </div>
+              </div>
+              <div id="semesterTrendBars"></div>
+            </div>
+          </div>
+
+          <div class="grid-2" style="margin-top:20px;">
+            <div class="card card-pad">
+              <div class="card-head">
+                <div>
+                  <h3>Academic Performance</h3>
+                  <div class="sub">Passing vs. failing, all recorded finals</div>
+                </div>
+              </div>
+              <div id="performanceStats"></div>
+              <div id="passFailBars" style="margin-top:14px;"></div>
+            </div>
+            <div class="card card-pad">
+              <div class="card-head">
+                <div>
+                  <h3>Courses Flagged for High Failure Rate</h3>
+                  <div class="sub">≥ 30% of recorded finals marked Failed</div>
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Course</th>
+                      <th>Program</th>
+                      <th>Finals</th>
+                      <th>Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody id="flaggedCoursesBody"></tbody>
+                </table>
+              </div>
+              <div id="noFlaggedMsg" class="empty-state" style="display:none;">No courses currently exceed the
+                failure-rate threshold.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= MY CLASSES (grade entry for courses the dean personally handles) ================= -->
+        <section class="page" id="page-classes">
+          <div class="grid-2 grading-layout">
+            <div class="card card-pad class-picker">
+              <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;">
+                <h3>Course Offerings</h3>
+                <button class="btn btn-primary" id="deanAddClassBtn" style="padding:6px 12px;font-size:12px;">+ Add
+                  Subject</button>
+              </div>
+              <div style="display:flex;gap:6px;margin-bottom:12px;">
+                <button type="button" class="btn btn-primary" id="deanScopeMyBtn" style="flex:1;font-size:12px;padding:6px;">My Classes</button>
+                <button type="button" class="btn btn-ghost" id="deanScopeAllBtn" style="flex:1;font-size:12px;padding:6px;">All Classes</button>
+              </div>
+              <label class="mobile-class-picker">Class<select class="field-input grading-class-select" aria-label="Select class"></select></label>
+              <div id="myCourseList" class="grading-course-list"></div>
+              <div id="noMyCoursesMsg" class="empty-state" style="display:none;">No course offerings found.</div>
+            </div>
+            <div class="card card-pad grading-card" hidden>
+              <div class="card-head">
+                <div>
+                  <h3 id="selectedMyCourseTitle">Select a class</h3>
+
+                </div>
+                <details class="grading-class-details"><summary>Class details</summary><div class="sub" id="selectedMyCourseSub"></div>
+                  <button type="button" class="btn btn-ghost" id="deanClassAuditLogBtn" style="display:none;align-items:center;gap:6px;font-size:12px;padding:6px 12px;" title="View all grade changes for this class">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Class Grade History
+                  </button>
+
+                </details>
+              </div>
+              <details class="grading-help"><summary>Grading help</summary><p>Enter school grades directly, such as 1.00, 1.10, or 2.75. Enter the official Equivalent manually after Final; 4.00 is conditional and 5.00 is failed. Legacy percentage records are read-only pending school review. Use History beside a student to view saved revisions or revert a mistake. Save your changes before switching classes.</p></details>
+              <label class="grading-period-control">Grading period<select class="field-input grading-period" aria-label="Grading period"><option value="2">Prelim</option><option value="3">Midterm</option><option value="4">Semifinal</option><option value="5">Final</option><option value="6">Equivalent</option></select></label>
+              <div class="table-responsive grading-table-wrap" tabindex="0" role="region" aria-label="Class grade table">
+                <table id="myRosterTable" style="display:none;">
+                  <thead>
+                    <tr>
+                      <th>Student</th>
+                      <th>Pre-Lim</th>
+                      <th>Midterm</th>
+                      <th>Semi-Final</th>
+                      <th>Final</th>
+                      <th>Equivalent</th>
+                      <th>Remark</th>
+                      <th style="text-align:center;">History</th>
+                    </tr>
+                  </thead>
+                  <tbody id="myRosterBody"></tbody>
+                </table>
+              </div>
+              <div id="noMyRosterMsg" class="empty-state">Pick a class from the left to view its roster.</div>
+              <div class="grading-actions"><button type="button" class="btn btn-ghost lock-grades-btn" disabled>Lock Grades</button><span class="grading-save-status" role="status">No unsaved changes</span><button class="btn btn-primary" id="saveMyGradesBtn" disabled>Save Grades</button></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= FACULTY & SCHEDULE ================= -->
+        <section class="page" id="page-faculty">
+          <div class="card card-pad">
+            <div class="card-head">
+              <div>
+                <h3>Teaching Workloads</h3>
+                <div class="sub">Total credit units and sections per faculty member, selected term</div>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Faculty</th>
+                    <th>Sections</th>
+                    <th>Total Units</th>
+                    <th>Load</th>
+                  </tr>
+                </thead>
+                <tbody id="workloadBody"></tbody>
+              </table>
+            </div>
+            <div id="noWorkloadMsg" class="empty-state" style="display:none;">No course offerings found for the current
+              term.</div>
+          </div>
+
+          <div class="card card-pad" style="margin-top:20px;">
+            <div class="card-head">
+              <div>
+                <h3>Course Offerings &amp; Faculty Assignment</h3>
+                <div class="sub">Manage subjects and assign instructors — saves instantly</div>
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;">
+                <select id="assignSemesterFilter" class="field-input" style="width:auto;"
+                  aria-label="Filter by Semester" title="Filter by Semester"></select>
+                <button class="btn btn-primary" data-modal="courseOffering">+ Add Subject Offering</button>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Course Title</th>
+                    <th>Program</th>
+                    <th>Schedule</th>
+                    <th>Assigned Faculty</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="assignBody"></tbody>
+              </table>
+            </div>
+            <div id="noOfferingsMsg" class="empty-state" style="display:none;">No course offerings found for this term.
+            </div>
+          </div>
+
+
+          <div class="card card-pad" style="margin-top:20px;">
+            <div class="card-head">
+              <div>
+                <h3>Student Evaluation Ratings</h3>
+                <div class="sub">Aggregated student feedback averages per instructor</div>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Faculty Member</th>
+                    <th>Term</th>
+                    <th>Evaluations</th>
+                    <th>Clarity</th>
+                    <th>Knowledge</th>
+                    <th>Availability</th>
+                    <th>Fairness</th>
+                    <th>Punctuality</th>
+                    <th>Overall Rating</th>
+                  </tr>
+                </thead>
+                <tbody id="deanEvalBody"></tbody>
+              </table>
+            </div>
+            <div id="noDeanEvalMsg" class="empty-state" style="display:none;">No student evaluations recorded yet.</div>
+          </div>
+
+          <div class="card card-pad" style="margin-top:20px;">
+            <div class="card-head">
+              <div>
+                <h3>Faculty Performance Log</h3>
+                <div class="sub">Evaluations, publications, and tenure-track notes</div>
+              </div>
+              <button class="btn btn-primary" data-modal="facultyNote">+ Add Note</button>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Faculty</th>
+                    <th>Type</th>
+                    <th>Note</th>
+                    <th>Logged</th>
+                  </tr>
+                </thead>
+                <tbody id="notesBody"></tbody>
+              </table>
+            </div>
+            <div id="noNotesMsg" class="empty-state" style="display:none;">No performance notes logged yet.</div>
+          </div>
+        </section>
+
+        <!-- ================= STUDENT COMPLIANCE ================= -->
+        <section class="page" id="page-compliance">
+          <div class="grid-2 record-layout">
+            <div class="card card-pad record-picker"><h3>Student Clearance</h3>
+              <label for="clearanceSearch">Search students</label><input id="clearanceSearch" class="field-input" type="search" placeholder="Name, student number, or program">
+              <div id="clearanceStudents" class="record-student-list" role="group" aria-label="Students"></div>
+            </div>
+            <div class="card card-pad record-detail"><h3 id="clearanceTitle">Select a student</h3><div id="clearanceDetails" role="status">Choose a student to view clearance.</div><details class="department-compliance"><summary>Graduation readiness, accreditation &amp; appeals</summary>          <div class="card card-pad">
+            <div class="card-head">
+              <div>
+                <h3>Graduation Readiness</h3>
+                <div class="sub">Final-year students below the expected earned-units threshold</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label for="requiredUnitsInput" style="font-size:12px;color:var(--ink-500);">Required units:</label>
+                <input type="number" id="requiredUnitsInput" class="field-input" value="144" style="width:80px;"
+                  title="Required units" aria-label="Required units">
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Program</th>
+                    <th>Units Earned</th>
+                    <th>Progress</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="gradReadinessBody"></tbody>
+              </table>
+            </div>
+            <div id="noSeniorsMsg" class="empty-state" style="display:none;">No final-year students found.</div>
+          </div>
+
+          <div class="card card-pad" style="margin-top:20px;">
+            <div class="card-head">
+              <div>
+                <h3>Accreditation Compliance Checklist</h3>
+                <div class="sub">Instructional hours, syllabus compliance, learning outcomes</div>
+              </div>
+              <button class="btn btn-primary" data-modal="accreditation">+ Add Requirement</button>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Requirement</th>
+                    <th>Department</th>
+                    <th>Status</th>
+                    <th>Evidence</th>
+                  </tr>
+                </thead>
+                <tbody id="accreditationBody"></tbody>
+              </table>
+            </div>
+            <div id="noAccreditationMsg" class="empty-state" style="display:none;">No accreditation items tracked yet.
+            </div>
+          </div>
+
+          <div class="card card-pad" style="margin-top:20px;">
+            <div class="card-head">
+              <div>
+                <h3>Appeals &amp; Approvals</h3>
+                <div class="sub">Grade change requests, prerequisite waivers, credit transfers</div>
+              </div>
+              <button class="btn btn-primary" data-modal="appeal">+ Log New Appeal</button>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Type</th>
+                    <th>Course</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="appealsBody"></tbody>
+              </table>
+            </div>
+            <div id="noAppealsMsg" class="empty-state" style="display:none;">No appeals on file.</div>
+          </div>
+</details></div>
+          </div>
+        </section>
+        <section class="page" id="page-records">
+          <div class="grid-2 record-layout">
+            <div class="card card-pad record-picker"><h3>Student Records</h3>
+              <label for="recordSearch">Search students</label><input id="recordSearch" class="field-input" type="search" placeholder="Name, student number, or program">
+              <div id="recordStudents" class="record-student-list" role="group" aria-label="Students"></div>
+            </div>
+            <div class="card card-pad record-detail"><h3 id="recordTitle">Select a student</h3><div id="recordDetails" role="status">Choose a student to view their records.</div></div>
+          </div>
+        </section>
+
+        <!-- ================= PROFILE ================= -->
+        <section class="page" id="page-profile">
+          <div class="card card-pad" style="max-width:520px;">
+            <div class="card-head">
+              <h3>My Profile</h3>
+            </div>
+            <div id="profileFields"></div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- GENERIC MODAL -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-box">
+      <h3 id="modalTitle">Add Entry</h3>
+      <form id="modalForm"></form>
+      <div class="modal-actions">
+        <button type="button" class="btn-outline btn" id="modalCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="modalSaveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GRADE REVISION HISTORY & REVERT MODAL -->
+  <div class="modal-overlay" id="gradeHistoryModal">
+    <div class="modal-box" style="max-width:820px;width:95%;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+        <div>
+          <h3 id="gradeHistoryModalTitle" style="margin:0 0 4px 0;">Grade Revision History</h3>
+          <div class="sub" id="gradeHistoryModalSub" style="font-size:13px;color:var(--ink-500);">Student and course details</div>
+        </div>
+        <button type="button" class="btn btn-ghost" id="gradeHistoryCloseBtn" style="padding:4px 8px;font-size:20px;line-height:1;" aria-label="Close">&times;</button>
+      </div>
+
+      <!-- Current Grade Card -->
+      <div id="gradeHistoryCurrentBox" style="background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;">
+      </div>
+
+      <!-- History Table -->
+      <div class="table-responsive" style="max-height:360px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius);">
+        <table style="margin:0;font-size:12.5px;">
+          <thead style="position:sticky;top:0;background:var(--card);z-index:2;">
+            <tr>
+              <th>Date &amp; Time</th>
+              <th>Student</th>
+              <th>Changed By</th>
+              <th>Type</th>
+              <th>Prelim</th>
+              <th>Midterm</th>
+              <th>Semi</th>
+              <th>Final</th>
+              <th>Equiv</th>
+              <th>Remark</th>
+              <th style="text-align:center;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="gradeHistoryBody"></tbody>
+        </table>
+      </div>
+      <div id="noGradeHistoryMsg" class="empty-state" style="display:none;padding:24px 0;">No previous revisions found. When grades are edited or updated, previous entries are archived here automatically.</div>
+
+      <div class="modal-actions" style="margin-top:16px;justify-content:space-between;align-items:center;">
+        <div style="font-size:12px;color:var(--ink-500);display:flex;align-items:center;gap:6px;">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          Clicking "Revert" restores that exact past version and preserves the current version in audit logs.
+        </div>
+        <button type="button" class="btn btn-primary" id="gradeHistoryDoneBtn">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../env-config.js"></script>
+  <script src="../shared/supabase-config.js"></script>
+  <script src="../shared/identity.js"></script>
+  <script src="../shared/authGuard.js"></script>
+  <script src="../shared/datetime.js"></script>
+  <script src="../shared/loading.js"></script>
+  <script src="../shared/grading.js"></script>
+  <script src="../shared/faculty-chrome.js"></script>
+  <script src="dean-dashboard.js"></script>
+</body>
+
+</html>

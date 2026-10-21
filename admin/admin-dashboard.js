@@ -20,11 +20,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const clearFiltersBtn = document.getElementById('clearFiltersBtn');
     const previewControl = document.getElementById('developerPreviewControl');
     const previewRole = document.getElementById('previewRole');
+    const temporaryRoleTest = document.getElementById('temporaryRoleTest');
     const previewPanel = document.getElementById('developerPreview');
     const previewFrame = document.getElementById('previewFrame');
     const previewStatus = document.getElementById('previewStatus');
     const workspace = document.getElementById('adminWorkspace');
     let previewChannel = null;
+    let demoSession = null, demoTimer = null, demoGeneration = 0;
     if (window.imccTableSkeleton) {
         if (pendingTableBody) pendingTableBody.innerHTML = window.imccTableSkeleton(5, 2);
         if (approvedTableBody) approvedTableBody.innerHTML = window.imccTableSkeleton(5, 4);
@@ -77,6 +79,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await previewRequest();
                 previewControl.hidden = false;
                 previewRole.disabled = false;
+                try { temporaryRoleTest.hidden = !(await demoRequest()).available; } catch { temporaryRoleTest.hidden = true; }
             } catch { previewControl.hidden = true; }
         }
         return true;
@@ -93,6 +96,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function closePreview() {
+        demoGeneration++;
+        demoSession = null;
+        clearTimeout(demoTimer);
+        temporaryRoleTest.textContent = 'Try selected role (demo)';
         previewChannel = null;
         previewFrame.hidden = true;
         previewFrame.removeAttribute('srcdoc');
@@ -101,9 +108,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         previewRole.value = 'admin';
     }
 
+    async function demoRequest(payload) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) throw new Error('Sign in with your developer account first.');
+        const endpoint = window.__ENV__?.SUPABASE_URL ? window.__ENV__.SUPABASE_URL.replace(/\/+$/,'') + '/functions/v1/developer-demo' : '/api/developer-demo';
+        const response = await fetch(endpoint, {
+            method: payload ? 'POST' : 'GET', cache: 'no-store',
+            headers: { Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json', apikey:window.__ENV__?.SUPABASE_ANON_KEY || '' },
+            ...(payload ? {body:JSON.stringify(payload)} : {}),
+        });
+        if (payload?.action === 'request') return response;
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Demo review is unavailable.');
+        return result;
+    }
+
+    async function startDemo() {
+        const generation = ++demoGeneration;
+        temporaryRoleTest.disabled = true;
+        previewRole.disabled = true;
+        try {
+            const session = await demoRequest({action:'start',role:previewRole.value});
+            if (generation !== demoGeneration) return;
+            demoSession = session;
+            temporaryRoleTest.textContent = 'Return to read-only';
+            clearTimeout(demoTimer);
+            demoTimer = setTimeout(() => { closePreview(); previewPanel.hidden=false; previewStatus.textContent='Demo review expired. Your admin workspace is restored.'; }, Math.max(0,demoSession.expiresAt-Date.now()));
+            await showPreview();
+        } catch(error) { closePreview(); previewPanel.hidden=false; previewStatus.textContent=error.message; }
+        finally { temporaryRoleTest.disabled = false; previewRole.disabled = previewControl.hidden; }
+    }
+
     // This runs inside the opaque frame. No admin token or parent storage is given to it.
-    function startReadOnlyDashboard(channel, user, theme) {
-        window.IMCC_DEVELOPER_VIEW = true;
+    function startReadOnlyDashboard(channel, user, theme, demo) {
+        window.IMCC_DEVELOPER_VIEW = !demo;
         const storage = new Map([['myimcc_theme', theme]]);
         Object.defineProperty(window, 'localStorage', { value: {
             getItem: key => storage.get(key) ?? null,
@@ -111,10 +149,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         } });
         const readOnlyFetch = async (input, options) => {
             const request = new Request(input, options);
-            if (!['GET', 'HEAD'].includes(request.method)) {
+            if (!demo && !['GET', 'HEAD'].includes(request.method)) {
                 return new Response(JSON.stringify({ code: '25006', message: 'Developer view is read only.' }), { status: 405 });
             }
             const id = crypto.randomUUID();
+            const body = !['GET','HEAD'].includes(request.method) ? JSON.parse(await request.text() || 'null') : null;
             return new Promise(resolve => {
                 const timeout = setTimeout(() => finish({ status: 504, body: '{"message":"Developer view request timed out."}' }), 20000);
                 function finish(result) {
@@ -127,7 +166,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 window.addEventListener('message', receive);
                 const url = new URL(request.url);
-                parent.postMessage({ channel, id, resource: url.pathname + url.search,
+                parent.postMessage({ channel, id, resource: url.pathname + url.search, method:request.method, body,
                     accept: request.headers.get('accept'), prefer: request.headers.get('prefer'), range: request.headers.get('range') }, '*');
             });
         };
@@ -140,39 +179,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         client.auth.onAuthStateChange = () => ({ data: { subscription: { unsubscribe() {} } } });
         client.channel = () => ({ on() { return this; }, subscribe() { return this; } });
         const rpc = client.rpc.bind(client);
-        client.rpc = (name, args) => rpc(name, args, { get: true });
+        if (!demo) client.rpc = (name, args) => rpc(name, args, { get: true });
         window.supabaseClient = window.__myimcc_supabase_client__ = client;
         window.getSupabaseClientAsync = async () => client;
         document.addEventListener('click', event => {
             if (event.target.closest('a[href],#logoutBtn,#signOutBtn')) {
                 event.preventDefault(); event.stopImmediatePropagation();
+                if (demo) {
+                    const link = event.target.closest('a[href]');
+                    if (link) parent.postMessage({channel,navigate:new URL(link.href).pathname},'*');
+                    else parent.postMessage({channel,exitDemo:true},'*');
+                }
             }
         }, true);
     }
 
-    async function showPreview() {
-        if (previewRole.value === 'admin') { closePreview(); return; }
+    async function showPreview(navigate) {
+        if (previewRole.value === 'admin' && !demoSession) { closePreview(); return; }
         const channel = previewChannel = crypto.randomUUID();
         previewRole.disabled = true;
         previewPanel.hidden = false;
         workspace.hidden = true;
         previewStatus.textContent = 'Loading dashboard…';
         try {
-            const { dashboards, user } = await previewRequest();
-            const path = dashboards[previewRole.value];
+            const metadata = demoSession || await previewRequest();
+            const user = metadata.user;
+            let path = typeof navigate==='string' ? navigate : demoSession ? demoSession.path : metadata.dashboards[previewRole.value];
+            if (demoSession) path = '/review-assets' + path;
             if (!path) throw new Error('Unknown dashboard role.');
             const response = await fetch(path, { cache: 'no-store' });
             if (!response.ok) throw new Error('Dashboard could not be loaded.');
             const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
-            doc.querySelectorAll('base,meta[http-equiv],#developerPreview,#developerPreviewControl').forEach(el => el.remove());
+            doc.querySelectorAll('base,meta[http-equiv]').forEach(el => el.remove());
+            if (!demoSession) doc.querySelectorAll('#developerPreview,#developerPreviewControl,#temporaryRoleTest').forEach(el=>el.remove());
             doc.querySelectorAll('script[src]').forEach(el => {
-                if (new URL(el.getAttribute('src'), new URL(path, location.origin)).pathname === '/env-config.js') el.remove();
+                if (new URL(el.getAttribute('src'), new URL(path, location.origin)).pathname.endsWith('/env-config.js')) el.remove();
             });
             let theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
             try { theme = localStorage.getItem('myimcc_theme') || theme; } catch {}
             doc.documentElement.dataset.theme = doc.body.dataset.theme = theme;
             const script = doc.createElement('script');
-            script.textContent = `(${startReadOnlyDashboard.toString()})(${JSON.stringify(channel)},${JSON.stringify(user).replaceAll('<', '\\u003c')},${JSON.stringify(theme)});`.replace(/\r\n?/g, '\n');
+            script.textContent = `(${startReadOnlyDashboard.toString()})(${JSON.stringify(channel)},${JSON.stringify(user).replaceAll('<', '\\u003c')},${JSON.stringify(theme)},${!!demoSession});`.replace(/\r\n?/g, '\n');
             const config = doc.querySelector('script[src$="/shared/supabase-config.js"]');
             if (!config) throw new Error('Dashboard configuration was not found.');
             config.replaceWith(script);
@@ -193,7 +240,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             previewFrame.srcdoc = '<!doctype html>' + doc.documentElement.outerHTML;
             previewFrame.title = previewRole.selectedOptions[0].textContent + ' dashboard';
             previewFrame.hidden = false;
-            previewStatus.textContent = 'Viewing as ' + previewRole.selectedOptions[0].textContent + ' — read only';
+            previewStatus.textContent = demoSession ? 'DEMO ONLY · ' + previewRole.selectedOptions[0].textContent + ' · ' + user.email : 'Viewing as ' + previewRole.selectedOptions[0].textContent + ' — read only';
+            previewPanel.querySelector('.preview-note').textContent = demoSession ? 'Interactive fictional records only. Changes stay in the review area. Ends at ' + new Date(demoSession.expiresAt).toLocaleTimeString() + '.' : 'Read only · Uses your admin account\'s permitted data. No role changes or user impersonation.';
         } catch (error) {
             if (previewChannel !== channel) return;
             closePreview();
@@ -204,12 +252,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.addEventListener('message', async event => {
         const request = event.data;
+        if (demoSession && previewChannel && event.source === previewFrame.contentWindow && request?.channel === previewChannel) {
+            if (request.exitDemo) { closePreview(); return; }
+            if (typeof request.navigate==='string') {
+                request.navigate=request.navigate.replace(/^\/review-assets(?=\/)/,'');
+                const allowed = [demoSession.path];
+                if (['dean','admin','registrar','staff'].includes(demoSession.role)) allowed.push('/staff/enrollment-requests.html');
+                if (demoSession.role==='admin') allowed.push('/faculty/dean-dashboard.html','/faculty/teacher-dashboard.html','/staff/registrar-dashboard.html','/staff/staff-dashboard.html');
+                if (allowed.includes(request.navigate)) await showPreview(request.navigate);
+                return;
+            }
+        }
         if (!previewChannel || event.source !== previewFrame.contentWindow || request?.channel !== previewChannel
             || typeof request.id !== 'string' || typeof request.resource !== 'string') return;
         const channel = previewChannel;
         let result;
         try {
-            const response = await previewRequest(request.resource, {
+            const response = demoSession ? await demoRequest({action:'request',ticket:demoSession.ticket,
+                resource:request.resource,method:request.method,body:request.body,accept:request.accept,prefer:request.prefer,range:request.range}) : await previewRequest(request.resource, {
                 'X-Preview-Accept': request.accept || 'application/json',
                 'X-Preview-Prefer': request.prefer || '', 'X-Preview-Range': request.range || '',
             });
@@ -219,11 +279,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch { result = { status: 503, body: '{"message":"Developer view is unavailable."}' }; }
         if (previewChannel === channel) previewFrame.contentWindow.postMessage({ ...result, channel, id: request.id }, '*');
     });
-    previewRole.addEventListener('change', showPreview);
+    previewRole.addEventListener('change', () => { if (demoSession) startDemo(); else showPreview(); });
+    temporaryRoleTest.addEventListener('click', () => {
+        if (demoSession) { const role=previewRole.value; closePreview(); previewRole.value=role; showPreview(); }
+        else startDemo();
+    });
     document.getElementById('exitPreview').addEventListener('click', closePreview);
     supabaseClient.auth.onAuthStateChange(event => {
         if (['SIGNED_OUT', 'USER_UPDATED', 'SIGNED_IN'].includes(event)) {
             closePreview(); previewControl.hidden = true; previewRole.disabled = true;
+            temporaryRoleTest.hidden = true;
         }
     });
 

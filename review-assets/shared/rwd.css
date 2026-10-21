@@ -1,0 +1,370 @@
+/* =====================================================================
+   MyIMCC Portal — Mobile-First Responsive Enhancement Layer
+   Load THIS stylesheet LAST across all dashboards. It fills the gaps
+   for small screens and touch devices on top of each page's own CSS.
+   ===================================================================== */
+
+/* ── Viewport / text sizing safety ─────────────────────────────────── */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* ── Custom Scrollbars: eliminates default white scrollbars across all portals ── */
+html, body, .sidebar, .main, [data-theme="dark"] * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(227, 43, 79, 0.3) transparent;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(227, 43, 79, 0.22);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(227, 43, 79, 0.45);
+}
+
+/* ── Fluid type scale (base ~320px → desktop ~1400px) ──────────────── */
+.page-header h1,
+.topbar h1,
+.main h1,
+h1.display { font-size: clamp(22px, 4.5vw, 32px); line-height: 1.15; }
+
+.page-header p,
+.topbar p,
+.hero p { font-size: clamp(13px, 2.8vw, 15px); }
+
+/* ── Grid fluidity: favor minmax + auto columns on any page ────────── */
+.bar-row {
+  grid-template-columns: minmax(96px, 130px) minmax(0, 1fr) 46px;
+}
+
+/* ── Tables: activate horizontal scroll with a sane content width ──── */
+.table-responsive {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.table-responsive table {
+  min-width: 640px;
+}
+
+.table-responsive table.min-table-500 { min-width: 500px; }
+.table-responsive table.min-table-720 { min-width: 720px; }
+.table-responsive table.min-table-900 { min-width: 900px; }
+
+/* Grid/flex children default to min-width:auto, which makes a scrollable
+   table stretch the whole page instead (clipped by .app overflow-x:hidden).
+   Forcing min-width:0 keeps the horizontal scroll INSIDE the card. */
+.grid-2 > *,
+.grid-3 > *,
+.grid-4 > *,
+.stats-grid > *,
+.dept-grid > *,
+.filter-bar > .table-responsive {
+  min-width: 0;
+}
+
+/* ── Touch targets: ensure interactive controls ≥ 44px on coarse ───── */
+@media (hover: none), (pointer: coarse) {
+
+  .menu-toggle,
+  .icon-btn,
+  .sidebar-close-btn,
+  .chat-send,
+  .btn,
+  .btn-primary,
+  .btn-action,
+  .btn-clear,
+  .btn-logout,
+  .btn-login,
+  .btn-ghost,
+  .mini-btn,
+  .chip,
+  .role-select,
+  select,
+  button.nav-item,
+  button,
+  .eye-btn {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+
+  .menu-toggle,
+  .icon-btn,
+  .sidebar-close-btn,
+  .chat-send {
+    width: 44px !important;
+    height: 44px !important;
+  }
+
+  /* Small pill/action buttons keep height without blowing up layout */
+  .mini-btn,
+  .btn-action,
+  .chip,
+  .badge-action {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+
+  /* Inline row checkboxes: keep visual size compact but give a
+     comfortable hit area (rows themselves are also tappable) */
+  .chk,
+  input[type="checkbox"] {
+    width: 26px !important;
+    height: 26px !important;
+    border-radius: 7px !important;
+    min-width: 26px !important;
+    min-height: 26px !important;
+  }
+
+  .prospectus-close,
+  .chat-close {
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 22px !important;
+  }
+}
+
+/* ── Fixed elements respect device safe areas (notches) ────────────── */
+.toast,
+.chat-fab,
+.chat-panel {
+  bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
+}
+.sidebar {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Notifications dropdown: pin to viewport on phones ─────────────── */
+@media (max-width: 640px) {
+
+  /* The bell sits mid-cluster in the topbar, so its absolute dropdown
+     clips off the left edge. Pin it to the viewport instead. */
+  #bellDropdown {
+    position: fixed !important;
+    top: 64px !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+}
+
+/* ── Small phones: ≤ 480px refinements ─────────────────────────────── */
+@media (max-width: 480px) {
+
+  /* Tighten main paddings, prevent cramped scroll feel */
+  .app .main,
+  .main,
+  .container {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  /* Overlapping page header actions wrap cleanly */
+  .page-header,
+  .panel-head,
+  .hero {
+    gap: 10px;
+  }
+
+  /* Stack form toolbars under each other */
+  .filter-bar,
+  .filters,
+  .table-responsive .toolbar,
+  .search-row {
+    flex-wrap: wrap;
+  }
+
+  /* Full-width controls inside filters */
+  #searchInput,
+  #courseFilter,
+  #filterDept,
+  #filterStatus,
+  .filter-search,
+  input[type="search"] {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Toast should breathe on tiny screens */
+  .toast {
+    left: 14px !important;
+    right: 14px !important;
+    max-width: none !important;
+  }
+
+  /* Keep the topbar cluster from squeezing: icon-only theme toggle */
+  .theme-toggle {
+    padding: 0 !important;
+    width: 40px !important;
+    height: 40px !important;
+    justify-content: center;
+  }
+  .theme-toggle span {
+    display: none !important;
+  }
+
+  /* Stats grid compact 2-column layout for tight screens */
+  .stats-grid,
+  .grid-4,
+  .stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+  .stats > :nth-child(3),
+  .grid-3 > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  /* Ensure modal forms never clip on small screens */
+  .modal-box,
+  .modal-card {
+    width: calc(100vw - 28px) !important;
+    max-width: 100vw !important;
+  }
+}
+
+/* ── Landscape phones: keep interactive rows compact ───────────────── */
+@media (max-height: 520px) and (orientation: landscape) {
+  .imcc-preloader { padding: 12px; }
+  .imcc-preloader .pl-mark { width: 44px; height: 44px; font-size: 18px; }
+  .sidebar { max-width: 78vw; }
+}
+
+/* ── Visibility helpers for responsive breakpoints ─────────────────── */
+.show-below-640 { display: none; }
+@media (max-width: 640px) {
+  .show-below-640 { display: initial; }
+  .hide-below-640 { display: none !important; }
+}
+@media (min-width: 641px) {
+  .show-above-640 { display: initial; }
+}
+.show-above-640 { display: none; }
+
+/* ── Print safety: expand tables so nothing clips in PDF exports ────── */
+@media print {
+  .table-responsive { overflow: visible !important; }
+  .table-responsive table { min-width: 0 !important; }
+  .sidebar, .topbar, .menu-toggle, .chat-fab, .chat-panel, .toast { display: none !important; }
+}
+/* My Classes: keep the course picker compact and give grade entry the workspace. */
+#page-classes .grading-layout { align-items: start; }
+#page-classes .class-picker .card-head { flex-wrap: wrap; gap: 10px; }
+#page-classes .class-picker .nav-item { width: 100%; min-height: 44px; }
+#page-classes .grading-card[hidden],
+#page-classes [hidden] { display: none !important; }
+#page-classes .mobile-class-picker { display: block; font-size: 12px; font-weight: 700; }
+#page-classes .grading-class-select { width: 100%; margin-top: 8px; min-height: 44px; }
+#page-classes .grading-course-list { display: none; }
+#page-classes .grading-card .card-head { align-items: start; flex-wrap: wrap; gap: 12px; }
+#page-classes .grading-card .card-head > div { min-width: 0; }
+#page-classes .grading-card h3 { overflow-wrap: anywhere; }
+#page-classes .grading-card .card-head button { white-space: normal; min-height: 44px; }
+#page-classes .grading-hint, #page-classes .grading-help { font-size: 12px; line-height: 1.6; color: var(--ink-700); }
+#page-classes .grading-help { margin-bottom: 16px; }
+#page-classes .grading-help summary { cursor: pointer; padding: 8px 0; color: var(--blue); }
+#page-classes .grading-table-wrap { overflow: auto; max-height: 65vh; border: 1px solid var(--line); border-radius: 8px; }
+#page-classes .grading-table-wrap table { min-width: 850px; border-collapse: separate; border-spacing: 0; }
+#page-classes .grading-table-wrap th { position: sticky; top: 0; z-index: 2; padding: 12px 10px; background: var(--card); color: var(--ink-700); }
+#page-classes .grading-table-wrap td { background: var(--card); }
+#page-classes .grading-table-wrap tr:nth-child(even) td { background: var(--bg); }
+#page-classes .grading-table-wrap :is(th, td):first-child { position: sticky; left: 0; z-index: 1; min-width: 155px; max-width: 200px; overflow-wrap: anywhere; border-right: 1px solid var(--line); }
+#page-classes .grading-table-wrap th:first-child { z-index: 3; }
+#page-classes .student-number { display: block; margin-top: 4px; color: var(--ink-500); }
+#page-classes .grading-table-wrap input { min-height: 44px; font-size: 16px; }
+#page-classes .grading-actions { position: sticky; bottom: 0; z-index: 4; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0 max(12px, env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--line); }
+#page-classes .grading-actions button { min-height: 44px; flex-shrink: 0; }
+#page-classes .grading-save-status { font-size: 12px; color: var(--ink-700); }
+#page-classes .grading-class-details { font-size: 12px; line-height: 1.6; }
+#page-classes .grading-class-details summary { cursor: pointer; padding: 8px 0; color: var(--ink-700); }
+#page-classes .grading-period-control { display: none; }
+#page-classes :is(input, select, button, summary, [tabindex]):focus-visible { outline: 2px solid var(--pink-500); outline-offset: 3px; }
+@media (max-width: 1199px) {
+    #page-classes.active { animation: none; transform: none; }
+    #page-classes .grading-card { padding-bottom: 90px; }
+    #page-classes .grading-actions { position: fixed; left: 0; right: 0; padding-left: 20px; padding-right: 20px; box-shadow: 0 -4px 16px #0002; }
+    body:has(#page-classes.active) .toast { bottom: 90px !important; }
+    #page-classes .grading-card .card-head { margin-bottom: 4px; }
+    #page-classes .grading-card .card-head > div:first-child { display: none; }
+    #page-classes .grading-class-details { width: 100%; }
+    #page-classes .grading-student-count { margin: 4px 0 8px; }
+    #page-classes .grading-help { margin: 0 0 12px; }
+}
+@media (max-width: 767px) {
+    #page-classes .card-pad { padding: 14px; }
+    #page-classes .class-picker .card-head .sub { display: none; }
+    #page-classes .grading-period-control { display: block; font-size: 12px; font-weight: 700; margin-bottom: 12px; }
+    #page-classes .grading-period { width: 100%; min-height: 44px; font-size: 16px; margin-top: 6px; }
+    #page-classes .grading-table-wrap table { min-width: 0; table-layout: fixed; }
+    #page-classes .grading-table-wrap :is(th, td) { padding: 10px 6px; }
+    #page-classes .grading-table-wrap :is(th, td):first-child { min-width: 0; max-width: none; width: 44%; }
+    #page-classes .grading-table-wrap :is(th, td):nth-child(n+2):nth-child(-n+7) { display: none; }
+    #page-classes[data-grading-period="2"] .grading-table-wrap :is(th, td):nth-child(2),
+    #page-classes[data-grading-period="3"] .grading-table-wrap :is(th, td):nth-child(3),
+    #page-classes[data-grading-period="4"] .grading-table-wrap :is(th, td):nth-child(4),
+    #page-classes[data-grading-period="5"] .grading-table-wrap :is(th, td):nth-child(5),
+    #page-classes[data-grading-period="6"] .grading-table-wrap :is(th, td):nth-child(6) { display: table-cell; width: 28%; }
+    #page-classes .grading-table-wrap :is(th, td):last-child { width: 28%; }
+    #page-classes .grading-table-wrap input { width: 100% !important; min-width: 0; padding: 8px; }
+    #page-classes .grading-table-wrap td:last-child button { padding: 6px !important; min-height: 44px; max-width: 100%; }
+    #page-classes .grading-table-wrap td:last-child svg { display: none; }
+}
+@media (min-width: 1200px) {
+    #page-classes .grading-layout { grid-template-columns: 280px minmax(0, 1fr); }
+    #page-classes .mobile-class-picker { display: none; }
+    #page-classes .grading-course-list { display: block; max-height: 70vh; overflow-y: auto; }
+    #page-classes .grading-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; }
+    #page-classes .grading-card > * { grid-column: 1 / -1; min-width: 0; }
+    #page-classes .grading-card > .card-head { grid-column: 1; grid-row: 1; }
+    #page-classes .grading-actions { position: static; grid-column: 2; grid-row: 1; border: 0; padding: 0; flex-direction: column-reverse; gap: 4px; align-self: start; }
+    #page-classes .grading-class-details > summary { display: none; }
+}
+@media (min-width: 1024px) and (max-width: 1199px) {
+    #page-classes .grading-layout { grid-template-columns: minmax(0, 1fr); }
+    #page-classes .grading-actions { left: 264px; }
+}
+
+/* Keep academic workspaces in the viewport; each list owns its scrolling. */
+body:has(#page-classes.active, #page-records.active, #page-compliance.active) .main {
+    display: flex; flex-direction: column; flex: 0 0 100dvh; height: 100dvh; max-height: 100dvh; min-height: 0; overflow: hidden;
+}
+body:has(#page-classes.active, #page-records.active, #page-compliance.active) .topbar { flex-shrink: 0; }
+body:has(#page-classes.active, #page-records.active, #page-compliance.active) .content { flex: 1; min-height: 0; overflow: hidden; }
+:is(#page-classes, #page-records, #page-compliance).active { height: 100%; min-height: 0; }
+.record-layout, #page-classes .grading-layout { height: 100%; min-height: 0; align-items: stretch; grid-template-rows: auto minmax(0, 1fr); }
+.record-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(130px, .4fr) minmax(0, 1fr); }
+.record-picker, .record-detail, #page-classes .class-picker, #page-classes .grading-card {
+    display: flex; flex-direction: column; min-height: 0; margin-bottom: 0;
+}
+.record-detail { overflow: auto; overscroll-behavior: contain; }
+.record-student-list, #page-classes .grading-course-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.record-student-list { flex: 1; margin-top: 12px; }
+.record-student-list button { width: 100%; display: block; text-align: left; }
+.record-student-list small { display: block; color: var(--ink-500); margin-top: 4px; }
+.record-picker h3 { margin-bottom: 12px; }
+#page-classes .grading-card { overflow: hidden; padding-bottom: 14px; }
+#page-classes .grading-table-wrap { flex: 1; min-height: 0; max-height: none; overscroll-behavior: contain; }
+#page-classes .grading-actions { position: static; flex-direction: row; flex-wrap: wrap; flex-shrink: 0; padding: 10px 0 0; box-shadow: none; }
+#page-classes .grading-actions .grading-save-status { flex: 1; }
+#page-classes .grading-actions button { min-height: 44px; }
+#page-classes .grading-actions[hidden] { display: none; }
+@media (min-width: 1200px) {
+    .record-layout { grid-template-columns: 280px minmax(0, 1fr); }
+    .record-layout, #page-classes .grading-layout { grid-template-rows: minmax(0, 1fr); }
+    #page-classes .grading-course-list { max-height: none; flex: 1; }
+}
+@media (max-width: 1199px) {
+    body:has(#page-classes.active, #page-records.active, #page-compliance.active) .content { padding-bottom: 16px; }
+    body:has(#page-classes.active) .toast { top: 76px; bottom: auto !important; }
+}

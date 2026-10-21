@@ -6,8 +6,8 @@
 // caught the empty `{"error": undefined}` responses in the MFA functions.
 //
 // The limitation is deliberate and worth understanding: the Edge Functions
-// import `serve`, the Supabase client, `otpauth`, `qrcode` and the transformer
-// pipeline over https, which tsc cannot follow. Everything reached through
+// import `serve`, the Supabase client, `otpauth` and `qrcode` over https,
+// which tsc cannot follow. Everything reached through
 // those imports is typed `any` here, so this check covers the functions' own
 // logic, signatures and error handling, and does not cover the shape of the
 // third-party APIs they call.
@@ -19,11 +19,15 @@ declare const Deno: {
   serve(handler: (req: Request) => Response | Promise<Response>): void;
 };
 
+declare const Supabase: {
+  ai: { Session: new (model: 'gte-small') => {
+    run(text: string, options: { mean_pool: boolean; normalize: boolean }): Promise<number[]>;
+  } };
+};
+
 declare module 'https://*' {
   export const serve: (handler: (req: Request) => Response | Promise<Response>) => void;
   export const createClient: any;
-  export const pipeline: any;
-  export const env: any;
   export const Secret: any;
   export const TOTP: any;
   const mod: any;

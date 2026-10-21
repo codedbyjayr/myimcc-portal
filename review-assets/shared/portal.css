@@ -1,0 +1,191 @@
+/* =====================================================================
+   MyIMCC Portal — Shared Design Tokens & Base Styles
+   Used by staff, faculty, and admin dashboards.
+   Design language: Build studio luxury minimalism — generous whitespace,
+   subtle weight contrast, single accent (pink) with breathing room.
+   ===================================================================== */
+
+:root {
+  /* Brand */
+  --pink-500: #E7338A;
+  --pink-600: #E32B4F;
+  --pink-700: #9D1F3A;
+  --pink-50: #FEF3F8;
+  --pink-100: #FBDEEC;
+  --pink-200: #F6B6D5;
+
+  /* Neutrals */
+  --ink-900: #1B1424;
+  --ink-700: #3D3548;
+  --ink-500: #6B6478;
+  --ink-300: #A29CAE;
+  --line: #EDE6F0;
+  --bg: #F7F5FA;
+  --card: #FFFFFF;
+
+  /* Semantic */
+  --green: #1B9C63;
+  --green-bg: #E7F7EF;
+  --amber: #C77A08;
+  --amber-bg: #FCF0DC;
+  --red: #D6274A;
+  --red-bg: #FCE5EA;
+  --blue: #2A64D6;
+  --blue-bg: #E7EFFC;
+
+  /* Shadows */
+  --shadow: 0 1px 2px rgba(23,20,31,.05);
+  --radius: 8px;
+}
+
+[data-theme="dark"] {
+  --pink-500: #F43F5E;
+  --pink-600: #FB7185;
+  --pink-700: #FDA4AF;
+  --pink-200: #5E1A38;
+  --pink-100: #3E1730;
+  --pink-50: #261222;
+  --ink-900: #F5F3F7;
+  --ink-700: #D4CCE0;
+  --ink-500: #9E96AD;
+  --ink-300: #6A6278;
+  --line: #2E2538;
+  --bg: #120E17;
+  --card: #1C1623;
+  --green: #34D399;
+  --green-bg: #0B251B;
+  --amber: #FBBF24;
+  --amber-bg: #261E0A;
+  --red: #F87171;
+  --red-bg: #2B1218;
+  --blue: #60A5FA;
+  --blue-bg: #101F36;
+  --shadow: 0 1px 3px rgba(0,0,0,.45);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--ink-900);
+  transition: background .25s ease, color .25s ease;
+}
+h1, h2, h3, .display { font-family: 'Plus Jakarta Sans', sans-serif; }
+
+::selection { background: var(--pink-200); }
+
+/* Stat cards */
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--pink-500);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+.stat-label {
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  font-weight: 800;
+  color: var(--ink-500);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.stat-value {
+  font-size: 27px;
+  font-weight: 800;
+  color: var(--pink-600);
+}
+
+/* Accessibility */
+button:focus-visible, input:focus-visible, a:focus-visible {
+  outline: 2px solid var(--pink-500);
+  outline-offset: 2px;
+}
+
+/* =====================================================================
+   Mobile-First RWD Utilities & Helpers
+   ===================================================================== */
+
+/* Responsive Table Wrapper */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 12px;
+  border-radius: 8px;
+}
+
+.table-responsive table {
+  min-width: 580px;
+  width: 100%;
+}
+
+.table-responsive::-webkit-scrollbar {
+  height: 6px;
+}
+.table-responsive::-webkit-scrollbar-track {
+  background: var(--bg);
+  border-radius: 3px;
+}
+.table-responsive::-webkit-scrollbar-thumb {
+  background: var(--ink-300);
+  border-radius: 3px;
+}
+
+/* Mobile Sidebar Drawer Overlay */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 10, 22, 0.55);
+  z-index: 990;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.sidebar-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Responsive Visibility Helpers */
+.hide-desktop {
+  display: block;
+}
+.hide-mobile {
+  display: none !important;
+}
+
+@media (min-width: 1024px) {
+  .hide-desktop {
+    display: none !important;
+  }
+  .hide-mobile {
+    display: initial !important;
+  }
+}
+
+/* Touch Device & Input Zoom Prevention on iOS */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="number"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  button,
+  .btn,
+  .nav-item {
+    min-height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}

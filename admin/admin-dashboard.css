@@ -340,4 +340,9 @@ td {
 #developerPreviewControl select { margin-left: 6px; }
 .preview-note { color: var(--text-muted); font-size: 12px; margin-bottom: 12px; }
 #previewFrame { display: block; width: 100%; height: 80vh; border: 1px solid var(--surface-border); border-radius: 8px; }
+@media (max-width: 600px) {
+  #developerPreview { padding: 10px; }
+  #developerPreview .preview-note { font-size: 11px; margin: 8px 0; }
+  #previewFrame { height: 85vh; }
+}
 .user-info { flex-wrap: wrap; }

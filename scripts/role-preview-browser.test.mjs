@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { server } from './test-portal.mjs';
+process.env.TEST_PORTAL_UNTIL = new Date(Date.now() + 3600000).toISOString();
 
 // Use the existing browser tooling and actual Supabase SDK; no app dependency is added.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -35,6 +36,8 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = [], reads = [], writes = [];
   let denyAccess = false;
+  let demoRole = null;
+  const demoWrites = [];
   page.on('pageerror', error => { errors.push(error.message); console.error('Browser error:', error.message); });
   page.on('console', message => { if (message.type() === 'error' && message.text().includes('Executing inline script')) console.error(message.text()); });
   await page.route('**/*', async route => {
@@ -53,6 +56,28 @@ try {
       if (request.method() !== 'GET') writes.push(request.url());
       return route.fulfill(dataResponse(url, request.headers()));
     }
+    if (url.pathname.endsWith('/developer-demo')) {
+      assert.equal(request.headers().authorization,'Bearer private-parent-token');
+      if (request.method()==='GET') return route.fulfill({json:{available:true,roles:Object.keys(paths)}});
+      const input=request.postDataJSON();
+      if(input.action==='start') {
+        demoRole=input.role;
+        return route.fulfill({json:{role:demoRole,user:{id:'demo-user',email:'review.'+demoRole+'@example.invalid'},path:paths[demoRole],expiresAt:Date.now()+1800000,ticket:'opaque-demo-ticket'}});
+      }
+      assert.equal(input.ticket,'opaque-demo-ticket');
+      if(!['GET','HEAD'].includes(input.method)) demoWrites.push(input);
+      const target=new URL(input.resource,origin);
+      if(target.pathname==='/rest/v1/profiles') {
+        const row={...profile,id:'demo-user',email:'review.'+demoRole+'@example.invalid',full_name:'DEMO '+demoRole,role:demoRole};
+        return route.fulfill({json:input.accept?.includes('object+json') ? row : [row]});
+      }
+      return route.fulfill(dataResponse(target,{accept:input.accept}));
+    }
+    if(url.origin===origin && url.pathname.startsWith('/review-assets/')) {
+      const path=url.pathname.replace('/review-assets','');
+      try { return route.fulfill({body:await readFile(new URL('..'+path,import.meta.url)),contentType:path.endsWith('.html')?'text/html':path.endsWith('.css')?'text/css':'text/javascript'}); }
+      catch { return route.fulfill({status:404,body:''}); }
+    }
     if (url.origin === origin && url.pathname === '/api/developer-preview') {
       assert.equal(request.headers().authorization, 'Bearer private-parent-token');
       assert.equal(request.method(), 'GET');
@@ -61,7 +86,7 @@ try {
       if (!resource) return route.fulfill({ json: { dashboards: paths, user } });
       reads.push(resource);
       const target = new URL(resource, origin);
-      if (target.pathname.startsWith('/rest/v1/rpc/') && !['get_class_roster', 'get_subject_instructor_options', 'get_dean_student_directory', 'helpdesk_recipient_id'].includes(target.pathname.split('/').pop())) {
+      if (target.pathname.startsWith('/rest/v1/rpc/') && !['get_class_roster', 'get_subject_instructor_options', 'get_dean_student_directory', 'list_student_records', 'get_student_record', 'helpdesk_recipient_id'].includes(target.pathname.split('/').pop())) {
         return route.fulfill({ status: 400, json: { message: 'Only dashboard data reads are allowed.' } });
       }
       return route.fulfill(dataResponse(target, { accept: request.headers()['x-preview-accept'] }));
@@ -71,10 +96,12 @@ try {
   await page.addInitScript(() => { if (window === top) localStorage.setItem('myimcc_theme', 'dark'); });
   await page.goto(origin + '/admin/admin-dashboard.html');
   await page.locator('#developerPreviewControl').waitFor({ state: 'visible' });
+  assert(await page.locator('#temporaryRoleTest').isVisible());
   assert(await page.locator('#adminWorkspace').isVisible());
   for (const role of Object.keys(paths).filter(role => role !== 'admin')) {
     const before = reads.length;
     await page.selectOption('#previewRole', role);
+    assert.equal(await page.locator('#temporaryRoleTest').textContent(), 'Try selected role (demo)');
     await page.locator('#previewFrame').waitFor({ state: 'visible' });
     await page.getByText(`Viewing as ${role[0].toUpperCase() + role.slice(1)} — read only`, { exact: true }).waitFor();
     const frame = await (await page.locator('#previewFrame').elementHandle()).contentFrame();
@@ -83,6 +110,7 @@ try {
     await frame.waitForFunction(() => !!window.__myimcc_supabase_client__);
     const probe = await frame.evaluate(() => window.__myimcc_supabase_client__.from('profiles').select('*').eq('id', 'developer-id').single());
     assert(probe.data, `${role}: ${JSON.stringify(probe)}; requests: ${reads.slice(-3).join(', ')}`);
+    await frame.getByText('Developer Tester', { exact: true }).first().waitFor({ state: 'visible' });
     assert(reads.length > before, `${role}: original scripts must request real data`);
     assert(await page.locator('#adminWorkspace').isHidden());
     assert.equal(await frame.locator('html').getAttribute('data-theme'), 'dark');
@@ -124,10 +152,27 @@ try {
   assert(await page.locator('#previewFrame').isHidden());
   assert(await page.locator('#adminWorkspace').isVisible());
   denyAccess = false;
+  await page.selectOption('#previewRole','dean');
+  await page.getByText('Viewing as Dean — read only',{exact:true}).waitFor();
+  await page.locator('#temporaryRoleTest').click();
+  await page.getByText('DEMO ONLY · Dean · review.dean@example.invalid',{exact:true}).waitFor();
+  let demoFrame=await (await page.locator('#previewFrame').elementHandle()).contentFrame();
+  await demoFrame.getByText('DEMO dean',{exact:true}).first().waitFor();
+  const demoWrite=await demoFrame.evaluate(()=>window.supabaseClient.from('faculty_notes').insert({content:'Fictional note',faculty_name:'DEMO'}));
+  assert.equal(demoWrite.error,null);
+  assert(demoWrites.some(request=>request.resource.startsWith('/rest/v1/faculty_notes')));
+  assert(!await page.locator('#previewFrame').getAttribute('srcdoc').then(source=>source.includes('opaque-demo-ticket')||source.includes('private-parent-token')));
+  await demoFrame.locator('a[href*="enrollment-requests"]').click();
+  await page.waitForFunction(()=>document.getElementById('previewFrame').srcdoc.includes('/review-assets/staff/enrollment-requests.html'));
+  await page.locator('#temporaryRoleTest').click();
+  await page.getByText('Viewing as Dean — read only',{exact:true}).waitFor();
+  assert.equal(await page.locator('#temporaryRoleTest').textContent(),'Try selected role (demo)');
+  console.log('Interactive demo identity, brokered writes, enrollment navigation and return to read-only passed.');
   await page.selectOption('#previewRole', 'staff');
   await page.getByText('Viewing as Staff — read only', { exact: true }).waitFor();
   await page.evaluate(() => window.testAuthChange('SIGNED_OUT'));
   assert(await page.locator('#developerPreviewControl').isHidden());
+  assert(await page.locator('#temporaryRoleTest').isHidden());
   assert.equal(await page.locator('#previewFrame').getAttribute('srcdoc'), null);
   assert.deepEqual(writes, []);
   assert.deepEqual(errors, [], 'No uncaught browser errors');
