@@ -7,14 +7,18 @@ const Grading = globalThis.Grading;
 // computeEquivalent
 assert.equal(Grading.computeEquivalent(null), null);
 assert.equal(Grading.computeEquivalent(NaN), null);
-assert.equal(Grading.computeEquivalent(97), 1.00);
-assert.equal(Grading.computeEquivalent(95), 1.25);
-assert.equal(Grading.computeEquivalent(92), 1.50);
-assert.equal(Grading.computeEquivalent(89), 1.75);
-assert.equal(Grading.computeEquivalent(86), 2.00);
-assert.equal(Grading.computeEquivalent(83), 2.25);
-assert.equal(Grading.computeEquivalent(80), 2.50);
-assert.equal(Grading.computeEquivalent(76), 2.75);
+const wholePercentages = [3,2.9,2.8,2.75,2.7,2.6,2.5,2.4,2.5,2.3,2.2,2.1,2,1.9,1.8,1.75,1.7,1.6,1.5,1.4,1.5,1.3,1.2,1.1,1,1];
+for (let p=0;p<=100;p++) assert.equal(Grading.computeEquivalent(p),p<75 ? 5 : wholePercentages[p-75], `Percentage ${p}`);
+for (const value of [-1,101,Infinity,NaN,'',undefined]) assert.equal(Grading.computeEquivalent(value),null);
+assert.equal(Grading.computeEquivalent(99.5),1);
+assert.equal(Grading.computeEquivalent(96.5),1.25);
+assert.equal(Grading.computeEquivalent(98.5),null, 'No rounding rule for gaps in the supplied table');
+assert.equal(Grading.computeEquivalent(74.999),5);
+assert.equal(Grading.gradeDescription(1.1),'Excellent');
+assert.equal(Grading.gradeDescription(1.25),'Outstanding');
+assert.equal(Grading.gradeDescription(2.5),'Fairly Satisfactory');
+assert.equal(Grading.gradeDescription(4),'Conditional / INC');
+assert.equal(Grading.gradeDescription(null),'');
 assert.equal(Grading.computeEquivalent(75), 3.00);
 assert.equal(Grading.computeEquivalent(74), 5.00);
 

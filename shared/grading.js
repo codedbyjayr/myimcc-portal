@@ -6,24 +6,30 @@
 (function (global) {
   'use strict';
 
-  const schoolGrades = [1, 1.1, 1.2, 1.25, 1.3, 1.4, 1.5, 1.6, 1.7, 1.75, 1.8, 1.9, 2, 2.1, 2.2, 2.25, 2.3, 2.4, 2.5, 2.6, 2.7, 2.75, 2.8, 2.9, 3, 4, 5];
+  const gradeScale = [
+    [1,99,100,'Excellent'], [1.1,98,98,'Excellent'], [1.2,97,97,'Excellent'],
+    [1.25,96,98,'Outstanding'], [1.3,96,96,'Outstanding'], [1.4,94,94,'Outstanding'],
+    [1.5,93,95,'Superior'], [1.6,92,92,'Superior'], [1.7,91,91,'Very Good'],
+    [1.75,90,92,'Very Good'], [1.8,89,89,'Very Good'], [1.9,88,88,'Good'],
+    [2,87,89,'Good'], [2.1,86,86,'Good'], [2.2,85,85,'Satisfactory'],
+    [2.25,84,86,'Satisfactory'], [2.3,84,84,'Satisfactory'], [2.4,82,82,'Satisfactory'],
+    [2.5,81,83,'Fairly Satisfactory'], [2.6,80,80,'Fairly Satisfactory'], [2.7,79,79,'Fair'],
+    [2.75,78,80,'Fair'], [2.8,77,77,'Fair'], [2.9,76,76,'Passing'],
+    [3,75,77,'Passing (minimum)'], [4,null,null,'Conditional / INC'], [5,0,74.99,'Failed']
+  ];
   function isSchoolGrade(value) {
-    return value !== null && value !== undefined && value !== '' && schoolGrades.includes(Number(value));
+    return value !== null && value !== undefined && value !== '' && gradeScale.some(row => row[0] === Number(value));
   }
-  // Legacy percentage records keep their original calculation until school review.
+  function gradeDescription(value) {
+    return isSchoolGrade(value) ? gradeScale.find(row => row[0] === Number(value))[3] : '';
+  }
+  // Exact percentage rows take priority over the supplied overlapping ranges.
   function computeEquivalent(avg) {
-    if (avg === null || avg === undefined || isNaN(avg)) return null;
-    if (avg === 98) return 1.10;
-    if (avg >= 96) return 1.00;
-    if (avg >= 94) return 1.25;
-    if (avg >= 92) return 1.50;
-    if (avg >= 89) return 1.75;
-    if (avg >= 86) return 2.00;
-    if (avg >= 83) return 2.25;
-    if (avg >= 80) return 2.50;
-    if (avg >= 76) return 2.75;
-    if (avg >= 75) return 3.00;
-    return 5.00;
+    if (avg === null || avg === undefined || avg === '' || !Number.isFinite(Number(avg)) || Number(avg) < 0 || Number(avg) > 100) return null;
+    const percentage = Number(avg);
+    if (percentage < 75) return 5;
+    const exact = gradeScale.find(row => row[1] === percentage && row[2] === percentage);
+    return (exact || gradeScale.find(row => row[1] !== null && percentage >= row[1] && percentage <= row[2]))?.[0] ?? null;
   }
 
   /** Equal-weighted average of whichever grading periods have values. */
@@ -291,6 +297,7 @@
     initWorkspace: initWorkspace,
     computeEquivalent: computeEquivalent,
     isSchoolGrade: isSchoolGrade,
+    gradeDescription: gradeDescription,
     estimate: estimate,
     weightedGwa: weightedGwa,
     formatGrade: formatGrade,

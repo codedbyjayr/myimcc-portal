@@ -20,6 +20,8 @@ assert.equal(texts['grade-highest-course'],'BEST — Final');
 assert.equal(texts['grade-ai'],'2.15');
 assert(elements.aiInsightText.innerHTML.includes('Focus on IMPROVE'));
 assert(!elements.gradesBody.innerHTML.includes('OTHER'));
+assert(elements.gradesBody.innerHTML.includes('Excellent'));
+assert(elements.gradesBody.innerHTML.includes('Passing (minimum)'));
 const homeStats=source.slice(source.indexOf('  const currentGrades ='),source.indexOf("  setText('stat-units'"));
 vm.runInContext("var d={student:{schoolYear:'2026',semester:'1st'}};_gradesSelectedTerm='2025|1st';"+homeStats,context);
 assert.equal(texts['stat-gwa'],'2.33','Home GWA uses current-term grades, independent of the grade-page filter');

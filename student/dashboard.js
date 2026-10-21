@@ -1216,7 +1216,7 @@ function renderGrades() {
       <td>${periodCell(g.grade_scale === 'school' ? g.midterm : null)}</td>
       <td>${periodCell(g.grade_scale === 'school' ? g.semifinal : null)}</td>
       <td style="${g.final !== null && g.final !== undefined ? 'color:var(--green);font-weight:700;' : 'font-style:italic;color:var(--ink-300);'}">${g.final != null ? Grading.formatGrade(g.grade_scale === 'school' ? g.final : g.equivalent) : 'Pending'}</td>
-      <td style="font-weight:800;">${Grading.formatGrade(g.equivalent)}${g.grade_scale === 'percentage' ? '<small> Legacy · under review</small>' : ''}</td>
+      <td style="font-weight:800;">${Grading.formatGrade(g.equivalent)}<small style="display:block;font-weight:400;">${g.grade_scale === 'school' ? Grading.gradeDescription(g.equivalent) : 'Legacy · under review'}</small></td>
       <td><span class="pred-chip" style="background:var(--pink-50, #fdf2f8);color:var(--pink-600, #db2777);padding:2px 8px;border-radius:12px;font-weight:600;font-size:12px;">${Grading.estimate(g) != null ? '~ ' + Grading.formatGrade(Grading.estimate(g)) : '—'}</span></td>
       <td><span class="badge ${g.remark === 'Passed' ? 'badge-green' : 'badge-blue'}">${escapeHtml(g.remark)}</span></td>
     </tr>`).join('');

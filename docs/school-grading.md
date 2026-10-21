@@ -26,9 +26,21 @@ grants were omitted for that local runner. The disposable container was removed.
 Existing grades and historical records are marked `percentage` without changing
 their values, equivalents, or remarks. They remain read-only in grade entry.
 Students see the stored school equivalent and a legacy-review label, with no raw
-percentage in the period cells. A school-authorized review must resolve the
-overlapping percentage ranges before converting those records. The one confirmed
-correction is 98% = 1.10; other historic mappings are retained pending review.
+percentage in the period cells. A school-authorized review is still required
+before changing those historical records. On 2026-10-21,
+the user confirmed that exact percentage rows take priority over overlapping
+ranges: 98% = 1.10, 97% = 1.20, 96% = 1.30, 94% = 1.40, and 77% = 2.80.
+All 27 school grades remain available for direct entry, including 1.25.
+The conversion helper uses an exact row first, then a containing range. It does
+not guess a rounding rule for decimal gaps such as 98.5%; those return null.
+All scores below 75% return 5.00. Conditional / INC has no percentage mapping.
+The grading_scale metadata and student descriptions follow the supplied table.
+Existing student grades and history remain unchanged until reviewed separately.
+The approved scale was deployed through
+`supabase/migrations/20261021040134_exact_school_grade_scale.sql`; live assertions
+passed for all 101 whole percentage scores, with unchanged grade/history checksums.
+Run `supabase/tests/exact_school_grade_scale.sql` for all whole percentage scores
+and the overlap, decimal, description, and invalid-input checks.
 
 The frontend and migration must be promoted together. New saves explicitly use
 `grade_scale: school`, so deploying the frontend before its migration will fail
