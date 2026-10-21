@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const previewStatus = document.getElementById('previewStatus');
     const workspace = document.getElementById('adminWorkspace');
     let previewChannel = null;
+    let previewHome = null;
     let demoSession = null, demoTimer = null, demoGeneration = 0;
     if (window.imccTableSkeleton) {
         if (pendingTableBody) pendingTableBody.innerHTML = window.imccTableSkeleton(5, 2);
@@ -101,6 +102,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         clearTimeout(demoTimer);
         temporaryRoleTest.textContent = 'Try selected role (demo)';
         previewChannel = null;
+        previewHome = null;
         previewFrame.hidden = true;
         previewFrame.removeAttribute('srcdoc');
         previewPanel.hidden = true;
@@ -185,11 +187,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.addEventListener('click', event => {
             if (event.target.closest('a[href],#logoutBtn,#signOutBtn')) {
                 event.preventDefault(); event.stopImmediatePropagation();
-                if (demo) {
-                    const link = event.target.closest('a[href]');
-                    if (link) parent.postMessage({channel,navigate:new URL(link.href).pathname},'*');
-                    else parent.postMessage({channel,exitDemo:true},'*');
-                }
+                const link = event.target.closest('a[href]');
+                if (link) parent.postMessage({channel,navigate:new URL(link.href).pathname},'*');
+                else if (demo) parent.postMessage({channel,exitDemo:true},'*');
             }
         }, true);
     }
@@ -204,6 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const metadata = demoSession || await previewRequest();
             const user = metadata.user;
+            previewHome = demoSession ? demoSession.path : metadata.dashboards[previewRole.value];
             let path = typeof navigate==='string' ? navigate : demoSession ? demoSession.path : metadata.dashboards[previewRole.value];
             if (demoSession) path = '/review-assets' + path;
             if (!path) throw new Error('Unknown dashboard role.');
@@ -252,13 +253,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     window.addEventListener('message', async event => {
         const request = event.data;
-        if (demoSession && previewChannel && event.source === previewFrame.contentWindow && request?.channel === previewChannel) {
-            if (request.exitDemo) { closePreview(); return; }
+        if (previewChannel && event.source === previewFrame.contentWindow && request?.channel === previewChannel) {
+            if (demoSession && request.exitDemo) { closePreview(); return; }
             if (typeof request.navigate==='string') {
                 request.navigate=request.navigate.replace(/^\/review-assets(?=\/)/,'');
-                const allowed = [demoSession.path];
-                if (['dean','admin','registrar','staff'].includes(demoSession.role)) allowed.push('/staff/enrollment-requests.html');
-                if (demoSession.role==='admin') allowed.push('/faculty/dean-dashboard.html','/faculty/teacher-dashboard.html','/staff/registrar-dashboard.html','/staff/staff-dashboard.html');
+                const role = demoSession?.role || previewRole.value;
+                const allowed = [previewHome];
+                if (!demoSession && request.navigate==='/admin/admin-dashboard.html') request.navigate=previewHome;
+                if (['dean','admin','registrar','staff'].includes(role)) allowed.push('/staff/enrollment-requests.html');
+                if (demoSession && role==='admin') allowed.push('/faculty/dean-dashboard.html','/faculty/teacher-dashboard.html','/staff/registrar-dashboard.html','/staff/staff-dashboard.html');
                 if (allowed.includes(request.navigate)) await showPreview(request.navigate);
                 return;
             }

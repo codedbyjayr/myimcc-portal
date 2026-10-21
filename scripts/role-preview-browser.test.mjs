@@ -67,6 +67,8 @@ try {
       assert.equal(input.ticket,'opaque-demo-ticket');
       if(!['GET','HEAD'].includes(input.method)) demoWrites.push(input);
       const target=new URL(input.resource,origin);
+      if(target.pathname==='/rest/v1/rpc/list_enrollment_request_history') return route.fulfill({json:[{id:'demo-request',student_id:'demo-student',student_name:'Demo Student',school_year:'2026-2027',semester:'Summer',program:'BSIT',year_level:'1st Year',code:'DEMO-SUM',title:'Demo Summer',units:3,status:'pending'}]});
+      if(target.pathname==='/rest/v1/rpc/get_enrollment_workspace') return route.fulfill({json:{groups:[{student_id:'demo-student',student_name:'Demo Student',school_year:'2026-2027',semester:'Summer',units:3}],terms:[]}});
       if(target.pathname==='/rest/v1/profiles') {
         const row={...profile,id:'demo-user',email:'review.'+demoRole+'@example.invalid',full_name:'DEMO '+demoRole,role:demoRole};
         return route.fulfill({json:input.accept?.includes('object+json') ? row : [row]});
@@ -86,7 +88,7 @@ try {
       if (!resource) return route.fulfill({ json: { dashboards: paths, user } });
       reads.push(resource);
       const target = new URL(resource, origin);
-      if (target.pathname.startsWith('/rest/v1/rpc/') && !['get_class_roster', 'get_subject_instructor_options', 'get_dean_student_directory', 'list_student_records', 'get_student_record', 'helpdesk_recipient_id'].includes(target.pathname.split('/').pop())) {
+      if (target.pathname.startsWith('/rest/v1/rpc/') && !['get_class_roster', 'get_subject_instructor_options', 'get_dean_student_directory', 'list_student_records', 'get_student_record', 'helpdesk_recipient_id','list_enrollment_request_history','get_enrollment_workspace'].includes(target.pathname.split('/').pop())) {
         return route.fulfill({ status: 400, json: { message: 'Only dashboard data reads are allowed.' } });
       }
       return route.fulfill(dataResponse(target, { accept: request.headers()['x-preview-accept'] }));
@@ -133,6 +135,15 @@ try {
       await frame.locator('[data-page="classes"]').click();
       await frame.getByText('PILOT101', { exact: true }).first().waitFor();
     }
+    if (role === 'dean') {
+      assert.equal(await frame.locator('[data-page="financial"]').count(),0);
+      await frame.locator('a[href*="enrollment-requests"]').click();
+      await page.waitForFunction(()=>document.getElementById('previewFrame').srcdoc.includes('/staff/enrollment-requests.html'));
+      const enrollment=await (await page.locator('#previewFrame').elementHandle()).contentFrame();
+      await enrollment.getByText('No pending requests found.',{exact:true}).waitFor();
+      await enrollment.locator('#back').click();
+      await page.waitForFunction(()=>document.getElementById('previewFrame').srcdoc.includes('/faculty/dean-dashboard.html'));
+    }
     await page.selectOption('#previewRole', 'admin');
     assert(await page.locator('#adminWorkspace').isVisible());
     assert(await page.locator('#developerPreview').isHidden());
@@ -164,6 +175,18 @@ try {
   assert(!await page.locator('#previewFrame').getAttribute('srcdoc').then(source=>source.includes('opaque-demo-ticket')||source.includes('private-parent-token')));
   await demoFrame.locator('a[href*="enrollment-requests"]').click();
   await page.waitForFunction(()=>document.getElementById('previewFrame').srcdoc.includes('/review-assets/staff/enrollment-requests.html'));
+  demoFrame=await (await page.locator('#previewFrame').elementHandle()).contentFrame();
+  await demoFrame.getByRole('button',{name:'Approve',exact:true}).click();
+  await demoFrame.getByRole('button',{name:'Reject',exact:true}).click();
+  await demoFrame.locator('dialog textarea').fill('Demo prerequisite missing');
+  await demoFrame.locator('dialog').getByRole('button',{name:'Continue',exact:true}).click();
+  await demoFrame.getByRole('button',{name:'Finalize Enrollment',exact:true}).click();
+  await demoFrame.locator('dialog').getByRole('button',{name:'Continue',exact:true}).click();
+  await demoFrame.locator('dialog').waitFor({state:'detached'});
+  await demoFrame.waitForFunction(()=>!document.getElementById('refresh').disabled);
+  assert(demoWrites.some(r=>r.body?.p_decision==='approved'));
+  assert(demoWrites.some(r=>r.body?.p_decision==='rejected' && r.body?.p_review_note==='Demo prerequisite missing'));
+  assert(demoWrites.some(r=>r.resource.includes('/rpc/finalize_enrollment')));
   await page.locator('#temporaryRoleTest').click();
   await page.getByText('Viewing as Dean — read only',{exact:true}).waitFor();
   assert.equal(await page.locator('#temporaryRoleTest').textContent(),'Try selected role (demo)');

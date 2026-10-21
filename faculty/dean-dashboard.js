@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const fmtDate = FC.fmtDate;
     const showToast = FC.showToast;
     const isMissingTableError = FC.isMissingTableError;
-    const peso = n => '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
     function statusBadgeClass(status) {
         const map = {
             pending: 'badge-amber', approved: 'badge-green', active: 'badge-green', compliant: 'badge-green',
@@ -40,7 +39,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let darkMode = false;
     const state = {
         profiles: [], offerings: [], grades: [], enrollments: [], facultyList: [],
-        budgets: [], grants: [], notes: [], accreditation: [], appeals: [], courses: [],
+        notes: [], accreditation: [], appeals: [], courses: [],
         // Instructor options loaded from the get_subject_instructor_options RPC.
         // Each entry: { id, full_name, role }
         instructorOptions: null,   // null = not yet loaded; [] = loaded but empty
@@ -55,7 +54,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         dashboard: 'Dashboard',
         classes: 'My Classes',
         faculty: 'Faculty & Schedule',
-        financial: 'Financial Oversight',
         compliance: 'Student Compliance',
         profile: 'My Profile',
     }, function (page) {
@@ -321,67 +319,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td>${escapeHtml(c.program || '—')}</td>
         <td>${c.total}</td>
         <td><span class="badge badge-red">${((c.failed / c.total) * 100).toFixed(0)}%</span></td>
-      </tr>
-    `).join('');
-    }
-
-    // ── Financial Oversight ─────────────────────────────────────────────
-    async function loadFinancials() {
-        const [budgetsRes, grantsRes] = await Promise.all([
-            supabaseClient.from('department_budgets').select('*').order('created_at', { ascending: false }),
-            supabaseClient.from('grant_funding').select('*').order('created_at', { ascending: false }),
-        ]);
-
-        const notice = getEl('budgetNotice');
-        if (isMissingTableError(budgetsRes.error) || isMissingTableError(grantsRes.error)) {
-            notice.style.display = 'block';
-            notice.innerHTML = 'Financial Oversight needs two extra tables (<code>department_budgets</code>, <code>grant_funding</code>) that aren\'t in your database yet. Run <code>dean-dashboard-schema.sql</code> in the Supabase SQL editor, then reload this page.';
-            state.budgets = [];
-            state.grants = [];
-        } else {
-            notice.style.display = 'none';
-            state.budgets = budgetsRes.data || [];
-            state.grants = grantsRes.data || [];
-        }
-        renderBudgets();
-        renderGrants();
-    }
-
-    function renderBudgets() {
-        const wrap = getEl('budgetBars');
-        const msg = getEl('noBudgetMsg');
-        if (!state.budgets.length) { wrap.innerHTML = ''; msg.style.display = 'block'; return; }
-        msg.style.display = 'none';
-
-        wrap.innerHTML = state.budgets.map(b => {
-            const pct = b.allocated_budget > 0 ? Math.min(100, (b.amount_spent / b.allocated_budget) * 100) : 0;
-            const cls = pct >= 95 ? 'danger' : pct >= 75 ? 'warn' : 'ok';
-            return `
-        <div style="margin-bottom:14px;">
-          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
-            <span><b>${escapeHtml(b.department)}</b> <span style="color:var(--ink-500);">· ${escapeHtml(b.fiscal_year)}</span></span>
-            <span>${peso(b.amount_spent)} / ${peso(b.allocated_budget)}</span>
-          </div>
-          <div class="bar-track" style="height:14px;">
-            <div class="bar-fill ${cls}" style="width:${pct.toFixed(0)}%;"></div>
-          </div>
-        </div>
-      `;
-        }).join('');
-    }
-
-    function renderGrants() {
-        const body = getEl('grantsBody');
-        const msg = getEl('noGrantsMsg');
-        if (!state.grants.length) { body.innerHTML = ''; msg.style.display = 'block'; return; }
-        msg.style.display = 'none';
-        body.innerHTML = state.grants.map(g => `
-      <tr>
-        <td><b>${escapeHtml(g.grant_name)}</b></td>
-        <td>${escapeHtml(g.department)}</td>
-        <td>${peso(g.amount)}</td>
-        <td><span class="badge ${statusBadgeClass(g.status)}">${escapeHtml(g.status)}</span></td>
-        <td>${escapeHtml(g.funding_source || '—')}</td>
       </tr>
     `).join('');
     }
@@ -1201,31 +1138,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // GENERIC MODAL SYSTEM
     // ══════════════════════════════════════════════════════════════════
     const modalConfigs = {
-        budget: {
-            title: 'Add Department Budget Entry',
-            table: 'department_budgets',
-            fields: [
-                { name: 'department', label: 'Department / Program', type: 'text', required: true, placeholder: 'e.g. BSIT' },
-                { name: 'fiscal_year', label: 'Fiscal Year', type: 'text', required: true, placeholder: 'e.g. 2025-2026' },
-                { name: 'allocated_budget', label: 'Allocated Budget (₱)', type: 'number', required: true },
-                { name: 'amount_spent', label: 'Amount Spent (₱)', type: 'number', required: false, default: 0 },
-                { name: 'notes', label: 'Notes', type: 'textarea', required: false },
-            ],
-            onSaved: loadFinancials,
-        },
-        grant: {
-            title: 'Add Grant',
-            table: 'grant_funding',
-            fields: [
-                { name: 'grant_name', label: 'Grant Name', type: 'text', required: true },
-                { name: 'department', label: 'Department', type: 'text', required: true },
-                { name: 'amount', label: 'Amount (₱)', type: 'number', required: true },
-                { name: 'status', label: 'Status', type: 'select', required: true, options: [{ value: 'pending', label: 'Pending' }, { value: 'active', label: 'Active' }, { value: 'closed', label: 'Closed' }] },
-                { name: 'funding_source', label: 'Funding Source', type: 'text', required: false },
-                { name: 'notes', label: 'Notes', type: 'textarea', required: false },
-            ],
-            onSaved: loadFinancials,
-        },
         facultyNote: {
             title: 'Add Faculty Performance Note',
             table: 'faculty_notes',
@@ -1671,7 +1583,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // Standard save logic for other modals (budget, grant, appeal)
+        // Standard save logic for other modals
         const payload = cfg.transform ? cfg.transform(values) : values;
         let saveRes;
         if (editingOfferingId) {
@@ -1714,7 +1626,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderFacultyPage();
     renderGradReadiness();
     await loadMyClasses();
-    await Promise.all([loadFinancials(), loadNotes(), loadAccreditation(), loadAppeals()]);
+    await Promise.all([loadNotes(), loadAccreditation(), loadAppeals()]);
 
     if (window.imccHidePreloader) window.imccHidePreloader();
 });

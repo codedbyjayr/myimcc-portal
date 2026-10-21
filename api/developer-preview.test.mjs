@@ -80,7 +80,7 @@ try {
   assert.deepEqual(Object.keys(allowed.body.dashboards), ['student', 'faculty', 'dean', 'registrar', 'staff', 'admin']);
   assert.deepEqual(allowed.body.user, { id: 'developer-id', email: 'jlm33405@imcc.edu.ph' });
   assert.deepEqual(Object.keys(allowed.body), ['dashboards', 'user'], 'Never return an access token');
-  for (const resource of ['/rest/v1/course_offerings?select=*', '/rest/v1/rpc/get_class_roster?p_offering_id=42']) {
+  for (const resource of ['/rest/v1/course_offerings?select=*', '/rest/v1/rpc/get_class_roster?p_offering_id=42', '/rest/v1/rpc/list_enrollment_request_history?p_status=pending']) {
     const data = await request({ resource });
     assert.equal(data.code, 200);
     assert.deepEqual(JSON.parse(data.body), [{ id: 42, title: 'Permitted data' }]);
@@ -88,7 +88,7 @@ try {
     assert.equal(requests.length, 3, 'Recheck user and profile before each data request');
   }
   for (const resource of ['https://attacker.example/rest/v1/profiles', '//attacker.example/rest/v1/profiles',
-    '/auth/v1/user', '/rest/v1/rpc/set_user_role', '/rest/v1/rpc/initialize_student_clearances',
+    '/auth/v1/user', '/rest/v1/rpc/set_user_role', '/rest/v1/rpc/initialize_student_clearances','/rest/v1/rpc/review_enrollment_request',
     '/rest/v1/../../auth/v1/user', '/rest/v1/%2e%2e/auth/v1/user', '/rest/v1/profiles\\..\\auth']) {
     assert.equal((await request({ resource })).code, 400, resource);
     assert.equal(requests.length, 2, 'Reject invalid targets before forwarding');

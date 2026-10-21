@@ -55,6 +55,7 @@
       </div>
 
       <div class="nav-label">Main Menu</div>
+      <a class="nav-item" href="../staff/enrollment-requests.html">Enrollment Requests</a>
       <button class="nav-item active" data-page="dashboard">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="3" width="7" height="9" rx="1.5" />
@@ -80,12 +81,6 @@
         </svg>
         Faculty &amp; Schedule
       </button>
-      <button class="nav-item" data-page="financial">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2v20M17 6.5c0-1.9-2-3.5-5-3.5s-5 1.6-5 3.5 2 3 5 3 5 1.1 5 3.5-2 3.5-5 3.5-5-1.6-5-3.5" />
-        </svg>
-        Financial Oversight
-      </button>
       <button class="nav-item" data-page="compliance">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z" />
@@ -95,7 +90,6 @@
       </button>
 
       <div class="nav-label">Quick Links</div>
-      <a class="nav-item" href="../staff/enrollment-requests.html">Enrollment Requests</a>
       <div id="ssoLinksNav"></div>
 
       <div class="nav-label">Account</div>
@@ -412,48 +406,6 @@
               </table>
             </div>
             <div id="noNotesMsg" class="empty-state" style="display:none;">No performance notes logged yet.</div>
-          </div>
-        </section>
-
-        <!-- ================= FINANCIAL OVERSIGHT ================= -->
-        <section class="page" id="page-financial">
-          <div class="card card-pad">
-            <div class="card-head">
-              <div>
-                <h3>Department Budgets</h3>
-                <div class="sub">Utilization tracker, dean-maintained</div>
-              </div>
-              <button class="btn btn-primary" data-modal="budget">+ Add Budget Entry</button>
-            </div>
-            <div class="notice" id="budgetNotice" style="display:none;"></div>
-            <div id="budgetBars"></div>
-            <div id="noBudgetMsg" class="empty-state" style="display:none;">No budget entries yet. Add one to start
-              tracking utilization.</div>
-          </div>
-
-          <div class="card card-pad" style="margin-top:20px;">
-            <div class="card-head">
-              <div>
-                <h3>Grant Funding Status</h3>
-                <div class="sub">Equipment acquisition &amp; research grants</div>
-              </div>
-              <button class="btn btn-primary" data-modal="grant">+ Add Grant</button>
-            </div>
-            <div class="table-responsive">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Grant</th>
-                    <th>Department</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Source</th>
-                  </tr>
-                </thead>
-                <tbody id="grantsBody"></tbody>
-              </table>
-            </div>
-            <div id="noGrantsMsg" class="empty-state" style="display:none;">No grants logged yet.</div>
           </div>
         </section>
 

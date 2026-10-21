@@ -10,6 +10,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   const finalizations = document.getElementById('finalizationGroups');
   const termSelect = document.getElementById('enrollmentTermSelect');
   document.getElementById('termManager').hidden = !['dean', 'admin', 'registrar'].includes(session.profile.role);
+  async function askReview(text, reason = false) {
+    if (window.IMCC_DEVELOPER_VIEW !== false) return reason ? window.prompt(text) : window.confirm(text);
+    // Opaque demo frames cannot use browser prompts; a native dialog keeps the sandbox intact.
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('aria-label', text);
+    const label = document.createElement('label');
+    label.textContent = text;
+    const input = document.createElement('textarea');
+    input.required = true; input.maxLength = 1000;
+    if (reason) label.append(input);
+    const cancel = document.createElement('button'), proceed = document.createElement('button');
+    cancel.type = proceed.type = 'button'; cancel.textContent = 'Cancel'; proceed.textContent = 'Continue';
+    dialog.style.cssText = 'max-width:440px;padding:24px;border-radius:12px;font:inherit';
+    dialog.append(label, cancel, proceed);
+    document.body.append(dialog);
+    return new Promise(resolve => {
+      dialog.addEventListener('close', () => {
+        const answer = dialog.returnValue === 'continue' ? (reason ? input.value.trim() : true) : null;
+        dialog.remove(); resolve(answer);
+      }, {once:true});
+      cancel.addEventListener('click', () => dialog.close('cancel'));
+      proceed.addEventListener('click', () => { if (!reason || input.reportValidity()) dialog.close('continue'); });
+      dialog.showModal();
+    });
+  }
   async function load() {
     refresh.disabled = true;
     rows.innerHTML = '';
@@ -60,7 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const row = button.closest('tr');
     let reviewNote = null;
     if (button.dataset.decision === 'rejected') {
-      reviewNote = window.prompt('Enter a reason for rejecting this enrollment request:')?.trim();
+      reviewNote = (await askReview('Enter a reason for rejecting this enrollment request:', true))?.trim();
       if (!reviewNote) { message.textContent = 'A rejection reason is required.'; return; }
       if (reviewNote.length > 1000) { message.textContent = 'Keep the rejection reason to 1,000 characters or fewer.'; return; }
     }
@@ -81,7 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   statusFilter.addEventListener('change', load);
   finalizations.addEventListener('click', async event => {
     const button = event.target.closest('[data-finalize]');
-    if (!button || refresh.disabled || !confirm('Finalize this enrollment? Subject changes for this student and term will be blocked.')) return;
+    if (!button || refresh.disabled || !await askReview('Finalize this enrollment? Subject changes for this student and term will be blocked.')) return;
     button.disabled = true;
     refresh.disabled = true;
     try {
