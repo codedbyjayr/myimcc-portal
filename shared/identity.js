@@ -353,8 +353,21 @@
       .join(' ');
   }
 
+  // Stable ordering is required so adjacent pages cannot repeat or skip tied rows.
+  async function fetchAll(query) {
+    const rows = [];
+    for (;;) {
+      const { data, error } = await query().order('id').range(rows.length, rows.length + 499);
+      if (error) return { data: null, error };
+      if (!Array.isArray(data)) return { data: null, error: { message: 'Expected a row list.' } };
+      if (!data.length) return { data: rows, error: null };
+      rows.push(...data);
+    }
+  }
+
   // ── Export ──────────────────────────────────────────────────────────
   global.IMCC = Object.assign(global.IMCC || {}, {
+    fetchAll,
     ROLES,
     REQUESTABLE_ROLES,
     PORTALS,
