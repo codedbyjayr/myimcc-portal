@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+const source=readFileSync(new URL('./dashboard.js',import.meta.url),'utf8');
+const start=source.indexOf('async function init()'),end=source.indexOf('function startAcademicUpdates()',start);
+let finishBilling,hidden=0;const loaders=['loadDashboard','loadEnrollment','loadBilling','loadGrades','loadClearance','loadCor','loadAnnouncements','loadDeadlines','loadNotifications','loadSSOLinks','loadAttendance','loadFacultyEval','loadProfile'];
+const context={state:{studentProfile:{id:'student'}},getCurrentStudent:async()=>({id:'student'}),initAuthGuard:async()=>({user:{id:'student'},profile:{id:'student'}}),setupAuthListener(){},wireMessaging(){},wireHelp(){},showLoadFailures(){},showToast(){},startAcademicUpdates(){},setTimeout:()=>1,clearTimeout(){},console,imccHidePreloader:()=>hidden++};context.window=context;
+loaders.forEach(name=>context[name]=()=>name==='loadBilling'?new Promise(resolve=>finishBilling=resolve):Promise.resolve());
+vm.runInNewContext(source.slice(start,end),context);const init=context.init();
+for(let i=0;i<6;i++)await Promise.resolve();
+assert(hidden>0,'A slow secondary section must not hold the main screen');finishBilling();await init;
+console.log('Student startup: dashboard releases preloader before a slow secondary section finishes.');

@@ -538,7 +538,7 @@ function markBellSeen() {
 }
 
 // ── Enrollment Module ────────────────────────────────────────────────
-async function loadEnrollment() {
+async function loadEnrollment(background = false) {
   const profile = state.studentProfile;
   if (!profile) return;
 
@@ -611,7 +611,7 @@ async function loadEnrollment() {
   }));
 
   state.miscFees = misc || [];
-  state.selectedOfferingIds = new Set();
+  state.selectedOfferingIds = background ? new Set([...state.selectedOfferingIds].filter(id => state.courses.some(c => String(c.offering_id) === String(id) && !c.enrollmentStatus))) : new Set();
   state.enrollmentComplete = state.courses.length > 0 && state.courses.every(c => c.enrollmentStatus === 'enrolled');
   const steps = getEl('enrollSteps');
   const summary = getEl('enrollmentBillingSummary');
@@ -1293,10 +1293,16 @@ function getOrdinalSuffix(n) {
   return num + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-async function viewProspectus() {
+let prospectusLoading = false;
+async function viewProspectus(background = false) {
   const profile = state.studentProfile;
   if (!profile) return;
 
+  if (prospectusLoading) return;
+  prospectusLoading = true;
+  const trigger = getEl('prospectusBtn');
+  const label = trigger?.textContent;
+  if (trigger) { trigger.disabled = true; trigger.textContent = 'Loading prospectus…'; }
   try {
     // 1. Fetch full degree curriculum courses from 'courses' table
     let { data: courses, error: cErr } = await supabaseClient
@@ -1310,12 +1316,13 @@ async function viewProspectus() {
 
     // Fallback if courses table returned no records
     if (!courses || courses.length === 0) {
-      const { data: offerings } = await supabaseClient
+      const { data: offerings, error: offeringsError } = await supabaseClient
         .from('course_offerings')
         .select('*')
         .order('year', { ascending: true })
         .order('semester', { ascending: true });
 
+      if (offeringsError) throw offeringsError;
       courses = (offerings || []).map(o => ({
         code: o.code,
         title: o.title,
@@ -1328,7 +1335,7 @@ async function viewProspectus() {
     }
 
     // 2. Fetch student's grades and enrollments
-    const [{ data: gradesData }, { data: enrollmentsData }] = await Promise.all([
+    const [{ data: gradesData, error: gradesError }, { data: enrollmentsData, error: enrollmentError }] = await Promise.all([
       supabaseClient
         .from('grades')
         .select('equivalent, final, remark, course_offerings(code)')
@@ -1338,6 +1345,9 @@ async function viewProspectus() {
         .select('status, course_offerings(code)')
         .eq('student_id', profile.id)
     ]);
+
+    if (gradesError) throw gradesError;
+    if (enrollmentError) throw enrollmentError;
 
     // Build lookup maps
     const completedMap = {};
@@ -1414,6 +1424,7 @@ async function viewProspectus() {
 
     const completionPercentage = totalUnits > 0 ? Math.round((unitsCompleted / totalUnits) * 100) : 0;
 
+    if (background === true && getEl('prospectusModal')?.style.display !== 'flex' && !document.querySelector('.prospectus-modal-dynamic')) return;
     showProspectusModal({
       program: programName,
       totalUnits,
@@ -1424,6 +1435,9 @@ async function viewProspectus() {
   } catch (err) {
     showToast('Could not load degree prospectus: ' + err.message, true);
     console.error('Prospectus error:', err);
+  } finally {
+    prospectusLoading = false;
+    if (trigger) { trigger.disabled = false; trigger.textContent = label; }
   }
 }
 window.viewProspectus = viewProspectus;
@@ -3130,8 +3144,11 @@ async function init() {
     failures.push(name);
   });
 
+  const releaseScreen = () => { if (window.imccHidePreloader) window.imccHidePreloader(); };
+  const loadingTimeout = setTimeout(releaseScreen, 8000);
+  const dashboardReady = loadSafely('dashboard', loadDashboard).finally(() => { clearTimeout(loadingTimeout); releaseScreen(); });
   await Promise.all([
-    loadSafely('dashboard',    loadDashboard),
+    dashboardReady,
     loadSafely('enrollment',   loadEnrollment),
     loadSafely('billing',      loadBilling),
     loadSafely('grades',       loadGrades),
@@ -3146,6 +3163,8 @@ async function init() {
     loadSafely('profile',      loadProfile),
   ]);
 
+  startAcademicUpdates();
+
   // A silent failure is indistinguishable from an empty account, so say so.
   showLoadFailures(failures);
   if (failures.length) {
@@ -3153,6 +3172,31 @@ async function init() {
   }
 
   if (window.imccHidePreloader) window.imccHidePreloader();
+}
+
+function startAcademicUpdates() {
+  if (!window.imccLiveRefresh) return;
+  const own = 'student_id=eq.' + state.studentProfile.id;
+  window.imccLiveRefresh(supabaseClient, [
+    {table:'enrollment_requests',filter:own}, {table:'enrollments',filter:own},
+    {table:'grades',filter:own}, {table:'activities',filter:own},
+    {table:'courses'}, {table:'course_offerings'}
+  ], async changes => {
+    const all = !changes.length;
+    const jobs = [];
+    if (all || changes.some(t => ['enrollment_requests','enrollments','course_offerings'].includes(t))) {
+      // A live refresh must never discard a student's proposed subjects or in-flight submission.
+      if (!state.selectedOfferingIds.size && !getEl('confirmEnrollBtn')?.textContent.includes('Submitting')) jobs.push(loadEnrollment(true));
+      jobs.push(loadDashboard());
+    }
+    if (all || changes.includes('grades')) jobs.push(loadGrades());
+    if (all || changes.includes('activities')) jobs.push(loadNotifications());
+    const modal = getEl('prospectusModal');
+    if ((all || changes.some(t => ['grades','enrollments','courses','course_offerings'].includes(t))) &&
+        (modal?.classList.contains('open') || modal?.style.display === 'flex' || document.querySelector('.prospectus-modal-dynamic'))) jobs.push(viewProspectus(true));
+    const results = await Promise.allSettled(jobs);
+    if (results.some(r => r.status === 'rejected')) showToast('Some updates could not load. Reopen the affected section to retry.', true);
+  });
 }
 
 // Wait for shared supabase-config.js to initialize window.__myimcc_supabase_client__

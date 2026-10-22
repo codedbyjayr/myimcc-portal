@@ -52,10 +52,14 @@ try{
  await page.getByRole('heading',{name:'No matching requests'}).waitFor();
  await page.screenshot({path:'.temp/enrollment-ui/empty.png',fullPage:true});
  fail=true;await page.getByRole('button',{name:'Refresh requests'}).click();
- await page.getByText('Could not load requests: Temporary test failure',{exact:true}).waitFor();
+ await page.getByText('Could not load requests: Temporary test failure', {exact:false}).waitFor();
  assert.equal(await page.locator('.request-empty').count(),0,'Failure cannot look like an empty queue');
  fail=false;empty=false;await page.getByRole('button',{name:'Refresh requests'}).click();
  await page.locator('.status-approved').waitFor();
+ fail=true;await page.getByRole('button',{name:'Refresh requests'}).click();
+ await page.getByText('displayed results may be outdated.',{exact:false}).waitFor();
+ assert.equal(await page.locator('.student-request').count(),1,'Failed refresh preserves existing student cards');
+ fail=false;
  await page.evaluate(()=>document.documentElement.dataset.theme='light');
   await page.waitForFunction(()=>getComputedStyle(document.body).backgroundColor==='rgb(247, 245, 250)');
  assert.deepEqual(errors,[]);

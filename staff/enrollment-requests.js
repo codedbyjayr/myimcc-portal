@@ -7,10 +7,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const message = document.getElementById('message');
   const refresh = document.getElementById('refresh');
   const statusFilter = document.getElementById('statusFilter');
+  let loading = false, reloadRequested = false;
   async function load() {
+    if (loading) { reloadRequested = true; return; }
+    loading = true;
     refresh.disabled = true;
-    rows.innerHTML = '';
-    message.textContent = 'Loading…';
+    message.textContent = rows.innerHTML ? 'Updating…' : 'Loading…';
     try {
       const { data, error } = await supabaseClient.rpc('list_enrollment_request_history', { p_status: statusFilter.value });
       if (error) throw error;
@@ -41,8 +43,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         </section>`;
       }).join('') || UIM.html`<section class="request-empty"><div class="empty-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H5a2 2 0 0 0-2 2v14h18V6a2 2 0 0 0-2-2h-3M8 2h8v5H8zM8 13l3 3 5-5"/></svg></div><h2>${statusFilter.value === 'pending' ? 'Nothing waiting for review' : 'No matching requests'}</h2><p>${statusFilter.value === 'pending' ? 'New subject requests will appear here when students submit their proposed load. You can still review previous decisions.' : 'There are no requests in this view. Change the status filter or refresh to check for updates.'}</p>${statusFilter.value !== 'all' ? UIM.html`<button type="button" data-history="all">View decision history</button>` : ''}</section>`;
       message.textContent = data?.length ? `${data.length} ${statusFilter.value === 'all' ? 'subject request(s)' : `${statusFilter.value} subject request(s)`} across ${groups.size} student/term group(s).` : `No ${statusFilter.value === 'all' ? 'requests' : statusFilter.value + ' requests'} found.`;
-    } catch (err) { message.textContent = 'Could not load requests: ' + err.message; }
-    finally { refresh.disabled = false; }
+    } catch (err) { if (rows.innerHTML.includes('class="request-empty"')) rows.innerHTML = ''; message.textContent = 'Could not load requests: ' + err.message + (rows.innerHTML ? ' — displayed results may be outdated. Refresh to retry.' : ''); }
+    finally { loading = false; refresh.disabled = false; if (reloadRequested) { reloadRequested = false; await load(); } }
   }
   rows.addEventListener('click', async event => {
     const button = event.target.closest('button[data-id],button[data-history]');
@@ -71,4 +73,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   refresh.addEventListener('click', load);
   statusFilter.addEventListener('change', load);
   await load();
+  window.imccLiveRefresh?.(supabaseClient, [{table:'enrollment_requests'}, {table:'enrollments'}, {table:'course_offerings'}], async () => {
+    if (!refresh.disabled && !document.querySelector('dialog[open]')) await load();
+  });
 });
