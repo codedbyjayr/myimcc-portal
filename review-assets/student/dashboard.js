@@ -611,7 +611,7 @@ async function loadEnrollment(background = false) {
   }));
 
   state.miscFees = misc || [];
-  state.selectedOfferingIds = background ? new Set([...state.selectedOfferingIds].filter(id => state.courses.some(c => String(c.offering_id) === String(id) && !c.enrollmentStatus))) : new Set();
+  state.selectedOfferingIds = background ? new Set([...state.selectedOfferingIds].filter(id => state.courses.some(c => String(c.offering_id) === String(id) && !['pending','approved','enrolled','completed'].includes(c.enrollmentStatus)))) : new Set();
   state.enrollmentComplete = state.courses.length > 0 && state.courses.every(c => c.enrollmentStatus === 'enrolled');
   const steps = getEl('enrollSteps');
   const summary = getEl('enrollmentBillingSummary');

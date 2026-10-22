@@ -11,3 +11,8 @@ context.state.selectedOfferingIds.clear();button.textContent='Submitting…';awa
 button.textContent='Submit Enrollment Request';await refresh(['enrollments']);assert.deepEqual(calls,[['enrollment',true]]);
 await refresh(['grades']);assert.deepEqual(calls.at(-1),['grades']);assert(!calls.some(c=>c[0]==='prospectus'),'Closed prospectus must not reopen');
 console.log('Student updates: own-record filters, unsaved selections, submission guards, targeted grade refresh and closed-modal behavior passed.');
+
+const selectionLine=source.split('\n').find(line=>line.includes('state.selectedOfferingIds = background ?'));
+const selectedState={selectedOfferingIds:new Set(['rejected','pending']),courses:[{offering_id:'rejected',enrollmentStatus:'rejected'},{offering_id:'pending',enrollmentStatus:'pending'}]};
+vm.runInNewContext(selectionLine,{state:selectedState,background:true});
+assert.deepEqual([...selectedState.selectedOfferingIds],['rejected'],'Retry choices survive a fetch while already submitted subjects are removed');
