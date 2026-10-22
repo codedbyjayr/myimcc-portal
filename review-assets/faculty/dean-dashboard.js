@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let darkMode = false;
     const state = {
         profiles: [], offerings: [], grades: [], enrollments: [], facultyList: [],
-        notes: [], courses: [], accreditation: [], appeals: [],
+        notes: [], courses: [], appeals: [],
         // Instructor options loaded from the get_subject_instructor_options RPC.
         // Each entry: { id, full_name, role }
         instructorOptions: null,   // null = not yet loaded; [] = loaded but empty
@@ -116,13 +116,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function loadAllData() {
-        const [{ data: profiles }, { data: offerings }, { data: gradeRows }, { data: enrollRows }, { data: courses }] = await Promise.all([
+        const results = await Promise.all([
             supabaseClient.rpc('list_student_records'),
-            supabaseClient.from('course_offerings').select('*'),
-            supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)'),
-            supabaseClient.from('enrollments').select('student_id, status, offering_id, course_offerings(school_year, semester)').eq('status', 'enrolled'),
-            supabaseClient.from('courses').select('*').order('code'),
+            IMCC.fetchAll(() => supabaseClient.from('course_offerings').select('*')),
+            IMCC.fetchAll(() => supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)')),
+            IMCC.fetchAll(() => supabaseClient.from('enrollments').select('id, student_id, status, offering_id, course_offerings(school_year, semester)').eq('status', 'enrolled')),
+            IMCC.fetchAll(() => supabaseClient.from('courses').select('*').order('code')),
         ]);
+
+        const failure = results.find(result => result.error || !Array.isArray(result.data));
+        if (failure) throw new Error(failure.error?.message || 'Dashboard data is unavailable.');
+        const [{ data: profiles }, { data: offerings }, { data: gradeRows }, { data: enrollRows }, { data: courses }] = results;
 
         state.profiles = [currentProfile, ...(profiles || [])].filter(Boolean);
         state.offerings = offerings || [];
@@ -588,37 +592,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     getEl('requiredUnitsInput').addEventListener('input', renderGradReadiness);
 
-    // ── Accreditation Checklist ─────────────────────────────────────────
-    async function loadAccreditation() {
-        const { data, error } = await supabaseClient.from('accreditation_checklist').select('*').order('updated_at', { ascending: false });
-        if (isMissingTableError(error)) {
-            state.accreditation = [];
-            getEl('accreditationBody').innerHTML = '';
-            const msg = getEl('noAccreditationMsg');
-            msg.style.display = 'block';
-            msg.textContent = 'This checklist needs the accreditation_checklist table — run dean-dashboard-schema.sql, then reload.';
-            return;
-        }
-        state.accreditation = data || [];
-        renderAccreditation();
-    }
-
-    function renderAccreditation() {
-        const body = getEl('accreditationBody');
-        const msg = getEl('noAccreditationMsg');
-        if (!state.accreditation.length) { body.innerHTML = ''; msg.style.display = 'block'; msg.textContent = 'No accreditation items tracked yet.'; return; }
-        msg.style.display = 'none';
-        const statusLabel = { compliant: 'Compliant', pending: 'Pending', at_risk: 'At Risk' };
-        body.innerHTML = state.accreditation.map(a => `
-      <tr>
-        <td><b>${escapeHtml(a.requirement)}</b>${a.notes ? `<div style="color:var(--ink-500);font-size:12px;margin-top:2px;">${escapeHtml(a.notes)}</div>` : ''}</td>
-        <td>${escapeHtml(a.department || '—')}</td>
-        <td><span class="badge ${statusBadgeClass(a.status)}">${escapeHtml(statusLabel[a.status] || a.status)}</span></td>
-        <td>${a.evidence_link ? `<a href="${escapeHtml(a.evidence_link)}" target="_blank" style="color:var(--blue);">View</a>` : '—'}</td>
-      </tr>
-    `).join('');
-    }
-
     // ── Appeals & Approvals ──────────────────────────────────────────────
     async function loadAppeals() {
         const { data, error } = await supabaseClient.from('appeals').select('*').order('created_at', { ascending: false });
@@ -978,8 +951,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     .upsert(payload, { onConflict: 'student_id,offering_id' })
                     .select()
                     .single();
-                if (!error && data) r.gradeId = data.id;
-                if (error) failCount++; else successCount++;
+                if (error || !data) failCount++;
+                else { Object.assign(r, data, { gradeId: data.id }); successCount++; }
             }
 
         } catch (error) {
@@ -988,6 +961,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } finally {
             gradingWorkspace.setSaving(false);
         }
+        if (successCount) renderMyRoster();
         if (failCount === 0) gradingWorkspace.markClean();
         else gradingWorkspace.saveFailed();
         btn.textContent = 'Save Grades';
@@ -996,8 +970,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         else showToast(`Saved ${successCount}, failed ${failCount}. Check console for details.`, true);
 
         // Keep department-wide analytics (avg GWA, pass/fail bars, flagged courses) in sync.
-        const { data: gradeRows } = await supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)');
-        state.grades = gradeRows || [];
+        const { data: gradeRows, error: refreshError } = await IMCC.fetchAll(() => supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)'));
+        if (refreshError) { showToast('Grades saved, but reports could not refresh. Displayed reports may be outdated.', true); return; }
+        state.grades = gradeRows;
         renderOverview();
         renderGradReadiness();
     });
@@ -1118,8 +1093,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showToast('Grade successfully reverted!');
 
                 // Refresh overview
-                const { data: gradeRows } = await supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)');
-                state.grades = gradeRows || [];
+                const { data: gradeRows, error } = await IMCC.fetchAll(() => supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)'));
+                if (error) { showToast('Grade reverted, but reports could not refresh. Displayed reports may be outdated.', true); return; }
+                state.grades = gradeRows;
                 renderOverview();
                     }
         });
@@ -1150,18 +1126,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return { ...values, faculty_name: faculty ? faculty.full_name : 'Unknown' };
             },
             onSaved: loadNotes,
-        },
-        accreditation: {
-            title: 'Add Accreditation Requirement',
-            table: 'accreditation_checklist',
-            fields: [
-                { name: 'requirement', label: 'Requirement', type: 'text', required: true, placeholder: 'e.g. Minimum instructional hours — IT301' },
-                { name: 'department', label: 'Department', type: 'text', required: false },
-                { name: 'status', label: 'Status', type: 'select', required: true, options: [{ value: 'compliant', label: 'Compliant' }, { value: 'pending', label: 'Pending' }, { value: 'at_risk', label: 'At Risk' }] },
-                { name: 'evidence_link', label: 'Evidence Link (URL)', type: 'text', required: false },
-                { name: 'notes', label: 'Notes', type: 'textarea', required: false },
-            ],
-            onSaved: loadAccreditation,
         },
         courseOffering: {
             title: 'Add Subject / Course Offering',
@@ -1203,8 +1167,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
             },
             onSaved: async (savedRow) => {
-                const { data: offerings } = await supabaseClient.from('course_offerings').select('*');
-                state.offerings = offerings || [];
+                const { data: offerings, error } = await IMCC.fetchAll(() => supabaseClient.from('course_offerings').select('*'));
+                if (error) { showToast('Subject saved, but the list could not refresh. Reload to retry.', true); return; }
+                state.offerings = offerings;
                 renderFacultyPage();
                 await loadMyClasses(savedRow?.id);
                 showToast('Subject offering saved successfully.');
@@ -1478,7 +1443,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // Standard save logic for faculty notes, accreditation, and appeals.
+        // Standard save logic for faculty notes and appeals.
         const payload = cfg.transform ? cfg.transform(values) : values;
         let saveRes;
         if (editingOfferingId) {
@@ -1515,7 +1480,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const ok = await checkDeanAuth();
     if (!ok) return;
 
-    await loadAllData();
+    try { await loadAllData(); }
+    catch (error) {
+        if (window.imccHidePreloader) window.imccHidePreloader();
+        getEl('pageTitle').textContent = 'Dashboard unavailable';
+        const notice = document.createElement('p');
+        notice.setAttribute('role', 'alert');
+        notice.textContent = 'Could not load dashboard data. Reload to retry. Reports are unavailable.';
+        getEl('page-dashboard').replaceChildren(notice);
+        showToast('Could not load dashboard: ' + error.message, true);
+        return;
+    }
     await loadSSOLinks();
     getEl('refreshEnrollmentNotifications').addEventListener('click', () => FC.loadEnrollmentNotifications(supabaseClient));
     await FC.loadEnrollmentNotifications(supabaseClient);
@@ -1523,7 +1498,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderFacultyPage();
     await loadMyClasses();
     renderGradReadiness();
-    await Promise.all([loadNotes(), loadAccreditation(), loadAppeals()]);
+    await Promise.all([loadNotes(), loadAppeals()]);
     renderStudentPicker('clearance');
     renderStudentPicker('record');
 

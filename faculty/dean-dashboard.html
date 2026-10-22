@@ -57,6 +57,7 @@
 
       <div class="nav-label">Main Menu</div>
       <a class="nav-item" href="../staff/enrollment-requests.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h4"/></svg><span>Enrollment Requests</span></a>
+      <button class="nav-item" data-page="records">View Records</button>
       <button class="nav-item active" data-page="dashboard">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="3" width="7" height="9" rx="1.5" />
@@ -162,6 +163,7 @@
 
         <!-- ================= DASHBOARD (Strategic Analytics) ================= -->
         <section class="page active" id="page-dashboard">
+          <div class="card card-pad" style="margin-bottom:16px"><div class="card-head"><h3>Enrollment Notifications</h3><button type="button" class="btn btn-ghost" id="refreshEnrollmentNotifications">Refresh</button></div><div id="enrollmentNotifications" aria-live="polite">Loading notifications…</div></div>
           <div class="hero">
             <div>
               <h2>Welcome!</h2>
@@ -263,8 +265,8 @@
 
                 </details>
               </div>
-              <details class="grading-help"><summary>Grading help</summary><p>Enter school grades directly, such as 1.00, 1.10, or 2.75. The final grade is official; 4.00 is conditional and 5.00 is failed. Legacy percentage records are read-only pending school review. Use History beside a student to view saved revisions or revert a mistake. Save your changes before switching classes.</p></details>
-              <label class="grading-period-control">Grading period<select class="field-input grading-period" aria-label="Grading period"><option value="2">Prelim</option><option value="3">Midterm</option><option value="4">Semifinal</option><option value="5">Final</option></select></label>
+              <details class="grading-help"><summary>Grading help</summary><p>Enter school grades directly, such as 1.00, 1.10, or 2.75. Enter the official Equivalent manually after Final; 4.00 is conditional and 5.00 is failed. Legacy percentage records are read-only pending school review. Use History beside a student to view saved revisions or revert a mistake. Save your changes before switching classes.</p></details>
+              <label class="grading-period-control">Grading period<select class="field-input grading-period" aria-label="Grading period"><option value="2">Prelim</option><option value="3">Midterm</option><option value="4">Semifinal</option><option value="5">Final</option><option value="6">Equivalent</option></select></label>
               <div class="table-responsive grading-table-wrap" tabindex="0" role="region" aria-label="Class grade table">
                 <table id="myRosterTable" style="display:none;">
                   <thead>
@@ -283,7 +285,7 @@
                 </table>
               </div>
               <div id="noMyRosterMsg" class="empty-state">Pick a class from the left to view its roster.</div>
-              <div class="grading-actions"><span class="grading-save-status" role="status">No unsaved changes</span><button class="btn btn-primary" id="saveMyGradesBtn" disabled>Save Grades</button></div>
+              <div class="grading-actions"><button type="button" class="btn btn-ghost lock-grades-btn" disabled>Lock Grades</button><span class="grading-save-status" role="status">No unsaved changes</span><button class="btn btn-primary" id="saveMyGradesBtn" disabled>Save Grades</button></div>
             </div>
           </div>
         </section>
@@ -345,17 +347,6 @@
             </div>
           </div>
 
-          <div class="card card-pad" style="margin-top:20px;">
-            <div class="card-head">
-              <div>
-                <h3>Timetable Conflict Checker</h3>
-                <div class="sub">Same faculty or room with overlapping schedules, selected term</div>
-              </div>
-            </div>
-            <div id="conflictsList"></div>
-            <div id="noConflictsMsg" class="empty-state" style="display:none;">No scheduling conflicts detected for this
-              term.</div>
-          </div>
 
           <div class="card card-pad" style="margin-top:20px;">
             <div class="card-head">
@@ -412,7 +403,12 @@
 
         <!-- ================= STUDENT COMPLIANCE ================= -->
         <section class="page" id="page-compliance">
-          <div class="card card-pad">
+          <div class="grid-2 record-layout">
+            <div class="card card-pad record-picker"><h3>Student Clearance</h3>
+              <label for="clearanceSearch">Search students</label><input id="clearanceSearch" class="field-input" type="search" placeholder="Name, student number, or program">
+              <div id="clearanceStudents" class="record-student-list" role="group" aria-label="Students"></div>
+            </div>
+            <div class="card card-pad record-detail"><h3 id="clearanceTitle">Select a student</h3><div id="clearanceDetails" role="status">Choose a student to view clearance.</div><details class="department-compliance"><summary>Graduation readiness &amp; appeals</summary>          <div class="card card-pad">
             <div class="card-head">
               <div>
                 <h3>Graduation Readiness</h3>
@@ -444,31 +440,6 @@
           <div class="card card-pad" style="margin-top:20px;">
             <div class="card-head">
               <div>
-                <h3>Accreditation Compliance Checklist</h3>
-                <div class="sub">Instructional hours, syllabus compliance, learning outcomes</div>
-              </div>
-              <button class="btn btn-primary" data-modal="accreditation">+ Add Requirement</button>
-            </div>
-            <div class="table-responsive">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Requirement</th>
-                    <th>Department</th>
-                    <th>Status</th>
-                    <th>Evidence</th>
-                  </tr>
-                </thead>
-                <tbody id="accreditationBody"></tbody>
-              </table>
-            </div>
-            <div id="noAccreditationMsg" class="empty-state" style="display:none;">No accreditation items tracked yet.
-            </div>
-          </div>
-
-          <div class="card card-pad" style="margin-top:20px;">
-            <div class="card-head">
-              <div>
                 <h3>Appeals &amp; Approvals</h3>
                 <div class="sub">Grade change requests, prerequisite waivers, credit transfers</div>
               </div>
@@ -490,6 +461,17 @@
               </table>
             </div>
             <div id="noAppealsMsg" class="empty-state" style="display:none;">No appeals on file.</div>
+          </div>
+</details></div>
+          </div>
+        </section>
+        <section class="page" id="page-records">
+          <div class="grid-2 record-layout">
+            <div class="card card-pad record-picker"><h3>Student Records</h3>
+              <label for="recordSearch">Search students</label><input id="recordSearch" class="field-input" type="search" placeholder="Name, student number, or program">
+              <div id="recordStudents" class="record-student-list" role="group" aria-label="Students"></div>
+            </div>
+            <div class="card card-pad record-detail"><h3 id="recordTitle">Select a student</h3><div id="recordDetails" role="status">Choose a student to view their records.</div></div>
           </div>
         </section>
 
@@ -573,6 +555,7 @@
   <script src="../env-config.js"></script>
   <script src="../shared/supabase-config.js"></script>
   <script src="../shared/identity.js"></script>
+  <script src="../shared/authGuard.js"></script>
   <script src="../shared/datetime.js"></script>
   <script src="../shared/loading.js"></script>
   <script src="../shared/grading.js"></script>
