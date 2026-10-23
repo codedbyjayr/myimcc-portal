@@ -30,3 +30,5 @@ const vercel=JSON.parse(readFileSync('vercel.json','utf8'));
 assert.equal(vercel.buildCommand,'npm run check:release');
 assert(readFileSync('.github/workflows/docker-build.yml','utf8').includes('run: npm run check:release'));
 console.log('Release guard: production leaks, crossed/missing assets, review helpers, blocked direct bootstrap and deployment wiring passed.');
+
+assert.equal(vercel.outputDirectory, '.', 'The static portal must publish the repository root after its release check');

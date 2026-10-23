@@ -51,5 +51,6 @@
       ]
     }
   ],
-  "buildCommand": "npm run check:release"
+  "buildCommand": "npm run check:release",
+  "outputDirectory": "."
 }
