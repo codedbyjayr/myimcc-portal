@@ -120,6 +120,14 @@ try {
     assert.equal(writes.length, writeCount, 'An invalid hidden period blocks all saves');
     assert.equal(await page.locator('.grading-period').inputValue(), '5', 'Validation reveals the invalid period');
     await finalScore.fill('1.50');
+    await save.click();
+    assert.equal(writes.length, writeCount, 'Final requires a manually entered Equivalent');
+    assert.equal(await page.locator('.grading-period').inputValue(), '6');
+    const equivalent = page.locator('.grading-card tbody input').nth(4);
+    await equivalent.fill('1.11');
+    await save.click();
+    assert.equal(writes.length, writeCount, 'Invalid school Equivalent cannot save');
+    await equivalent.fill('2.75');
     failSave = true;
     await save.click();
     await page.getByText('Save failed · changes kept', { exact: true }).waitFor();
@@ -131,7 +139,10 @@ try {
     failSave = false;
     await save.click();
     await page.getByText('No unsaved changes', { exact: true }).waitFor();
-    assert.deepEqual([writes.at(-12).prelim, writes.at(-12).midterm, writes.at(-12).final], [1.20, 1.30, 1.50]);
+    assert.deepEqual([writes.at(-12).prelim, writes.at(-12).midterm, writes.at(-12).final, writes.at(-12).equivalent], [1.20, 1.30, 1.50, 2.75]);
+    assert.equal(await equivalent.inputValue(), '2.75', 'Manual Equivalent survives save');
+    await page.selectOption('.grading-period', '6');
+    if (process.env.MANUAL_EQ_SCREENSHOT) await page.screenshot({path:process.env.MANUAL_EQ_SCREENSHOT.replace('.png', '-' + role + '.png')});
     await page.selectOption('.grading-period', '2');
     await score.fill('1.40');
     page.once('dialog', dialog => dialog.dismiss());

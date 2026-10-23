@@ -829,7 +829,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td>${periodInput(r, idx, 'midterm', 'my-mid-input')}</td>
         <td>${periodInput(r, idx, 'semifinal', 'my-semifinal-input')}</td>
         <td>${periodInput(r, idx, 'final', 'my-final-input')}</td>
-        <td class="my-equiv-cell" data-idx="${idx}">${previewMyEquivalent(r)}</td>
+        <td>${periodInput(r, idx, 'equivalent', 'my-equivalent-input')}</td>
         <td class="my-remark-cell" data-idx="${idx}">${previewMyRemarkBadge(r)}</td>
         <td style="text-align:center;white-space:nowrap;">
           <button type="button" class="btn btn-ghost dean-grade-hist-btn" data-idx="${idx}" style="padding:4px 9px;font-size:12px;display:inline-flex;align-items:center;gap:4px;" title="View history & revert">
@@ -840,14 +840,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       </tr>
     `).join('');
 
-        const fieldByClass = { 'my-prelim-input': 'prelim', 'my-mid-input': 'midterm', 'my-semifinal-input': 'semifinal', 'my-final-input': 'final' };
-        document.querySelectorAll('.my-prelim-input, .my-mid-input, .my-semifinal-input, .my-final-input').forEach(input => {
+        const fieldByClass = { 'my-prelim-input': 'prelim', 'my-mid-input': 'midterm', 'my-semifinal-input': 'semifinal', 'my-final-input': 'final', 'my-equivalent-input': 'equivalent' };
+        document.querySelectorAll('.my-prelim-input, .my-mid-input, .my-semifinal-input, .my-final-input, .my-equivalent-input').forEach(input => {
             input.addEventListener('input', (e) => {
                 const idx = Number(e.target.dataset.idx);
                 const val = e.target.value === '' ? null : Number(e.target.value);
                 const field = fieldByClass[[...e.target.classList].find(c => fieldByClass[c])];
                 myRoster[idx][field] = val;
-                document.querySelector(`.my-equiv-cell[data-idx="${idx}"]`).textContent = previewMyEquivalent(myRoster[idx]);
                 document.querySelector(`.my-remark-cell[data-idx="${idx}"]`).innerHTML = previewMyRemarkBadge(myRoster[idx]);
             });
         });
@@ -878,7 +877,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             for (const r of myRoster) {
                 if (r.grade_scale === 'percentage') continue;
-                const equivalent = r.final;
+                const equivalent = r.equivalent;
                 const remark = Grading.computeRemark(r);
 
                 const payload = {

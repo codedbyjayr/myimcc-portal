@@ -42,12 +42,12 @@
   }
 
   function previewEquivalent(r) {
-    var eq = r.grade_scale === 'percentage' ? r.equivalent : (isSchoolGrade(r.final) ? Number(r.final) : null);
+    var eq = r.equivalent;
     return eq == null ? '—' : Number(eq).toFixed(2);
   }
 
   function previewRemarkBadge(r) {
-    if (r.final === null || r.final === undefined) return '<span class="badge badge-amber">Pending</span>';
+    if (r.final == null || r.equivalent == null) return '<span class="badge badge-amber">Pending</span>';
     var remark = computeRemark(r);
     return '<span class="badge ' + (remark === 'Passed' ? 'badge-green' : remark === 'Failed' ? 'badge-red' : 'badge-amber') + '">' + remark + '</span>';
   }
@@ -55,9 +55,9 @@
   /** Build the remark string for a grade save payload. */
   function computeRemark(r) {
     if (r.remark === 'Dropped') return 'Dropped';
-    if (r.final === null || r.final === undefined) return 'Pending';
+    if (r.final == null || r.equivalent == null) return 'Pending';
     if (r.grade_scale === 'percentage') return r.remark || 'Pending';
-    var eq = isSchoolGrade(r.final) ? Number(r.final) : null;
+    var eq = isSchoolGrade(r.equivalent) ? Number(r.equivalent) : null;
     if (eq === 4) return 'Conditional';
     return eq !== null && eq <= 3.00 ? 'Passed' : 'Failed';
   }
@@ -283,6 +283,20 @@
         if (readOnly || saving) return false;
         inputs().forEach(input => input.setCustomValidity(input.readOnly || input.value === '' || isSchoolGrade(input.value) ? '' : 'Choose a school grade from 1.00 to 3.00, 4.00, or 5.00.'));
         const invalid = inputs().find(input => !input.validity.valid);
+        if (!invalid) {
+          for (const row of card.querySelectorAll('tbody tr')) {
+            const final = row.querySelector('input.final-input, input.my-final-input');
+            const equivalent = row.querySelector('input.equivalent-input, input.my-equivalent-input');
+            if (final && equivalent && final.value !== '' && equivalent.value === '' && !equivalent.readOnly) {
+              equivalent.setCustomValidity('Enter the official Equivalent before saving a final grade.');
+              period.value = '6'; showPeriod(); equivalent.reportValidity(); return false;
+            }
+            if (final && equivalent && final.value === '' && equivalent.value !== '' && !final.readOnly) {
+              final.setCustomValidity('Enter Final before its official Equivalent.');
+              period.value = '5'; showPeriod(); final.reportValidity(); return false;
+            }
+          }
+        }
         if (invalid) {
           period.value = String(invalid.closest('td').cellIndex + 1);
           showPeriod();

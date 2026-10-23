@@ -313,7 +313,8 @@ h1.display { font-size: clamp(22px, 4.5vw, 32px); line-height: 1.15; }
     #page-classes[data-grading-period="2"] .grading-table-wrap :is(th, td):nth-child(2),
     #page-classes[data-grading-period="3"] .grading-table-wrap :is(th, td):nth-child(3),
     #page-classes[data-grading-period="4"] .grading-table-wrap :is(th, td):nth-child(4),
-    #page-classes[data-grading-period="5"] .grading-table-wrap :is(th, td):nth-child(5) { display: table-cell; width: 28%; }
+    #page-classes[data-grading-period="5"] .grading-table-wrap :is(th, td):nth-child(5),
+    #page-classes[data-grading-period="6"] .grading-table-wrap :is(th, td):nth-child(6) { display: table-cell; width: 28%; }
     #page-classes .grading-table-wrap :is(th, td):last-child { width: 28%; }
     #page-classes .grading-table-wrap input { width: 100% !important; min-width: 0; padding: 8px; }
     #page-classes .grading-table-wrap td:last-child button { padding: 6px !important; min-height: 44px; max-width: 100%; }

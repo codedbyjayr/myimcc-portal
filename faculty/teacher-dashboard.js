@@ -217,7 +217,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td>${periodInput(r, idx, 'midterm', 'mid-input')}</td>
         <td>${periodInput(r, idx, 'semifinal', 'semifinal-input')}</td>
         <td>${periodInput(r, idx, 'final', 'final-input')}</td>
-        <td class="equiv-cell" data-idx="${idx}">${previewEquivalent(r)}</td>
+        <td>${periodInput(r, idx, 'equivalent', 'equivalent-input')}</td>
         <td class="remark-cell" data-idx="${idx}">${previewRemarkBadge(r)}</td>
         <td style="text-align:center;white-space:nowrap;">
           <button type="button" class="btn btn-ghost grade-hist-btn" data-idx="${idx}" style="padding:4px 9px;font-size:12px;display:inline-flex;align-items:center;gap:4px;" title="View history & revert">
@@ -228,14 +228,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       </tr>
     `).join('');
 
-        const fieldByClass = { 'prelim-input': 'prelim', 'mid-input': 'midterm', 'semifinal-input': 'semifinal', 'final-input': 'final' };
-        document.querySelectorAll('.prelim-input, .mid-input, .semifinal-input, .final-input').forEach(input => {
+        const fieldByClass = { 'prelim-input': 'prelim', 'mid-input': 'midterm', 'semifinal-input': 'semifinal', 'final-input': 'final', 'equivalent-input': 'equivalent' };
+        document.querySelectorAll('.prelim-input, .mid-input, .semifinal-input, .final-input, .equivalent-input').forEach(input => {
             input.addEventListener('input', (e) => {
                 const idx = Number(e.target.dataset.idx);
                 const val = e.target.value === '' ? null : Number(e.target.value);
                 const field = fieldByClass[[...e.target.classList].find(c => fieldByClass[c])];
                 roster[idx][field] = val;
-                document.querySelector(`.equiv-cell[data-idx="${idx}"]`).textContent = previewEquivalent(roster[idx]);
                 document.querySelector(`.remark-cell[data-idx="${idx}"]`).innerHTML = previewRemarkBadge(roster[idx]);
             });
         });
@@ -266,7 +265,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             for (const r of roster) {
                 if (r.grade_scale === 'percentage') continue;
-                const equivalent = r.final;
+                const equivalent = r.equivalent;
                 const remark = Grading.computeRemark(r);
 
                 const payload = {

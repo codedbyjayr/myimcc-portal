@@ -134,6 +134,10 @@ try {
       await frame.getByText('PILOT101', { exact: true }).first().waitFor();
     }
     if (role === 'dean') {
+      assert.equal(await frame.getByText('Accreditation Compliance Checklist', {exact:true}).count(),0);
+      await frame.locator('[data-page="compliance"]').click();
+      await frame.getByRole('heading', {name:'Graduation Readiness',exact:true}).waitFor();
+      if (process.env.DEAN_SCREENSHOT) await page.screenshot({path:process.env.DEAN_SCREENSHOT,animations:'disabled'});
       assert.equal(await frame.locator('[data-page="financial"]').count(),0);
       await frame.locator('a[href*="enrollment-requests"]').click();
       await page.waitForFunction(()=>document.getElementById('previewFrame').srcdoc.includes('/staff/enrollment-requests.html'));

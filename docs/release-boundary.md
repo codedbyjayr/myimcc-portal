@@ -5,8 +5,8 @@ Normal role URLs and the read-only Admin data preview use the current production
 columns. The preview uses the Admin's own permissions and assignments; it does
 not verify another role's access.
 
-Use **Try selected role (demo)** to review the new student records, manual
-Equivalent, grade locking and enrollment finalization workflows. These pages
+Use **Try selected role (demo)** to review the new student records,
+grade locking and enrollment finalization workflows. These pages
 and their shared scripts live under `/review-assets/`. The existing server
 broker fixes their requests to `imcc_review`; their direct Supabase bootstrap
 throws rather than connecting to school data. The review identity helper must
@@ -44,3 +44,9 @@ compatibility checks together in a separate release. Replace the boundary's
 review-only contract restrictions only after verifying those contracts on the
 target. There is no `portal_release_ready` marker in the current database;
 this release does not claim or rely on one.
+
+Manual Equivalent entry is now an independently approved production feature. The
+small `manual_school_equivalent` migration changes only future grade validation
+and remark calculation; it does not promote the pending adviser migration or
+rewrite old grades/history. Verify it with `node scripts/test-manual-equivalent-db.mjs`
+using the existing optional PGlite runtime, plus the grading browser suite.
