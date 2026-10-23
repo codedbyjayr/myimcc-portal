@@ -16,4 +16,4 @@ jobs:
           node-version: 24
       - run: node scripts/check-live-login.mjs "$DEPLOYMENT_URL"
         env:
-          DEPLOYMENT_URL: ${{ github.event.deployment_status.environment_url }}
+          DEPLOYMENT_URL: https://myimcc-portal.vercel.app
