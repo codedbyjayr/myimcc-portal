@@ -5,7 +5,7 @@ import { server } from './test-portal.mjs';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const sdk = await readFile(new URL('../node_modules/@supabase/supabase-js/dist/umd/supabase.js', import.meta.url), 'utf8');
-const browser = await chromium.launch({ headless: true, channel: 'msedge' });
+const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge' });
 server.listen(0, '127.0.0.1');
 await once(server, 'listening');
 const origin = `http://127.0.0.1:${server.address().port}`;
@@ -42,6 +42,7 @@ try {
         if (table === 'profiles') data = request.headers().accept?.includes('object+json') ? profile : [profile];
         if (table === 'course_offerings') data = empty ? [] : courses;
         if (table === 'get_class_roster') data = emptyRoster ? [] : students;
+        if (Array.isArray(data) && url.searchParams.has('offset')) data = data.slice(Number(url.searchParams.get('offset')), Number(url.searchParams.get('offset')) + Number(url.searchParams.get('limit')));
         return route.fulfill({ json: data });
       }
       return url.origin === origin ? route.continue() : route.abort();

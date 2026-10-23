@@ -5,7 +5,8 @@
     "test:portal": "node scripts/test-portal.mjs",
     "backup": "node scripts/backup-supabase.js",
     "check:edge": "tsc -p supabase/functions",
-    "check:edge:parse": "node supabase/functions/check-syntax.mjs"
+    "check:edge:parse": "node supabase/functions/check-syntax.mjs",
+    "check:release": "node scripts/check-release.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3"

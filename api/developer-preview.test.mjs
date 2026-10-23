@@ -88,6 +88,7 @@ try {
     assert.equal(requests.length, 3, 'Recheck user and profile before each data request');
   }
   for (const resource of ['https://attacker.example/rest/v1/profiles', '//attacker.example/rest/v1/profiles',
+    '/rest/v1/rpc/list_student_records', '/rest/v1/rpc/get_student_record', '/rest/v1/rpc/get_enrollment_workspace',
     '/auth/v1/user', '/rest/v1/rpc/set_user_role', '/rest/v1/rpc/initialize_student_clearances','/rest/v1/rpc/review_enrollment_request',
     '/rest/v1/../../auth/v1/user', '/rest/v1/%2e%2e/auth/v1/user', '/rest/v1/profiles\\..\\auth']) {
     assert.equal((await request({ resource })).code, 400, resource);

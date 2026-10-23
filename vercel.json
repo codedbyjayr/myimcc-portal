@@ -50,5 +50,6 @@
         }
       ]
     }
-  ]
+  ],
+  "buildCommand": "npm run check:release"
 }

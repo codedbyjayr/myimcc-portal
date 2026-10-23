@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const source = readFileSync(new URL('./dean-dashboard.js', import.meta.url), 'utf8');
 const nodes = new Map();
-const getEl = id => { if (!nodes.has(id)) nodes.set(id, { innerHTML: '', style: {} }); return nodes.get(id); };
+const getEl = id => { if (!nodes.has(id)) nodes.set(id, { innerHTML: '', style: {}, addEventListener() {} }); return nodes.get(id); };
 const state = { instructorOptions: null, facultyList: [], offerings: [{ id: 1, code: 'TEST', instructor_id: 'self', instructor_name: 'Demo Dean' }] };
 const context = vm.createContext({
   currentUserId: 'self', currentProfile: { id: 'self', role: 'dean', status: 'approved' }, state, getEl, console,
@@ -38,8 +38,10 @@ let release;
 context.supabaseClient.rpc = name => name === 'get_dean_student_directory' ? Promise.resolve({ data: [] }) : new Promise(resolve => { release = resolve; });
 context.supabaseClient.from = table => ({
   select() { return this; }, eq() { return this; }, order() { return this; },
+  range() { return this; },
   then(resolve, reject) { return Promise.resolve({ data: table === 'profiles' ? [{ id: 'self', full_name: 'Demo Dean', role: 'dean', status: 'approved' }] : table === 'course_offerings' ? state.offerings : [] }).then(resolve, reject); },
 });
+context.IMCC = { fetchAll: query => query() };
 let loaded = false;
 const loading = vm.runInContext('loadAllData()', context).then(() => { loaded = true; });
 await new Promise(resolve => setImmediate(resolve));

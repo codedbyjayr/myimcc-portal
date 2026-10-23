@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const fmtDate = FC.fmtDate;
     const showToast = FC.showToast;
     const isMissingTableError = FC.isMissingTableError;
-    const peso = n => '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
     function statusBadgeClass(status) {
         const map = {
             pending: 'badge-amber', approved: 'badge-green', active: 'badge-green', compliant: 'badge-green',
@@ -36,7 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let darkMode = false;
     const state = {
         profiles: [], offerings: [], grades: [], enrollments: [], facultyList: [],
-        notes: [], courses: [], appeals: [],
+        notes: [], appeals: [], courses: [],
         // Instructor options loaded from the get_subject_instructor_options RPC.
         // Each entry: { id, full_name, role }
         instructorOptions: null,   // null = not yet loaded; [] = loaded but empty
@@ -51,14 +50,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         dashboard: 'Dashboard',
         classes: 'My Classes',
         faculty: 'Faculty & Schedule',
-        records: 'View Records',
         compliance: 'Student Compliance',
         profile: 'My Profile',
     }, function (page) {
         if (page === 'profile') renderProfile();
         if (page === 'classes') loadMyClasses();
-        if (page === 'records') renderStudentPicker('record');
-        if (page === 'compliance') renderStudentPicker('clearance');
     });
 
     // ── Dropdown + theme — delegated to FC ──
@@ -117,7 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadAllData() {
         const results = await Promise.all([
-            supabaseClient.rpc('list_student_records'),
+            supabaseClient.rpc('get_dean_student_directory'),
             IMCC.fetchAll(() => supabaseClient.from('course_offerings').select('*')),
             IMCC.fetchAll(() => supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)')),
             IMCC.fetchAll(() => supabaseClient.from('enrollments').select('id, student_id, status, offering_id, course_offerings(school_year, semester)').eq('status', 'enrolled')),
@@ -558,6 +554,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         `).join('');
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // STUDENT COMPLIANCE
+    // ══════════════════════════════════════════════════════════════════
     function renderGradReadiness() {
         const required = Number(getEl('requiredUnitsInput').value || 144);
         const seniors = state.profiles.filter(p => p.role === 'student' && p.status === 'approved' && /4/.test(String(p.year_level || '')));
@@ -640,43 +639,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showToast(`Appeal ${btn.dataset.action}.`);
                 loadAppeals();
             });
-        });
-    }
-
-
-    let selectedRecord = { record: null, clearance: null };
-    function renderStudentPicker(kind) {
-        const query = getEl(kind + 'Search').value.trim().toLowerCase();
-        const students = state.profiles.filter(p => p.role === 'student' && (p.full_name + ' ' + (p.student_no || '') + ' ' + (p.program || '')).toLowerCase().includes(query));
-        getEl(kind + 'Students').innerHTML = students.map(p => '<button class="nav-item" type="button" data-student="' + escapeHtml(p.id) + '">' + escapeHtml(p.full_name) + '<small>' + escapeHtml([p.student_no, p.program, p.year_level].filter(Boolean).join(' · ')) + '</small></button>').join('') || '<p>No matching students.</p>';
-    }
-    function recordsTable(rows, columns) {
-        if (!rows?.length) return '<p>No records.</p>';
-        return '<div class="table-responsive"><table><thead><tr>' + columns.map(([label]) => '<th>' + escapeHtml(label) + '</th>').join('') + '</tr></thead><tbody>' + rows.map(row => '<tr>' + columns.map(([, value]) => '<td>' + escapeHtml(value(row) ?? '—') + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
-    }
-    for (const kind of ['record', 'clearance']) {
-        getEl(kind + 'Search').addEventListener('input', () => renderStudentPicker(kind));
-        getEl(kind + 'Students').addEventListener('click', async event => {
-            const id = event.target.closest('[data-student]')?.dataset.student;
-            if (!id) return;
-            selectedRecord[kind] = id;
-            const target = getEl(kind + 'Details');
-            target.textContent = 'Loading records…';
-            getEl(kind + 'Title').textContent = state.profiles.find(p => p.id === id)?.full_name || 'Student records';
-            const { data, error } = await supabaseClient.rpc('get_student_record', { p_student_id: id });
-            if (selectedRecord[kind] !== id) return;
-            if (error) { target.textContent = 'Could not load records: ' + error.message; return; }
-            const clearance = recordsTable(data.clearances, [['Office', r => r.department_name], ['Status', r => r.status], ['Note', r => r.note], ['Cleared', r => fmtDate(r.cleared_at)]]);
-            if (kind === 'clearance') { target.innerHTML = clearance; return; }
-            const p = data.profile;
-            target.innerHTML = '<h4>Student Information</h4>' + recordsTable([p], [['Student No.', r => r.student_no || r.id_number], ['Program', r => r.program], ['Year / Section', r => [r.year_level, r.section].filter(Boolean).join(' / ')], ['Email', r => r.email], ['Phone', r => r.phone], ['Address', r => r.address]]) +
-                '<h4>Enrollment & Terms</h4>' + recordsTable(data.enrollments, [['Subject', r => r.code + ' — ' + r.title], ['Term', r => r.semester + ' ' + r.school_year], ['Status', r => r.status], ['Units', r => r.units]]) +
-                '<h4>Grades</h4>' + recordsTable(data.grades, [['Subject', r => r.code], ['Term', r => r.semester + ' ' + r.school_year], ['Prelim', r => Grading.formatGrade(r.prelim)], ['Midterm', r => Grading.formatGrade(r.midterm)], ['Semifinal', r => Grading.formatGrade(r.semifinal)], ['Final', r => Grading.formatGrade(r.final)], ['Equivalent', r => Grading.formatGrade(r.equivalent)], ['Remark', r => r.remark]]) +
-                '<h4>Clearance</h4>' + clearance +
-                '<h4>Attendance</h4>' + recordsTable(data.attendance, [['Subject', r => r.code], ['Date', r => fmtDate(r.date)], ['Status', r => r.status], ['Notes', r => r.notes]]) +
-                '<h4>Payment Records</h4>' + recordsTable(data.transactions, [['Receipt', r => r.or_number], ['Date', r => fmtDate(r.txn_date)], ['Description', r => r.description], ['Amount', r => peso(r.amount)]]) +
-                '<h4>Balance</h4><p>' + escapeHtml(peso(data.billing?.balance)) + '</p>' +
-                '<h4>Installments</h4>' + recordsTable(data.installments, [['Name', r => r.name], ['Due', r => fmtDate(r.due_date)], ['Amount', r => peso(r.amount)], ['Status', r => r.status]]);
         });
     }
 
@@ -811,16 +773,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         getEl('selectedMyCourseSub').textContent = `Section ${selectedMyOffering.section || '—'} · ${selectedMyOffering.semester || ''} ${selectedMyOffering.school_year || ''} · ${selectedMyOffering.schedule || 'Schedule TBA'}${selectedMyOffering.instructor_name ? ` · Instructor: ${selectedMyOffering.instructor_name}` : ''}`;
         getEl('saveMyGradesBtn').disabled = true;
 
-        const [{ data: enrollments, error: rosterError }, { data: existingGrades, error: gradesError }, { data: offeringState, error: offeringError }] = await Promise.all([
+        const [{ data: enrollments, error: rosterError }, { data: existingGrades }] = await Promise.all([
             supabaseClient.rpc('get_class_roster', { p_offering_id: Number(offeringId) }),
             supabaseClient.from('grades').select('*').eq('offering_id', offeringId),
-            supabaseClient.from('course_offerings').select('grades_locked').eq('id', offeringId).single(),
         ]);
 
         if (String(selectedMyOffering?.id) !== String(offeringId)) return;
-        if (gradesError || offeringError) { myRoster = []; renderMyRoster(); showToast('Could not load grades or finalization status. Please retry.', true); return; }
-        selectedMyOffering.grades_locked = offeringState?.grades_locked === true;
-        gradingWorkspace.setLocked(selectedMyOffering.grades_locked);
         if (rosterError) { myRoster = []; renderMyRoster(); showToast('Could not load class roster: ' + rosterError.message, true); return; }
 
         const gradeByStudent = {};
@@ -862,7 +820,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (getEl('deanClassAuditLogBtn')) getEl('deanClassAuditLogBtn').style.display = 'inline-flex';
 
         const periodInput = (r, idx, field, cls) =>
-            `<input type="number" min="1" max="${r.grade_scale === 'percentage' ? 100 : 5}" step="0.01" class="field-input ${cls}" style="width:72px;" data-idx="${idx}" ${window.IMCC_DEVELOPER_VIEW || selectedMyOffering?.grades_locked || r.grade_scale === 'percentage' ? 'readonly' : ''} aria-label="${escapeHtml(r.student.full_name || 'Student')} ${field} school grade" value="${r[field] ?? ''}">`;
+            `<input type="number" min="1" max="${r.grade_scale === 'percentage' ? 100 : 5}" step="0.01" class="field-input ${cls}" style="width:72px;" data-idx="${idx}" ${window.IMCC_DEVELOPER_VIEW || r.grade_scale === 'percentage' ? 'readonly' : ''} aria-label="${escapeHtml(r.student.full_name || 'Student')} ${field} school grade" value="${r[field] ?? ''}">`;
 
         body.innerHTML = myRoster.map((r, idx) => `
       <tr>
@@ -871,7 +829,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td>${periodInput(r, idx, 'midterm', 'my-mid-input')}</td>
         <td>${periodInput(r, idx, 'semifinal', 'my-semifinal-input')}</td>
         <td>${periodInput(r, idx, 'final', 'my-final-input')}</td>
-        <td>${periodInput(r, idx, 'equivalent', 'my-equivalent-input')}</td>
+        <td class="my-equiv-cell" data-idx="${idx}">${previewMyEquivalent(r)}</td>
         <td class="my-remark-cell" data-idx="${idx}">${previewMyRemarkBadge(r)}</td>
         <td style="text-align:center;white-space:nowrap;">
           <button type="button" class="btn btn-ghost dean-grade-hist-btn" data-idx="${idx}" style="padding:4px 9px;font-size:12px;display:inline-flex;align-items:center;gap:4px;" title="View history & revert">
@@ -882,13 +840,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       </tr>
     `).join('');
 
-        const fieldByClass = { 'my-prelim-input': 'prelim', 'my-mid-input': 'midterm', 'my-semifinal-input': 'semifinal', 'my-final-input': 'final', 'my-equivalent-input': 'equivalent' };
-        document.querySelectorAll('.my-prelim-input, .my-mid-input, .my-semifinal-input, .my-final-input, .my-equivalent-input').forEach(input => {
+        const fieldByClass = { 'my-prelim-input': 'prelim', 'my-mid-input': 'midterm', 'my-semifinal-input': 'semifinal', 'my-final-input': 'final' };
+        document.querySelectorAll('.my-prelim-input, .my-mid-input, .my-semifinal-input, .my-final-input').forEach(input => {
             input.addEventListener('input', (e) => {
                 const idx = Number(e.target.dataset.idx);
                 const val = e.target.value === '' ? null : Number(e.target.value);
                 const field = fieldByClass[[...e.target.classList].find(c => fieldByClass[c])];
                 myRoster[idx][field] = val;
+                document.querySelector(`.my-equiv-cell[data-idx="${idx}"]`).textContent = previewMyEquivalent(myRoster[idx]);
                 document.querySelector(`.my-remark-cell[data-idx="${idx}"]`).innerHTML = previewMyRemarkBadge(myRoster[idx]);
             });
         });
@@ -901,23 +860,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
     }
-
-    document.querySelector('.lock-grades-btn').addEventListener('click', async () => {
-        if (!selectedMyOffering || !gradingWorkspace.canFinalize()) return;
-        if (!confirm('Lock all grades for this class? Normal grade entry and history reverts will be disabled.')) return;
-        const button = document.querySelector('.lock-grades-btn');
-        button.disabled = true;
-        try {
-            const { error } = await supabaseClient.rpc('lock_class_grades', { p_offering_id: Number(selectedMyOffering.id) });
-            if (error) throw error;
-            selectedMyOffering.grades_locked = true;
-            gradingWorkspace.setLocked(true);
-            renderMyRoster();
-            gradingWorkspace.markClean();
-            showToast('Grades finalized and locked.');
-        } catch (error) { showToast('Could not lock grades: ' + error.message, true); }
-        finally { gradingWorkspace.refresh(); }
-    });
 
     // Grade preview — delegated to shared/grading.js
     function previewMyEquivalent(r) { return Grading.previewEquivalent(r); }
@@ -935,8 +877,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         try {
             for (const r of myRoster) {
-                if (r.grade_scale === 'percentage' || selectedMyOffering?.grades_locked) continue;
-                const equivalent = r.equivalent;
+                if (r.grade_scale === 'percentage') continue;
+                const equivalent = r.final;
                 const remark = Grading.computeRemark(r);
 
                 const payload = {
@@ -1070,7 +1012,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderDeanHistoryRows(rows, targetStudent) {
         Grading.renderHistoryRows(rows, targetStudent, (histEntry, studentId) => {
             executeDeanRevert(histEntry, targetStudent || myRoster.find(x => x.student.id === studentId));
-        }, selectedMyOffering?.grades_locked);
+        });
     }
 
     async function executeDeanRevert(histEntry, studentRosterItem) {
@@ -1078,7 +1020,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             supabaseClient,
             histEntry,
             studentRosterItem,
-            locked: selectedMyOffering?.grades_locked,
             roleLabel: '(Dean Oversight)',
             showToast,
             async onDone(data, item) {
@@ -1106,6 +1047,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     getEl('deanClassAuditLogBtn')?.addEventListener('click', openDeanClassGradeHistory);
 
     getEl('deanAddClassBtn')?.addEventListener('click', () => {
+        // Do NOT pre-select the dean as the instructor; require an explicit selection.
         openModal('courseOffering');
     });
 
@@ -1143,7 +1085,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 { name: 'schedule', label: 'Schedule', type: 'text', required: false, placeholder: 'e.g. MWF 08:00–09:30 or TTH 13:00–14:30' },
                 // instructor_id uses a dedicated async-populated dropdown (type: 'instructor_select').
                 // openModal handles the RPC load and renders the <select> itself.
-                { name: 'instructor_id', label: 'Assigned Instructor (optional)', type: 'instructor_select', required: false },
+                { name: 'instructor_id', label: 'Assigned Instructor', type: 'instructor_select', required: true },
             ],
             transform: (values) => {
                 // Resolve full_name from whichever instructor list is available.
@@ -1194,18 +1136,106 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.querySelectorAll('[data-modal]').forEach(btn => btn.addEventListener('click', () => openModal(btn.dataset.modal)));
 
-    // An unavailable instructor list must still allow saving an unassigned subject.
-    function renderInstructorDropdown(existingInstructorId = null, existingInstructorName = null) {
+    /**
+     * Render (or re-render) the instructor <select> inside the course-offering modal.
+     * Handles:
+     * - Loading state (while get_subject_instructor_options RPC runs)
+     * - Error state (with retry button)
+     * - Empty state (no eligible instructors found)
+     * - Add mode (requires explicit selection, no preselection)
+     * - Edit mode:
+     *   * If current instructor is eligible: preselects them
+     *   * If current instructor is legacy/ineligible (e.g. deactivated):
+     *     shows a prominent legacy warning and requires explicit selection of a replacement before saving
+     */
+    function renderInstructorDropdown(existingInstructorId = null, existingInstructorName = null, isEdit = false) {
         const wrapper = getEl('instructorSelectWrapper');
         if (!wrapper) return;
-        const options = state.instructorOptions || [];
-        const legacy = existingInstructorId && !options.some(f => String(f.id) === String(existingInstructorId));
-        wrapper.innerHTML = '<label for="field_instructor_id">Assigned Instructor (optional)</label>' +
-            '<select id="field_instructor_id" class="field-input"><option value="">Unassigned — pending assignment</option>' +
-            (legacy ? '<option selected value="' + escapeHtml(existingInstructorId) + '">' + escapeHtml(existingInstructorName || 'Previous instructor') + ' (choose an active replacement or Unassigned)</option>' : '') +
-            options.map(f => '<option value="' + escapeHtml(f.id) + '" ' + (String(f.id) === String(existingInstructorId) ? 'selected' : '') + '>' + escapeHtml(f.full_name) + (f.id === currentUserId ? ' (You)' : '') + '</option>').join('') + '</select>' +
-            (state.instructorOptions === null ? '<p role="status">Loading instructors. You can save the subject as unassigned.</p>' : state.instructorOptionsError ? '<p role="status">Instructors could not be loaded. Save as unassigned or <button type="button" id="retryInstructorLoad">Retry</button>.</p>' : '');
-        getEl('retryInstructorLoad')?.addEventListener('click', async () => { await loadInstructorOptions(true); renderInstructorDropdown(existingInstructorId, existingInstructorName); });
+
+        const selId = 'field_instructor_id';
+
+        if (state.instructorOptions === null) {
+            // Still loading from the RPC
+            wrapper.innerHTML = `
+              <label for="${selId}">Assigned Instructor <span style="color:var(--red,#dc2626)">*</span></label>
+              <select id="${selId}" class="field-input" disabled>
+                <option value="">⏳ Loading instructors…</option>
+              </select>`;
+            return;
+        }
+
+        if (state.instructorOptionsError) {
+            // RPC failed — show the error so the dean isn't left with a silent empty list
+            wrapper.innerHTML = `
+              <label for="${selId}">Assigned Instructor <span style="color:var(--red,#dc2626)">*</span></label>
+              <select id="${selId}" class="field-input" disabled>
+                <option value="">⚠ Could not load instructors</option>
+              </select>
+              <p style="color:var(--red,#dc2626);font-size:12px;margin-top:4px;">
+                RPC error: ${escapeHtml(state.instructorOptionsError)}<br>
+                <button type="button" id="retryInstructorLoad" style="font-size:12px;color:var(--blue,#0284c7);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;">Retry</button>
+              </p>`;
+            getEl('retryInstructorLoad')?.addEventListener('click', async () => {
+                await loadInstructorOptions(true);
+                renderInstructorDropdown(existingInstructorId, existingInstructorName, isEdit);
+            });
+            return;
+        }
+
+        if (!state.instructorOptions.length) {
+            wrapper.innerHTML = `
+              <label for="${selId}">Assigned Instructor <span style="color:var(--red,#dc2626)">*</span></label>
+              <select id="${selId}" class="field-input" disabled>
+                <option value="">— No active instructors found —</option>
+              </select>
+              <p style="color:var(--amber-700,#b45309);font-size:12px;margin-top:4px;">No eligible instructors are available. Refresh and try again.</p>`;
+            return;
+        }
+
+        const sorted = state.instructorOptions
+            .slice()
+            .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+
+        // Check if existing instructor is eligible
+        const isEligible = Boolean(
+            existingInstructorId && sorted.some(f => String(f.id) === String(existingInstructorId))
+        );
+
+        let placeholderOption = '';
+        let warningHtml = '';
+
+        if (isEdit) {
+            if (isEligible) {
+                placeholderOption = `<option value="" disabled>— Select Instructor —</option>`;
+            } else {
+                // Preserve visibility of an assignment outside the eligible options.
+                const legacyDisplay = existingInstructorName || (existingInstructorId ? 'Ineligible Profile' : 'Unassigned');
+                placeholderOption = `<option value="" disabled selected>⚠ Legacy assignment: ${escapeHtml(legacyDisplay)} (Choose replacement)</option>`;
+                warningHtml = `
+                  <div class="legacy-assignment-alert" style="margin-top:6px;padding:8px 10px;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;font-size:12px;color:#92400e;line-height:1.4;">
+                    <strong>⚠ Legacy Assignment:</strong> Currently assigned to <strong>${escapeHtml(legacyDisplay)}</strong>. Choose an eligible teacher, faculty member, or yourself before saving.
+                  </div>`;
+            }
+        } else {
+            // Add mode: explicit selection required
+            placeholderOption = `<option value="" disabled selected>— Select Eligible Instructor —</option>`;
+        }
+
+        const optionsHtml = sorted
+            .map(f => {
+                const selected = isEligible && String(f.id) === String(existingInstructorId);
+                const roleBadge = f.id === currentUserId ? ' (You — Dean)' : f.role ? ` (${f.role})` : '';
+                return `<option value="${escapeHtml(f.id)}" ${selected ? 'selected' : ''}>${escapeHtml(f.full_name)}${escapeHtml(roleBadge)}</option>`;
+            })
+            .join('');
+
+        wrapper.innerHTML = `
+          <label for="${selId}">Assigned Instructor <span style="color:var(--red,#dc2626)">*</span></label>
+          <select id="${selId}" class="field-input" required>
+            ${placeholderOption}
+            ${optionsHtml}
+          </select>
+          ${warningHtml}`;
     }
 
     function openModal(key, initialValues = null) {
@@ -1342,19 +1372,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!el) continue;
             const val = el.value.trim();
             if (f.required && !val) { showToast(`${f.label} is required.`, true); if (el.closest('details')) el.closest('details').open = true; el.focus(); return; }
-            if (f.type === 'number' && (!Number.isFinite(Number(val)) || Number(val) <= 0)) { showToast(`${f.label} must be a positive number.`, true); el.focus(); return; }
             values[f.name] = f.type === 'number' ? (val === '' ? null : Number(val)) : (val || null);
         }
 
         // Special handling for courseOffering: instructor assignment validation & atomic save
         if (activeModalKey === 'courseOffering') {
-            const selectedInstructorId = getEl('field_instructor_id')?.value.trim() || '';
-            const selectedInstructor = (state.instructorOptions || []).find(o => String(o.id) === selectedInstructorId);
-            if (selectedInstructorId && !selectedInstructor) {
-                showToast('Choose an approved active instructor or leave the subject unassigned.', true); return;
+            if (!Number.isFinite(values.units) || values.units <= 0) { showToast('Units must be greater than zero.', true); getEl('field_units')?.focus(); return; }
+            if (state.instructorOptions === null) {
+                showToast('Instructor options are still loading. Please wait a moment.', true);
+                return;
             }
-            values.instructor_id = selectedInstructor?.id || null;
-            values.instructor_name = selectedInstructor?.full_name || null;
+            if (state.instructorOptionsError) {
+                showToast('Cannot save: instructor list failed to load. Please click retry.', true);
+                return;
+            }
+            if (!state.instructorOptions.length) {
+                showToast('Cannot save: no approved active instructors are available to assign.', true);
+                return;
+            }
+
+            const instructorEl = getEl('field_instructor_id');
+            const selectedInstructorId = instructorEl ? instructorEl.value.trim() : '';
+            if (!selectedInstructorId) {
+                showToast('Please select an eligible instructor.', true);
+                instructorEl?.focus();
+                return;
+            }
+
+            const selectedInstructor = state.instructorOptions.find(o => String(o.id) === String(selectedInstructorId));
+            if (!selectedInstructor) {
+                showToast('Selected instructor is not eligible. Please choose from the list.', true);
+                instructorEl?.focus();
+                return;
+            }
+
+            values.instructor_id = selectedInstructor.id;
+            values.instructor_name = selectedInstructor.full_name;
 
             const saveBtn = getEl('modalSaveBtn');
             const originalBtnText = saveBtn.textContent;
@@ -1373,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     p_semester: values.semester,
                     p_school_year: values.school_year || '2026–2027',
                     p_schedule: values.schedule || null,
-                    p_instructor_id: selectedInstructor?.id || null,
+                    p_instructor_id: selectedInstructor.id,
                 };
 
                 let savedRow = null;
@@ -1402,8 +1455,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                             school_year: values.school_year || '2026–2027',
                             units: Number(values.units),
                             schedule: values.schedule || null,
-                            instructor_id: selectedInstructor?.id || null,
-                            instructor_name: selectedInstructor?.full_name || null,
+                            instructor_id: selectedInstructor.id,
+                            instructor_name: selectedInstructor.full_name,
                         };
 
                         if (editingOfferingId) {
@@ -1443,7 +1496,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // Standard save logic for faculty notes and appeals.
+        // Standard save logic for other modals
         const payload = cfg.transform ? cfg.transform(values) : values;
         let saveRes;
         if (editingOfferingId) {
@@ -1492,15 +1545,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
     await loadSSOLinks();
-    getEl('refreshEnrollmentNotifications').addEventListener('click', () => FC.loadEnrollmentNotifications(supabaseClient));
-    await FC.loadEnrollmentNotifications(supabaseClient);
     renderOverview();
     renderFacultyPage();
-    await loadMyClasses();
     renderGradReadiness();
+    await loadMyClasses();
     await Promise.all([loadNotes(), loadAppeals()]);
-    renderStudentPicker('clearance');
-    renderStudentPicker('record');
 
     if (window.imccHidePreloader) window.imccHidePreloader();
 });

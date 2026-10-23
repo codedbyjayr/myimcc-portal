@@ -24,24 +24,28 @@ assert.equal(failed.data, null, 'Never return a partial list as a complete one')
 assert.equal(failed.error.message, 'Denied');
 console.log('Pagination: over 1,000 rows, lower server caps, stable order and later-page failures passed.');
 
-// Exercise the actual Dean startup loader with the shared helper.
-const dean = readFileSync(new URL('../faculty/dean-dashboard.js', import.meta.url), 'utf8');
-context.currentProfile = { id: 'dean', role: 'dean' };
-context.state = {};
-context.loadInstructorOptions = async () => {};
-context.supabaseClient = {
-  rpc: async () => ({ data: [{ id: 'student', role: 'student' }], error: null }),
-  from: () => ({
-    select() { return this; }, eq() { return this; }, order() { return this; },
-    async range(from, to) { return { data: rows.slice(from, to + 1), error: null }; },
-  }),
-};
-const start = dean.indexOf('    async function loadAllData(');
-vm.runInContext(dean.slice(start, dean.indexOf('    // ═', start)), context);
-await vm.runInContext('loadAllData()', context);
-for (const key of ['offerings', 'grades', 'enrollments', 'courses']) assert.equal(context.state[key].length, 1203);
-const previousGrades = context.state.grades;
-context.supabaseClient.rpc = async () => ({ data: null, error: { message: 'Denied' } });
-await assert.rejects(vm.runInContext('loadAllData()', context), /Denied/);
-assert.equal(context.state.grades, previousGrades, 'A failed reload preserves displayed data');
-console.log('Dean startup: real shared helper loads all lists and preserves data on failure.');
+// Exercise each real startup loader with its own shared identity module.
+for (const [prefix, expectedRpc] of [['', 'get_dean_student_directory'], ['review-assets/', 'list_student_records']]) {
+  const context = vm.createContext({document:{currentScript:null}});
+  vm.runInContext(readFileSync(new URL('../' + prefix + 'shared/identity.js', import.meta.url), 'utf8'), context);
+  const dean = readFileSync(new URL('../' + prefix + 'faculty/dean-dashboard.js', import.meta.url), 'utf8');
+  context.currentProfile = { id: 'dean', role: 'dean' };
+  context.state = {};
+  context.loadInstructorOptions = async () => {};
+  context.supabaseClient = {
+    rpc: async name => { assert.equal(name, expectedRpc); return { data: [{ id: 'student', role: 'student' }], error: null }; },
+    from: () => ({
+      select() { return this; }, eq() { return this; }, order() { return this; },
+      async range(from, to) { return { data: rows.slice(from, to + 1), error: null }; },
+    }),
+  };
+  const start = dean.indexOf('    async function loadAllData(');
+  vm.runInContext(dean.slice(start, dean.indexOf('    // ═', start)), context);
+  await vm.runInContext('loadAllData()', context);
+  for (const key of ['offerings', 'grades', 'enrollments', 'courses']) assert.equal(context.state[key].length, 1203);
+  const previousGrades = context.state.grades;
+  context.supabaseClient.rpc = async () => ({ data: null, error: { message: 'Denied' } });
+  await assert.rejects(vm.runInContext('loadAllData()', context), /Denied/);
+  assert.equal(context.state.grades, previousGrades, 'A failed reload preserves displayed data');
+}
+console.log('Production and review Dean startup: matching helpers/RPCs, complete lists and failed-reload retention passed.');

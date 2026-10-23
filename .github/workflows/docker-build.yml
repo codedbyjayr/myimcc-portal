@@ -20,6 +20,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run check:release
       - run: npm test
       - run: npm run check:edge
       - run: npm run check:edge:parse

@@ -28,7 +28,8 @@ function rowsFor(url) {
   return [];
 }
 function dataResponse(url, headers = {}) {
-  const rows = rowsFor(url);
+  let rows = rowsFor(url);
+  if (url.searchParams.has('offset')) rows = rows.slice(Number(url.searchParams.get('offset')), Number(url.searchParams.get('offset')) + Number(url.searchParams.get('limit')));
   return { status: 200, contentType: 'application/json', headers: { 'content-range': `0-${Math.max(0, rows.length - 1)}/${rows.length}` },
     body: JSON.stringify(headers.accept?.includes('object+json') ? rows[0] || null : rows) };
 }
@@ -75,11 +76,6 @@ try {
       }
       return route.fulfill(dataResponse(target,{accept:input.accept}));
     }
-    if(url.origin===origin && url.pathname.startsWith('/review-assets/')) {
-      const path=url.pathname.replace('/review-assets','');
-      try { return route.fulfill({body:await readFile(new URL('..'+path,import.meta.url)),contentType:path.endsWith('.html')?'text/html':path.endsWith('.css')?'text/css':'text/javascript'}); }
-      catch { return route.fulfill({status:404,body:''}); }
-    }
     if (url.origin === origin && url.pathname === '/api/developer-preview') {
       assert.equal(request.headers().authorization, 'Bearer private-parent-token');
       assert.equal(request.method(), 'GET');
@@ -88,7 +84,7 @@ try {
       if (!resource) return route.fulfill({ json: { dashboards: paths, user } });
       reads.push(resource);
       const target = new URL(resource, origin);
-      if (target.pathname.startsWith('/rest/v1/rpc/') && !['get_class_roster', 'get_subject_instructor_options', 'get_dean_student_directory', 'list_student_records', 'get_student_record', 'helpdesk_recipient_id','list_enrollment_request_history','get_enrollment_workspace'].includes(target.pathname.split('/').pop())) {
+      if (target.pathname.startsWith('/rest/v1/rpc/') && !['get_class_roster', 'get_subject_instructor_options', 'get_dean_student_directory', 'helpdesk_recipient_id','list_enrollment_request_history'].includes(target.pathname.split('/').pop())) {
         return route.fulfill({ status: 400, json: { message: 'Only dashboard data reads are allowed.' } });
       }
       return route.fulfill(dataResponse(target, { accept: request.headers()['x-preview-accept'] }));
@@ -113,6 +109,8 @@ try {
     const probe = await frame.evaluate(() => window.__myimcc_supabase_client__.from('profiles').select('*').eq('id', 'developer-id').single());
     assert(probe.data, `${role}: ${JSON.stringify(probe)}; requests: ${reads.slice(-3).join(', ')}`);
     await frame.getByText('Developer Tester', { exact: true }).first().waitFor({ state: 'visible' });
+    if (role === 'dean') await frame.locator('#enrollmentStats .stat').first().waitFor();
+    assert.equal(await frame.getByText('Dashboard unavailable', {exact:true}).count(), 0, role + ': startup must succeed');
     assert(reads.length > before, `${role}: original scripts must request real data`);
     assert(await page.locator('#adminWorkspace').isHidden());
     assert.equal(await frame.locator('html').getAttribute('data-theme'), 'dark');
@@ -169,6 +167,7 @@ try {
   await page.getByText('DEMO ONLY · Dean · review.dean@example.invalid',{exact:true}).waitFor();
   let demoFrame=await (await page.locator('#previewFrame').elementHandle()).contentFrame();
   await demoFrame.getByText('DEMO dean',{exact:true}).first().waitFor();
+  await demoFrame.locator('#enrollmentStats .stat').first().waitFor();
   const demoWrite=await demoFrame.evaluate(()=>window.supabaseClient.from('faculty_notes').insert({content:'Fictional note',faculty_name:'DEMO'}));
   assert.equal(demoWrite.error,null);
   assert(demoWrites.some(request=>request.resource.startsWith('/rest/v1/faculty_notes')));

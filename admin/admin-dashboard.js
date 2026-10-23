@@ -242,7 +242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             previewFrame.title = previewRole.selectedOptions[0].textContent + ' dashboard';
             previewFrame.hidden = false;
             previewStatus.textContent = demoSession ? 'DEMO ONLY · ' + previewRole.selectedOptions[0].textContent + ' · ' + user.email : 'Viewing as ' + previewRole.selectedOptions[0].textContent + ' — read only';
-            previewPanel.querySelector('.preview-note').textContent = demoSession ? 'Interactive fictional records only. Changes stay in the review area. Ends at ' + new Date(demoSession.expiresAt).toLocaleTimeString() + '.' : 'Read only · Uses your admin account\'s permitted data. No role changes or user impersonation.';
+            previewPanel.querySelector('.preview-note').textContent = demoSession ? 'Interactive fictional records only. Changes stay in the review area. Ends at ' + new Date(demoSession.expiresAt).toLocaleTimeString() + '.' : 'Admin data preview · Uses your account permissions and assignments. Use the demo for fictional role workflows; verify real access with each role’s approved account.';
         } catch (error) {
             if (previewChannel !== channel) return;
             closePreview();

@@ -10,7 +10,7 @@ const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
   '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.gif': 'image/gif', '.webp': 'image/webp', '.ico': 'image/x-icon',
   '.woff': 'font/woff', '.woff2': 'font/woff2' };
-const directories = new Set(['auth', 'student', 'faculty', 'staff', 'admin', 'onboarding', 'shared']);
+const directories = new Set(['auth', 'student', 'faculty', 'staff', 'admin', 'onboarding', 'shared', 'review-assets']);
 const config = `window.__ENV__ = ${JSON.stringify({ SUPABASE_URL: testUrl, SUPABASE_ANON_KEY: testKey })};`;
 const login = `<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>MyIMCC test login</title>
