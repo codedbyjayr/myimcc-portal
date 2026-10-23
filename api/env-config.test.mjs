@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import handler from './env-config.js';
+const vercel = JSON.parse(readFileSync('vercel.json', 'utf8'));
+assert.equal(vercel.rewrites.find(route => route.source === '/env-config.js')?.destination, '/api/env-config');
 const saved = { ...process.env };
 try {
   const response = () => ({ headers: {}, setHeader(k,v) { this.headers[k]=v; }, status(code) { this.code=code; return this; }, send(body) { this.body=body; } });

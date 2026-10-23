@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+const origin = new URL(process.argv[2]).origin;
+const response = await fetch(new URL('/env-config.js', origin), { signal: AbortSignal.timeout(20000) });
+assert.equal(response.status, 200, 'Login configuration request failed');
+assert.match(response.headers.get('content-type') || '', /javascript/);
+const context = { window: {} };
+vm.runInNewContext(await response.text(), context, { timeout: 1000 });
+assert.equal(new URL(context.window.__ENV__.SUPABASE_URL).protocol, 'https:');
+assert.ok(context.window.__ENV__.SUPABASE_ANON_KEY, 'Missing public API key');
+console.log('Live login configuration is executable and contains required public settings.');

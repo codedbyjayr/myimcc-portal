@@ -5,6 +5,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     supabaseClient = await getSupabaseClientAsync();
   } catch (e) {
     console.error("Failed to init Supabase", e);
+    const error = document.getElementById('ssoError');
+    if (error) {
+      error.textContent = 'Sign-in is temporarily unavailable. Please reload the page or contact support.';
+      error.hidden = false;
+    }
+    const button = document.getElementById('ssoBtn');
+    if (button) button.disabled = true;
     return;
   }
 
