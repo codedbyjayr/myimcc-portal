@@ -2,7 +2,7 @@ name: Build and Push Docker Image
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "codex/backend-semester-release" ]
 
 env:
   REGISTRY: ghcr.io
@@ -21,10 +21,20 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+        if: github.ref == 'refs/heads/main'
+      - run: npm run test:backend
+        if: github.ref != 'refs/heads/main'
+      - run: npm install --prefix .temp/adviser-db --no-save --package-lock=false @electric-sql/pglite@0.5.11 @electric-sql/pglite-pgvector@0.0.12
+      - run: npm run test:db
       - run: npm run check:edge
-      - run: npm run check:edge:parse
+      - run: npm run check:release
+        if: github.ref == 'refs/heads/main'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
   build-and-push:
+    if: github.ref == 'refs/heads/main'
     needs: checks
     runs-on: ubuntu-latest
     permissions:

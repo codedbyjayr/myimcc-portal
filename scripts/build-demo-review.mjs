@@ -6,7 +6,7 @@ export async function buildDemoReview() {
     'migrations/20261015164009_production_role_workflows.sql',
     'migrations/20261021035015_production_school_grading.sql',
     'migrations/20261021040134_exact_school_grade_scale.sql',
-    'pending/20261021111506_adviser_requirements.sql'];
+    'migrations/20261027020245_backend_semester_release.sql'];
   const sources = await Promise.all(files.map(file => readFile(new URL('../supabase/' + file, import.meta.url), 'utf8')));
   const sql = sources.join('\n').replace(/^CREATE TRIGGER on_auth_user_created[^\n]*\n/gm, '')
     .replace(/^CREATE EXTENSION[^\n]*\n/gm, '').replace(/^(BEGIN|COMMIT);\s*$/gm, '')

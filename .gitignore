@@ -26,6 +26,8 @@ build/
 
 # IDE & agent configs
 .agents/
+AGENTS.md
+skills-lock.json
 .vscode/
 .DS_Store
 Thumbs.db

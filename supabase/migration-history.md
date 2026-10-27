@@ -1,5 +1,26 @@
 # Migration history
 
+## Recovery on 2026-10-26
+
+The 34 migrations currently recorded by production were compared with local SQL
+using normalized-content checksums. Missing review-schema, manual-Equivalent,
+and academic-live-update records were recovered without executing them.
+The equivalent local `20261022090000_academic_live_updates.sql` was moved to
+`pending/20261022090000_academic_live_updates_duplicate.sql`; production records
+that change under `20261022043635`.
+
+The five unapplied feature scripts were consolidated into
+`20261027020245_backend_semester_release.sql` in dependency order. This is the only
+new migration after the 34 production records. The isolated runner executes this
+exact file; adviser, permission, enrollment, grade and FAQ regressions run afterward.
+Do not replay the recovered temporary-review migration against an already-provisioned project.
+
+With a fresh history export, `node scripts/check-migrations.mjs <history.json>
+--allow-pending` verifies recorded SQL while listing unapplied local migrations.
+Without that flag the check still rejects any extra local migration.
+
+## Earlier recovery
+
 `supabase/migrations/` contains the 27 migrations recorded by the production
 project `dusiokpfmkhutptomrqg` when its history was recovered on 2026-10-21.
 The SQL and version timestamps come from `supabase_migrations.schema_migrations`.

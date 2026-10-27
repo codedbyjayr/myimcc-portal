@@ -1,11 +1,15 @@
 -- Run with psql -v ON_ERROR_STOP=1 after the attendance assignment migration.
 -- All fixtures and writes are rolled back.
 BEGIN;
+SELECT set_config('request.jwt.claims','{}',true);
+INSERT INTO public.course_offerings(code,title,units,school_year,semester,enrollment_open)
+VALUES('ATT-OWN','Attendance own class',3,'2098-2099','1st Semester',true),
+ ('ATT-OTHER','Attendance other class',3,'2098-2099','1st Semester',true);
 CREATE TEMP TABLE attendance_test_ids AS
 SELECT gen_random_uuid() AS teacher, gen_random_uuid() AS student,
        gen_random_uuid() AS admin,
-       (SELECT id FROM public.course_offerings ORDER BY id LIMIT 1) AS own_offering,
-       (SELECT id FROM public.course_offerings ORDER BY id LIMIT 1 OFFSET 1) AS other_offering;
+       (SELECT id FROM public.course_offerings WHERE code='ATT-OWN') AS own_offering,
+       (SELECT id FROM public.course_offerings WHERE code='ATT-OTHER') AS other_offering;
 GRANT SELECT ON attendance_test_ids TO authenticated;
 
 DO $$
@@ -26,6 +30,8 @@ FROM attendance_test_ids i WHERE p.id IN(i.teacher,i.student,i.admin);
 
 INSERT INTO public.teacher_assignments(teacher_id,offering_id,academic_year,semester,is_active)
 SELECT teacher,own_offering,'attendance-test','1st Semester',true FROM attendance_test_ids;
+INSERT INTO public.enrollments(student_id,offering_id,status)
+SELECT student,offering,'enrolled' FROM attendance_test_ids,LATERAL unnest(ARRAY[own_offering,other_offering]) AS offerings(offering);
 INSERT INTO public.attendance(student_id,offering_id,date,status)
 SELECT student,other_offering,'2099-01-01','present' FROM attendance_test_ids;
 
@@ -46,14 +52,14 @@ BEGIN
     INSERT INTO public.attendance(student_id,offering_id,date,status)
     SELECT student,target_offering,'2099-01-02','absent' FROM attendance_test_ids;
     RAISE EXCEPTION 'Unauthorized attendance insert succeeded';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  EXCEPTION WHEN insufficient_privilege OR foreign_key_violation THEN NULL;
   END;
   BEGIN
     INSERT INTO public.attendance(student_id,offering_id,date,status)
     SELECT student,target_offering,'2099-01-01','absent' FROM attendance_test_ids
     ON CONFLICT(student_id,offering_id,date) DO UPDATE SET status=EXCLUDED.status;
     RAISE EXCEPTION 'Unauthorized attendance upsert succeeded';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  EXCEPTION WHEN insufficient_privilege OR foreign_key_violation THEN NULL;
   END;
 END;
 $$;

@@ -81,7 +81,7 @@ Two things follow from the trigger design, and both are handled in the UI. If no
 | **Styling & UI** | Custom Responsive Design Tokens, Glassmorphism, Print CSS (`@media print`) |
 | **Authentication** | Supabase Auth (Google OAuth SSO + TOTP Multi-Factor Authentication) |
 | **Backend / Database** | Supabase (PostgreSQL, Cloud-hosted) with Row Level Security (RLS) & Triggers |
-| **AI Assistant** | Supabase Edge Functions (Deno / TypeScript) + Groq API (`llama-3.3-70b-versatile`) |
+| **AI Assistant** | Supabase Edge Functions (Deno / TypeScript) + Groq API (`openai/gpt-oss-20b`) |
 | **Deployment / Infra** | Docker, Nginx, Portainer, Ngrok, Raspberry Pi 4, Vercel |
 | **Automation** | Node.js backup scripts (`scripts/backup-supabase.js`) |
 
@@ -135,8 +135,7 @@ myimcc-portal/
 │   ├── config.toml               # Supabase CLI project configuration
 │   └── functions/
 │       ├── faq-assistant/        # AI Groq chatbot Edge Function
-│       ├── mfa-enroll/           # TOTP enrollment function
-│       └── mfa-verify/           # TOTP challenge & verification function
+│       └── faq-reindex/          # FAQ embedding maintenance function
 ├── scripts/
 │   └── backup-supabase.js        # Automated Supabase schema & table backup script
 ├── config/
@@ -209,15 +208,14 @@ node shared/identity.test.mjs          # 84 assertions
 node shared/ui.test.mjs                # 49 assertions
 node shared/datetime.test.mjs          # 39 assertions
 node database/tools/check-scope-rules.mjs   # assistant scope: 26 assertions
-node supabase/functions/check-syntax.mjs    # Edge Function structure
-node database/tools/check-sql.js database/appointments.sql   # and each other migration
+npm run check:edge                    # Edge Function TypeScript checks
 node --check student/dashboard.js
 node --check staff/registrar-dashboard.js
 ```
 
-`supabase/functions/check-syntax.mjs` is a stand-in for `deno check`, not a replacement. It only proves the functions parse and that no binding is declared twice in the same block; it cannot check types. Run `deno check` where Deno is available.
+`npm run check:edge` checks the maintained Edge Function sources without emitting files. Login enrolls and verifies MFA through the Supabase Auth SDK directly.
 
-`database/tools/check-sql.js` catches unbalanced dollar-quoting, unbalanced `BEGIN`/`END`, unterminated comments, and calls to functions the script does not define. It is static only: it does not execute SQL, so it cannot prove a policy or trigger behaves correctly. The integration scripts under `database/` exist for that and need a live database.
+Run `npm run test:db` for the isolated SQL authorization and academic-workflow checks. These use fictional records and never connect to production.
 
 `database/test-appointments-and-messaging.sql` is the one script that exercises the support flow end to end: a student cannot open a peer channel, a filed request really does notify the help desk, a past Manila time is rejected by the database rather than only in the browser, and a registrar can still offer a time earlier than the student asked for. It runs in a transaction it rolls back, and it stands down pre-existing registrar and admin accounts for the duration so the routing assertions are deterministic on a live database. **It has never been executed**: Docker was unavailable while it was written, so it has only passed the static check. Treat its first run as a debugging session, not a green light.
 
@@ -261,14 +259,35 @@ A preconfigured [`vercel.json`](vercel.json) is included in the project root for
 
 ## 💾 Database Backups
 
-Run the automated Supabase backup script to export table records and schema snapshots:
+Install PostgreSQL client tools (`pg_dump` and `pg_restore`, matching the server
+major version or newer). Set `SUPABASE_DB_URL` in your environment or local `.env`
+to the intended database's direct or session-pooler connection URL. The script
+backs up that one database; management API tokens and project-name arguments are
+no longer used.
 
 ```bash
 npm install
 npm run backup
 ```
 
-Backups are saved to `database/backups/` as timestamped JSON archives.
+Backups are saved to `database/backups/` as PostgreSQL custom `.dump` archives,
+including database structures, table data, policies, functions and sequence values.
+Each run writes a summary. Failed exports exit nonzero and retain a `.partial`
+file; they are never published as completed archives. `pg_restore --list` checks
+the archive before publication, but does not prove a full restore.
+
+Rehearse restoration into a disposable database with compatible Supabase roles
+and extensions before relying on recovery:
+
+```powershell
+$env:PGDATABASE = $env:RESTORE_TEST_DB_URL # disposable destination only
+pg_restore --exit-on-error --single-transaction --no-owner --dbname "$env:PGDATABASE" "path/to/backup.dump"
+```
+
+Verify representative grades, enrollment links, arrays, policies and subsequent
+inserts there. Database archives do not include Storage file bytes, global roles,
+OAuth configuration or Edge Function secrets. Keep those in the recovery plan.
+Never restore a rehearsal over production.
 
 ---
 

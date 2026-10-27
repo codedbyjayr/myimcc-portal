@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { errorMessage } from '../_shared/errors.ts';
+import { embedFaq } from '../_shared/faq-embedding.ts';
 
 // ─────────────────────────────────────────────────────────────────────
 // Grounded FAQ assistant
@@ -17,43 +18,12 @@ import { errorMessage } from '../_shared/errors.ts';
 // that actually exist in that table.
 // ─────────────────────────────────────────────────────────────────────
 
-const EMBEDDING_DIM = 384;
 const MATCH_COUNT = 5;
 const SIMILARITY_THRESHOLD = 0.5;
 
-// Lazy-loaded MiniLM encoder. 384 dims, matching the vector(384) column
-// and match_faq_articles() signature in database/supabase-schema-v3-rag.sql.
-let encoderPromise: Promise<(text: string) => Promise<number[]>> | null = null;
-
-async function getEncoder() {
-  if (!encoderPromise) {
-    encoderPromise = (async () => {
-      const { pipeline, env } = await import(
-        'https://esm.sh/@xenova/transformers@2.17.2'
-      );
-      env.allowLocalModels = false;
-      const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-      return async (text: string): Promise<number[]> => {
-        const output = await extractor(text, { pooling: 'mean', normalize: true });
-        return Array.from(output.data as Float32Array);
-      };
-    })().catch((err) => {
-      console.error('embedding model unavailable, falling back to keyword search', err);
-      encoderPromise = null;
-      throw err;
-    });
-  }
-  return encoderPromise;
-}
-
 async function embed(text: string): Promise<number[] | null> {
-  try {
-    const encode = await getEncoder();
-    const vector = await encode(text);
-    return vector.length === EMBEDDING_DIM ? vector : null;
-  } catch {
-    return null;
-  }
+  try { return await embedFaq(text); }
+  catch { console.warn('faq_embedding_unavailable'); return null; }
 }
 
 interface FaqRow {
@@ -67,7 +37,6 @@ interface FaqRow {
 
 async function semanticSearch(
   supabase: any,
-  question: string,
   vector: number[],
 ): Promise<FaqRow[] | null> {
   const { data, error } = await supabase.rpc('match_faq_articles', {
@@ -93,7 +62,7 @@ async function keywordSearch(
   const terms = question
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter((t) => t.length > 2)
+    .filter((t) => t.length > 2 && !['how', 'what', 'where', 'can', 'the', 'for', 'and', 'that', 'this', 'with', 'does', 'are', 'you', 'your', 'about', 'there'].includes(t))
     .slice(0, 8);
 
   if (terms.length === 0) return [];
@@ -270,7 +239,7 @@ async function logExchange(
   extra: Record<string, unknown> = {},
 ): Promise<void> {
   try {
-    await supabase.from('chat_logs').insert({
+    const { error } = await supabase.from('chat_logs').insert({
       user_id: userId,
       user_message: question.slice(0, 2000),
       bot_response: answer.slice(0, 4000),
@@ -278,6 +247,7 @@ async function logExchange(
       // the existing sources JSON rather than needing an ALTER on a live table.
       sources: { resolved, ...extra, articles: sources },
     });
+    if (error) console.warn('faq_audit_write_failed', { code: error.code });
   } catch (error) {
     console.warn('chat_logs insert failed:', errorMessage(error));
   }
@@ -295,19 +265,26 @@ serve(async (req) => {
     });
 
   try {
-    const { message, history } = await req.json();
-    const question = (message || '').trim();
+    if (req.method !== 'POST') return json({ error: 'Only POST is allowed' }, 405);
+    const raw = await req.text();
+    if (raw.length > 24000) return json({ error: 'Request too large' }, 413);
+    let body;
+    try { body = JSON.parse(raw); } catch { return json({ error: 'Invalid JSON' }, 400); }
+    if (!body || typeof body.message !== 'string' || body.message.length > 1000) {
+      return json({ error: 'Message must be text of at most 1000 characters' }, 400);
+    }
+    const history = body.history ?? [];
+    if (!Array.isArray(history) || history.length > 10 || history.some(turn =>
+      !turn || !['user', 'assistant'].includes(turn.role) || typeof turn.content !== 'string'
+      || turn.content.length > (turn.role === 'user' ? 1000 : 1500))) {
+      return json({ error: 'Invalid conversation history' }, 400);
+    }
+    const question = body.message.trim();
     if (!question) {
       return json({ answer: NO_ANSWER, sources: [], resolved: false });
     }
 
-    // The service role key is required because match_faq_articles() is
-    // granted to `authenticated`, and an end user's JWT would otherwise
-    // be rejected for a public FAQ table.
-    //
-    // Built before the scope check, not after: a refusal is the most
-    // interesting thing in the log, because a run of refusals on the same
-    // topic is the signal that an article is missing.
+    // Service role is used only for published FAQ retrieval and attributable audit writes.
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     if (!supabaseKey || !supabaseUrl) {
@@ -323,6 +300,16 @@ serve(async (req) => {
 
     // Verified server-side so the audit log is attributable and unforgeable.
     const callerId = await resolveCallerId(supabase, req);
+    if (!callerId) return json({ error: 'Sign in to use the assistant' }, 401);
+    const { data: profile, error: profileError } = await supabase.from('profiles')
+      .select('status,is_active').eq('id', callerId).single();
+    if (profileError || profile?.status !== 'approved' || profile?.is_active !== true) {
+      return json({ error: 'An approved active account is required' }, 403);
+    }
+
+    const { data: allowed, error: limitError } = await supabase.rpc('consume_faq_request', { p_user_id: callerId });
+    if (limitError) return json({ error: 'The assistant is temporarily unavailable' }, 503);
+    if (allowed !== true) return json({ error: 'Too many questions. Please retry in one minute.' }, 429);
 
     // Personal records, medical matters and anything urgent are not
     // self-service. Rejected before retrieval so no article is used to answer
@@ -343,9 +330,12 @@ serve(async (req) => {
       return json({ answer: refusal, sources: [], resolved: false, outOfScope: true });
     }
 
-    const vector = await embed(question);
-    let rows = vector ? await semanticSearch(supabase, question, vector) : null;
-    if (!rows) rows = await keywordSearch(supabase, question);
+    const followUp = /\b(that|those|it|them|there)\b/i.test(question);
+    const previous = [...history].reverse().find(turn => turn.role === 'user');
+    const searchQuestion = followUp && previous ? previous.content + '\n' + question : question;
+    const vector = await embed(searchQuestion);
+    let rows = vector ? await semanticSearch(supabase, vector) : null;
+    if (!rows?.length) rows = await keywordSearch(supabase, searchQuestion);
 
     if (rows.length === 0) {
       // No article matched. Logged too: these are the questions the published
@@ -357,14 +347,15 @@ serve(async (req) => {
       return json({ answer: NO_ANSWER, sources: [], resolved: false });
     }
 
+    const articleReply = async (reason: string) => {
+      console.warn('faq_provider_fallback', { reason });
+      const answer = buildContext(rows!);
+      const sources = buildSources(rows!);
+      await logExchange(supabase, question, answer, sources, true, callerId, { provider: 'articles', reason });
+      return json({ answer, sources, resolved: true, provider: 'articles' });
+    };
     const groqApiKey = Deno.env.get('GROQ_API_KEY');
-    if (!groqApiKey) {
-      // No model configured. Return the retrieved articles themselves
-      // rather than composing an ungrounded answer.
-      const answer = buildContext(rows);
-      await logExchange(supabase, question, answer, buildSources(rows), true, callerId);
-      return json({ answer, sources: buildSources(rows), resolved: true });
-    }
+    if (!groqApiKey) return articleReply('not_configured');
 
     const systemPrompt = `You are the MyIMCC Portal assistant for Iligan Medical Center College.
 
@@ -389,28 +380,36 @@ ${buildContext(rows)}`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...(Array.isArray(history) ? history : []),
+      ...history.map(({ role, content }) => ({ role, content })),
       { role: 'user', content: question },
     ];
 
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${groqApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages,
-        temperature: 0.2,
-      }),
-    });
-
-    const aiData = await res.json();
-    const answer = aiData?.choices?.[0]?.message?.content;
-
-    if (!answer) {
-      return json({ error: 'FAQ assistant did not return an answer' }, 502);
+    let answer: string;
+    try {
+      const model = Deno.env.get('GROQ_MODEL') || 'openai/gpt-oss-20b';
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        signal: AbortSignal.timeout(15000),
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${groqApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          max_completion_tokens: 1200,
+          ...(model.startsWith('openai/gpt-oss-') ? { reasoning_effort: 'low', include_reasoning: false } : {}),
+          messages,
+          temperature: 0.2,
+        }),
+      });
+  
+      if (!res.ok) return articleReply('http_' + res.status);
+      const aiData = await res.json();
+      const content = aiData?.choices?.[0]?.message?.content;
+      if (typeof content !== 'string' || !content.trim()) return articleReply('empty_response');
+      answer = content;
+    } catch {
+      return articleReply('request_failed');
     }
 
     // A model that says it cannot help must not be recorded as an answer the
@@ -424,10 +423,10 @@ ${buildContext(rows)}`;
       lowered.includes("don't have that information");
 
     const sources = buildSources(rows);
-    await logExchange(supabase, question, answer, sources, !gaveUp, callerId);
+    await logExchange(supabase, question, answer, sources, !gaveUp, callerId, { provider: 'groq' });
 
     // sources are the retrieved articles, never the model.
-    return json({ answer, sources, resolved: !gaveUp });
+    return json({ answer, sources, resolved: !gaveUp, provider: 'groq' });
   } catch (error) {
     console.error('faq-assistant request failed:', errorMessage(error));
     return json({ error: 'Internal server error' }, 500);

@@ -2,10 +2,13 @@
   "type": "module",
   "scripts": {
     "test": "node scripts/test.mjs",
+    "test:backend": "node scripts/backup-supabase.test.mjs && node scripts/check-release.test.mjs && node scripts/deploy-backend-functions.test.mjs && node scripts/faq-assistant.test.mjs",
+    "test:db": "node scripts/test-adviser-db.mjs",
     "test:portal": "node scripts/test-portal.mjs",
     "backup": "node scripts/backup-supabase.js",
-    "check:edge": "tsc -p supabase/functions",
-    "check:edge:parse": "node supabase/functions/check-syntax.mjs"
+    "check:release": "node scripts/check-release.mjs",
+    "deploy:backend:functions": "node scripts/deploy-backend-functions.mjs",
+    "check:edge": "tsc -p supabase/functions --noEmit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3"

@@ -50,5 +50,10 @@
         }
       ]
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "codex/backend-semester-release": false
+    }
+  }
 }
