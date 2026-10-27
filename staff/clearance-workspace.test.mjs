@@ -4,7 +4,7 @@ import vm from 'node:vm';
 const html=readFileSync(new URL('./staff-dashboard.html',import.meta.url),'utf8');
 assert(html.indexOf('../env-config.js')<html.indexOf('../shared/supabase-config.js'));
 assert(html.indexOf('../shared/ui.js')<html.indexOf('let allClearances'));
-const script=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(match=>match[1]).find(code=>code.includes('let allClearances'));
+const script=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map(match=>match[1]).find(code=>code.includes('let allClearances'));
 const elements=new Map();
 const get=id=>{if(!elements.has(id))elements.set(id,{value:'',innerHTML:'',textContent:'',style:{},handlers:{},addEventListener(name,fn){this.handlers[name]=fn;}});return elements.get(id);};
 const payload=`<img src=x onerror="alert(1)">'&`;
