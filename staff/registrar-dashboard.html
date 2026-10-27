@@ -64,7 +64,7 @@
 
             <nav aria-label="Registrar sections">
                 <div class="nav-label">Main Menu</div>
-                <a class="nav-item" href="enrollment-requests.html">Enrollment Requests</a>
+                <a class="nav-item" href="enrollment-requests.html">Enrollment / Advising</a>
                 <button class="nav-item active" data-view="dashboard" type="button" aria-current="page">
                     <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10l9-7 9 7v10a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg></span>
                     Dashboard
@@ -173,8 +173,23 @@
                 </div>
             </section>
 
+            <label for="registrarTerm">Academic semester</label>
+            <select id="registrarTerm" aria-label="Academic semester"></select>
+            <label for="registrarYear">Year level</label>
+            <select id="registrarYear"><option value="">All year levels</option><option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option></select>
             <!-- -------- PROSPECTUS VIEW -------- -->
             <section id="view-prospectus" class="hidden" aria-labelledby="pageTitle">
+                <details class="panel" id="summerPublisher">
+                    <summary>Publish a Summer subject</summary>
+                    <p>Offer an existing subject for a failed-prerequisite retake or GE enrollment. Prerequisite rules still apply. Assign an instructor before enrollment opens.</p>
+                    <form id="summerOfferingForm">
+                        <div class="field"><label for="summerSubject">Existing subject</label><select id="summerSubject" required></select></div>
+                        <div class="field"><label for="summerSchoolYear">School year</label><input id="summerSchoolYear" required pattern="[0-9]{4}-[0-9]{4}" placeholder="2026-2027"></div>
+                        <div class="field"><label for="summerSchedule">Schedule</label><input id="summerSchedule" maxlength="200" placeholder="Schedule TBA"></div>
+                        <button class="btn btn-primary" type="submit">Publish Summer offering</button>
+                        <p id="summerPublishStatus" role="status"></p>
+                    </form>
+                </details>
                 <div class="panel">
                     <div class="panel-head">
                         <h3>Prospectus</h3>

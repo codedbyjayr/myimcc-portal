@@ -22,7 +22,7 @@ await vm.runInContext('loadInstructorOptions()', context);
 assert.deepEqual(Array.from(state.instructorOptions, p => p.id), ['teacher', 'self']);
 assert.deepEqual(Array.from(state.facultyList, p => p.id), ['teacher', 'self']);
 vm.runInContext('renderInstructorDropdown()', context);
-assert(getEl('instructorSelectWrapper').innerHTML.includes('Demo Dean (You — Dean)'));
+assert(getEl('instructorSelectWrapper').innerHTML.includes('Demo Dean (You)'));
 vm.runInContext("renderInstructorDropdown('self', 'Demo Dean', true)", context);
 assert(getEl('instructorSelectWrapper').innerHTML.includes('value="self" selected'));
 assert(!getEl('instructorSelectWrapper').innerHTML.includes('legacy-assignment-alert'));
@@ -35,13 +35,14 @@ const start = source.indexOf('    async function loadAllData(');
 vm.runInContext(source.slice(start, source.indexOf('    // ═', start)), context);
 state.instructorOptions = null;
 let release;
-context.supabaseClient.rpc = name => name === 'get_dean_student_directory' ? Promise.resolve({ data: [] }) : new Promise(resolve => { release = resolve; });
+context.supabaseClient.rpc = name => name === 'list_student_records' ? Promise.resolve({ data: [] }) : new Promise(resolve => { release = resolve; });
 context.supabaseClient.from = table => ({
   select() { return this; }, eq() { return this; }, order() { return this; },
-  range() { return this; },
-  then(resolve, reject) { return Promise.resolve({ data: table === 'profiles' ? [{ id: 'self', full_name: 'Demo Dean', role: 'dean', status: 'approved' }] : table === 'course_offerings' ? state.offerings : [] }).then(resolve, reject); },
+  range(from, to) { this.from = from; this.to = to; return this; },
+  then(resolve, reject) { return Promise.resolve({ data: (table === 'profiles' ? [{ id: 'self', full_name: 'Demo Dean', role: 'dean', status: 'approved' }] : table === 'course_offerings' ? state.offerings : []).slice(this.from || 0, (this.to ?? 499) + 1) }).then(resolve, reject); },
 });
-context.IMCC = { fetchAll: query => query() };
+context.document.currentScript = null;
+vm.runInContext(readFileSync(new URL('../shared/identity.js', import.meta.url), 'utf8'), context);
 let loaded = false;
 const loading = vm.runInContext('loadAllData()', context).then(() => { loaded = true; });
 await new Promise(resolve => setImmediate(resolve));
@@ -51,4 +52,8 @@ await loading;
 vm.runInContext('renderAssignments()', context);
 assert(getEl('assignBody').innerHTML.includes('Demo Teacher'), 'Teacher appears on first assignment render without opening Edit');
 assert(getEl('assignBody').innerHTML.includes('Demo Dean (You)'));
+const previous = state.offerings;
+context.supabaseClient.rpc = async () => ({ error: { message: 'Network unavailable' } });
+await assert.rejects(vm.runInContext('loadAllData()', context), /Network unavailable/);
+assert.equal(state.offerings, previous, 'Failed refresh must preserve the last complete dashboard state');
 console.log('Dean instructors: self-teaching, add/edit, and delayed startup assignment dropdown passed');

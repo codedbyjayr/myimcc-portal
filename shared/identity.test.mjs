@@ -197,6 +197,14 @@ eq(IMCC.isCurrentPage('/onboarding/select-role.html', '/'), false, 'a directory 
 eq(IMCC.isCurrentPage('/x/', '/x/'), true, 'the same bare directory is the same page');
 eq(IMCC.isCurrentPage('/x/index.html', '/x/'), false, 'a directory index and a named file are different pages');
 
+eq(IMCC.termKey({school_year:'2026–2027',semester:'Summer'}), '2026-2027|Summer', 'term keys normalize school-year dashes');
+eq(IMCC.termKeys([
+  {school_year:'2026–2027',semester:'1st Semester'},
+  {school_year:'2026-2027',semester:'1st Semester'},
+  {school_year:'2026-2027',semester:'Summer'},
+  {school_year:'2026-2027',semester:'2nd Semester'},
+  {school_year:'2025-2026',semester:'Summer'}
+]).join(','), '2026-2027|Summer,2026-2027|2nd Semester,2026-2027|1st Semester,2025-2026|Summer', 'terms are distinct by year and semester, newest first');
 console.log(`\nidentity.js: ${passed} passed, ${failures.length} failed`);
 if (failures.length) {
   console.log('\nFAILURES:');
