@@ -242,7 +242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             previewFrame.title = previewRole.selectedOptions[0].textContent + ' dashboard';
             previewFrame.hidden = false;
             previewStatus.textContent = demoSession ? 'DEMO ONLY · ' + previewRole.selectedOptions[0].textContent + ' · ' + user.email : 'Viewing as ' + previewRole.selectedOptions[0].textContent + ' — read only';
-            previewPanel.querySelector('.preview-note').textContent = demoSession ? 'Interactive fictional records only. Changes stay in the review area. Ends at ' + new Date(demoSession.expiresAt).toLocaleTimeString() + '.' : 'Admin data preview · Uses your account permissions and assignments. Use the demo for fictional role workflows; verify real access with each role’s approved account.';
+            previewPanel.querySelector('.preview-note').textContent = demoSession ? 'Interactive fictional records only. Changes stay in the review area. Ends at ' + new Date(demoSession.expiresAt).toLocaleTimeString() + '.' : 'Read only · Uses your admin account\'s permitted data. No role changes or user impersonation.';
         } catch (error) {
             if (previewChannel !== channel) return;
             closePreview();
@@ -297,11 +297,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2. Fetch Pending Requests
     async function loadPendingUsers() {
-        const { data: users, error } = await supabaseClient
+        const { data: users, error } = await IMCC.fetchAll(() => supabaseClient
             .from('profiles')
             .select('*')
             .eq('status', 'pending')
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: true }));
 
         if (error) return;
 
@@ -314,11 +314,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 3. Fetch Approved Users & Render Interactive Select Dropdowns
     async function loadApprovedUsers() {
-        const { data: users, error } = await supabaseClient
+        const { data: users, error } = await IMCC.fetchAll(() => supabaseClient
             .from('profiles')
             .select('*')
             .eq('status', 'approved')
-            .order('full_name', { ascending: true });
+            .order('full_name', { ascending: true }));
 
         if (error) return;
 

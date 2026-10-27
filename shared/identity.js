@@ -365,9 +365,23 @@
     }
   }
 
+  function termKey(row) {
+    return String(row.school_year || '').replace(/[\u2013\u2014]/g, '-') + '|' + (row.semester || '');
+  }
+
+  function termKeys(rows) {
+    const semesterOrder = ['1st Semester', '2nd Semester', 'Summer'];
+    return [...new Set(rows.map(termKey))].sort((a, b) => {
+      const [ay, as] = a.split('|'), [by, bs] = b.split('|');
+      return by.localeCompare(ay) || semesterOrder.indexOf(bs) - semesterOrder.indexOf(as);
+    });
+  }
+
   // ── Export ──────────────────────────────────────────────────────────
   global.IMCC = Object.assign(global.IMCC || {}, {
     fetchAll,
+    termKey,
+    termKeys,
     ROLES,
     REQUESTABLE_ROLES,
     PORTALS,

@@ -13,6 +13,6 @@ await refresh(['grades']);assert.deepEqual(calls.at(-1),['grades']);assert(!call
 console.log('Student updates: own-record filters, unsaved selections, submission guards, targeted grade refresh and closed-modal behavior passed.');
 
 const selectionLine=source.split('\n').find(line=>line.includes('state.selectedOfferingIds = background ?'));
-const selectedState={selectedOfferingIds:new Set(['rejected','pending']),courses:[{offering_id:'rejected',enrollmentStatus:'rejected'},{offering_id:'pending',enrollmentStatus:'pending'}]};
+const selectedState={selectedOfferingIds:new Set(['rejected','pending','closed']),courses:[{offering_id:'rejected',enrollmentStatus:'rejected',enrollment_open:true},{offering_id:'pending',enrollmentStatus:'pending',enrollment_open:true},{offering_id:'closed',enrollmentStatus:'rejected',enrollment_open:false}]};
 vm.runInNewContext(selectionLine,{state:selectedState,background:true});
 assert.deepEqual([...selectedState.selectedOfferingIds],['rejected'],'Retry choices survive a fetch while already submitted subjects are removed');

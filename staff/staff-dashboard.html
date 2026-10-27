@@ -55,7 +55,7 @@
     <div>
       <h1>Staff Dashboard</h1>
       <p>Manage clearances and student records</p>
-      <a href="enrollment-requests.html">Enrollment Requests</a>
+      <a href="enrollment-requests.html">Enrollment / Advising</a>
     </div>
     <button class="btn-logout" id="signOutBtn">Sign Out</button>
   </div>
@@ -109,8 +109,10 @@
   </div>
 </div>
 
+<script src="../env-config.js"></script>
 <script src="../shared/supabase-config.js"></script>
 <script src="../shared/identity.js"></script>
+<script src="../shared/ui.js"></script>
 <script src="../shared/authGuard.js"></script>
 <script src="../shared/loading.js"></script>
 <script>
@@ -131,10 +133,7 @@ async function init() {
 
 async function loadClearances() {
   try {
-    const { data, error } = await supabaseClient
-      .from('clearances')
-      .select('*, profiles!inner(student_no, full_name, program)')
-      .order('created_at', { ascending: false });
+    const { data, error } = await IMCC.fetchAll(() => supabaseClient.rpc('get_clearance_workspace'));
 
     if (error) throw error;
 
@@ -146,11 +145,11 @@ async function loadClearances() {
     const depts = [...new Set(allClearances.map(c => c.department_name))];
     const filter = document.getElementById('filterDept');
     filter.innerHTML = '<option value="">All Departments</option>' +
-      depts.map(d => `<option value="${d}">${d}</option>`).join('');
+      depts.map(d => `<option value="${UIM.escapeHtml(d)}">${UIM.escapeHtml(d)}</option>`).join('');
   } catch (err) {
     console.error('Clearance load error:', err);
     document.getElementById('clearanceTable').innerHTML =
-      `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--red);">Error loading data: ${err.message}</td></tr>`;
+      `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--red);">Error loading data: ${UIM.escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -177,12 +176,12 @@ function renderTable() {
 
   document.getElementById('clearanceTable').innerHTML = filtered.map(c => `
     <tr>
-      <td><strong>${c.profiles?.full_name || '—'}</strong><br><span style="font-size:11px;color:var(--ink-500);">${c.profiles?.student_no || ''}</span></td>
-      <td>${c.profiles?.program || '—'}</td>
-      <td>${c.department_name}</td>
-      <td><span class="badge ${badgeClass[c.status] || 'badge-pending'}">${c.status.replace('_',' ').toUpperCase()}</span></td>
-      <td style="font-size:11px;color:var(--ink-500);">${c.note || '—'}</td>
-      <td>${c.status !== 'cleared' ? `<button class="btn-clear" onclick="clearStudent('${c.student_id}','${c.department_code}')">Mark Cleared</button>` : '—'}</td>
+      <td><strong>${UIM.escapeHtml(c.profiles?.full_name || '—')}</strong><br><span style="font-size:11px;color:var(--ink-500);">${UIM.escapeHtml(c.profiles?.student_no || '')}</span></td>
+      <td>${UIM.escapeHtml(c.profiles?.program || '—')}</td>
+      <td>${UIM.escapeHtml(c.department_name)}</td>
+      <td><span class="badge ${badgeClass[c.status] || 'badge-pending'}">${UIM.escapeHtml(c.status.replace('_',' ').toUpperCase())}</span></td>
+      <td style="font-size:11px;color:var(--ink-500);">${UIM.escapeHtml(c.note || '—')}</td>
+      <td>${c.status !== 'cleared' ? `<button type="button" class="btn-clear" data-student-id="${UIM.escapeHtml(c.student_id)}" data-dept-code="${UIM.escapeHtml(c.department_code)}">Mark Cleared</button>` : '—'}</td>
     </tr>
   `).join('');
 }
@@ -198,12 +197,14 @@ function renderStats() {
 async function clearStudent(studentId, deptCode) {
   if (!confirm(`Mark this student as cleared for ${deptCode}?`)) return;
   try {
-    const { error } = await supabaseClient
+    const { data, error } = await supabaseClient
       .from('clearances')
       .update({ status: 'cleared', cleared_at: new Date().toISOString() })
       .eq('student_id', studentId)
-      .eq('department_code', deptCode);
+      .eq('department_code', deptCode)
+      .select('id').single();
     if (error) throw error;
+    if (!data?.id) throw new Error('No clearance was changed. Refresh and retry.');
 
     showToast('Clearance approved successfully');
     await loadClearances();
@@ -221,6 +222,10 @@ function showToast(msg, isError) {
 }
 
 document.getElementById('searchInput').addEventListener('input', renderTable);
+document.getElementById('clearanceTable').addEventListener('click', event => {
+  const button = event.target.closest('button[data-student-id]');
+  if (button) clearStudent(button.dataset.studentId, button.dataset.deptCode);
+});
 document.getElementById('filterDept').addEventListener('change', renderTable);
 document.getElementById('filterStatus').addEventListener('change', renderTable);
 

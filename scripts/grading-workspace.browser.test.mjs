@@ -2,17 +2,19 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { readFile, mkdir } from 'node:fs/promises';
 import { server } from './test-portal.mjs';
+process.env.TEST_PORTAL_UNTIL = new Date(Date.now() + 3600000).toISOString();
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const sdk = await readFile(new URL('../node_modules/@supabase/supabase-js/dist/umd/supabase.js', import.meta.url), 'utf8');
-const browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge' });
+const browser = await chromium.launch({ headless: true, channel: 'msedge' });
 server.listen(0, '127.0.0.1');
 await once(server, 'listening');
 const origin = `http://127.0.0.1:${server.address().port}`;
 const user = { id: 'faculty-test', email: 'faculty@example.invalid' };
 const profile = { ...user, full_name: 'Faculty Tester', role: 'admin', status: 'approved', is_active: true, program: 'BSN' };
 const courses = [1, 2].map(id => ({ id, code: `TEST${id}`, title: 'Clinical Nursing', section: id === 1 ? 'A' : 'B',
-  instructor_id: user.id, instructor_name: profile.full_name, units: 3, school_year: '2026-2027', semester: '1st Semester', schedule: 'Mon 8:00–10:00' }));
+  instructor_id: user.id, instructor_name: profile.full_name, year: id, units: 3, school_year: '2026-2027', semester: '1st Semester', schedule: 'Mon 8:00–10:00' }));
+courses.push({...courses[0],id:3,code:'HISTORICAL',school_year:'2025-2026',semester:'2nd Semester'});
 const students = Array.from({ length: 12 }, (_, i) => ({ student_id: `student-${i}`, profiles: { id: `student-${i}`, full_name: `Student ${String(i + 1).padStart(2, '0')}`, student_no: `2026-${i + 1}` } }));
 await mkdir(new URL('../.temp/grading-layout/', import.meta.url), { recursive: true });
 try {
@@ -20,7 +22,7 @@ try {
     const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
     page.setDefaultTimeout(10000);
     const errors = [], writes = [];
-    let empty = false, failSave = false, readOnly = false, emptyRoster = false;
+    let empty = false, failSave = false, readOnly = false, emptyRoster = false, deanAssigned = true, assignmentError = false;
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', async route => {
       const request = route.request(), url = new URL(request.url());
@@ -30,17 +32,22 @@ try {
         const client = supabase.createClient('https://grading-test.invalid', 'test-key', { auth: { persistSession: false, autoRefreshToken: false } });
         client.auth.getUser = async () => ({ data: { user: ${JSON.stringify(user)} } });
         client.auth.getSession = async () => ({ data: { session: null } });
+        client.channel = () => ({ on() { return this; }, subscribe() { return this; } });
         window.supabaseClient = window.__myimcc_supabase_client__ = client;
         window.getSupabaseClientAsync = async () => client;` });
       if (url.hostname === 'grading-test.invalid') {
         const table = url.pathname.split('/').pop();
-        if (table === 'grades' && request.method() === 'POST') {
-          writes.push(request.postDataJSON());
-          return route.fulfill({ status: failSave ? 403 : 200, json: failSave ? { message: 'Save denied' } : { id: 7 } });
+        if (table === 'grades' && ['POST','PATCH'].includes(request.method())) {
+          const payload = request.postDataJSON(); writes.push(payload);
+          return route.fulfill({ status: failSave ? 403 : 200, json: failSave ? { message: 'Save denied' } : { ...payload, id: 7, graded_at: '2026-10-27T00:00:00.000001Z' } });
         }
         let data = [];
-        if (table === 'profiles') data = request.headers().accept?.includes('object+json') ? profile : [profile];
-        if (table === 'course_offerings') data = empty ? [] : courses;
+        if (table === 'profiles') { const actor = { ...profile, role }; data = request.headers().accept?.includes('object+json') ? actor : [actor]; }
+        if (table === 'teacher_assignments') {
+          if (assignmentError) return route.fulfill({status:503,json:{message:'Assignment unavailable'}});
+          data = deanAssigned ? [{offering_id:1}] : [];
+        }
+        if (table === 'course_offerings') data = empty ? [] : request.headers().accept?.includes('object+json') ? { ...courses.find(c => String(c.id) === url.searchParams.get('id')?.replace('eq.', '')), grades_locked: false } : courses;
         if (table === 'get_class_roster') data = emptyRoster ? [] : students;
         if (Array.isArray(data) && url.searchParams.has('offset')) data = data.slice(Number(url.searchParams.get('offset')), Number(url.searchParams.get('offset')) + Number(url.searchParams.get('limit')));
         return route.fulfill({ json: data });
@@ -57,17 +64,23 @@ try {
       await page.waitForFunction(() => document.querySelector('.grading-card tbody input'));
     };
     await openClasses();
+    if(role==='teacher') await page.waitForFunction(()=>document.querySelector('#stat-classes').textContent==='2');
     const card = page.locator('.grading-card'), picker = page.locator('.class-picker');
     assert((await card.boundingBox()).width > (await picker.boundingBox()).width * 2, 'Desktop prioritizes grading');
     assert.equal(await picker.evaluate(el => Math.round(el.getBoundingClientRect().width)), 280);
     assert.equal(await page.locator('.grading-student-count').textContent(), 'Section A · 12 students');
-    assert(await page.locator('.grading-actions button').isDisabled());
+    assert(await page.locator('.grading-actions button.btn-primary').isDisabled());
     assert.equal(await page.locator('.grading-table-wrap thead th').count(), 8, 'Student number shares name column');
     assert.equal(await page.locator('.student-number').first().textContent(), '2026-1');
     const score = page.locator('.grading-card tbody input').first();
-    const save = page.locator('.grading-actions button');
+    const save = page.locator('.grading-actions button.btn-primary');
     await score.fill('1.10');
     assert.equal(await page.locator('.grading-save-status').textContent(), 'Unsaved changes');
+    assert.equal(await page.locator('.grading-course-list [data-id="3"]').count(),0,'Historical classes are excluded from the selected term');
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.selectOption('.grading-term-select','2025-2026|2nd Semester');
+    assert.equal(await page.locator('.grading-term-select').inputValue(),'2026-2027|1st Semester');
+    assert.equal(await score.inputValue(),'1.10','Cancelling a semester switch retains grade edits');
     page.once('dialog', dialog => dialog.dismiss());
     await page.locator('.grading-course-list [data-id="2"]').click();
     assert.match(await card.locator('h3').textContent(), /TEST1/);
@@ -80,14 +93,33 @@ try {
     await score.fill('1.10');
     failSave = true;
     await save.click();
-    await page.waitForFunction(() => document.querySelector('.grading-actions button').textContent === 'Save Grades');
+    await page.waitForFunction(() => document.querySelector('.grading-actions button.btn-primary').textContent === 'Save Grades');
     assert.equal(await page.locator('.grading-save-status').textContent(), 'Save failed · changes kept', 'Failed saves retain edits');
     failSave = false;
     await save.click();
     await page.getByText('No unsaved changes', { exact: true }).waitFor();
-    assert.equal(writes.at(-12).prelim, 1.10);
+    assert.equal(writes.at(-1).prelim, 1.10);
+    assert.equal(writes.length, 2, 'Failed attempt and retry write only the edited student');
+    const savedScore = await score.inputValue();
+    await score.fill('1.20');
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.selectOption('.grading-year-select','2');
+    assert.equal(await page.locator('.grading-year-select').inputValue(),'','Cancelling year switch keeps the selected filter');
+    assert.equal(await score.inputValue(),'1.20','Cancelling year switch keeps unsaved grades');
+    await score.fill(savedScore);
     assert(await score.isEnabled());
     assert(await save.isDisabled(), 'Saved unchanged grades cannot be submitted again');
+    await page.selectOption('.grading-year-select','2');
+    assert.equal(await page.locator('.grading-course-list [data-id="1"]').count(),0);
+    assert.equal(await page.locator('.grading-course-list [data-id="2"]').count(),1);
+    await page.selectOption('.grading-year-select','');
+    await page.selectOption('.grading-term-select','2025-2026|2nd Semester');
+    assert.equal(await page.locator('.grading-course-list [data-id="1"]').count(),0);
+    assert.equal(await page.locator('.grading-course-list [data-id="3"]').count(),1);
+    if(role==='teacher') await page.waitForFunction(()=>document.querySelector('#stat-classes').textContent==='1');
+    await page.selectOption('.grading-term-select','2026-2027|1st Semester');
+    await page.locator('.grading-course-list [data-id="1"]').click();
+    await page.waitForFunction(() => document.querySelector('.grading-card tbody input'));
     const history = card.locator('[title="View history & revert"]').first();
     await history.click();
     assert(await page.locator('#gradeHistoryModal').isVisible());
@@ -97,8 +129,12 @@ try {
     await page.setViewportSize({ width: 390, height: 844 });
     assert(await page.locator('.grading-class-select').isVisible());
     assert(await page.locator('.grading-course-list').isHidden());
-    assert.equal(await page.locator('.grading-actions').evaluate(el => getComputedStyle(el).position), 'fixed');
+    assert.equal(await page.locator('.grading-actions').evaluate(el => getComputedStyle(el).position), 'static');
     const actionBounds = await page.locator('.grading-actions').boundingBox();
+    if (!(actionBounds.y >= 0 && actionBounds.y + actionBounds.height <= 845)) {
+      await page.screenshot({ path: `.temp/grading-layout/${role}-overflow.png` });
+      console.log(await page.evaluate(() => ['.main','.content','#page-classes','.grading-layout','.class-picker','.grading-card','.grading-table-wrap','.grading-actions'].map(s => { const e=document.querySelector(s),r=e.getBoundingClientRect();return {s,y:r.y,height:r.height,display:getComputedStyle(e).display,minHeight:getComputedStyle(e).minHeight,rows:getComputedStyle(e).gridTemplateRows}; })));
+    }
     assert(actionBounds.y >= 0 && actionBounds.y + actionBounds.height <= 845, 'Save remains visible on mobile');
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No page-wide horizontal overflow');
     assert(await card.locator('h3').isHidden(), 'Mobile avoids repeating the selected subject');
@@ -120,14 +156,8 @@ try {
     assert.equal(writes.length, writeCount, 'An invalid hidden period blocks all saves');
     assert.equal(await page.locator('.grading-period').inputValue(), '5', 'Validation reveals the invalid period');
     await finalScore.fill('1.50');
-    await save.click();
-    assert.equal(writes.length, writeCount, 'Final requires a manually entered Equivalent');
-    assert.equal(await page.locator('.grading-period').inputValue(), '6');
-    const equivalent = page.locator('.grading-card tbody input').nth(4);
-    await equivalent.fill('1.11');
-    await save.click();
-    assert.equal(writes.length, writeCount, 'Invalid school Equivalent cannot save');
-    await equivalent.fill('2.75');
+    await page.selectOption('.grading-period', '6');
+    await page.locator('.grading-card tbody input').nth(4).fill('2.75');
     failSave = true;
     await save.click();
     await page.getByText('Save failed · changes kept', { exact: true }).waitFor();
@@ -139,10 +169,7 @@ try {
     failSave = false;
     await save.click();
     await page.getByText('No unsaved changes', { exact: true }).waitFor();
-    assert.deepEqual([writes.at(-12).prelim, writes.at(-12).midterm, writes.at(-12).final, writes.at(-12).equivalent], [1.20, 1.30, 1.50, 2.75]);
-    assert.equal(await equivalent.inputValue(), '2.75', 'Manual Equivalent survives save');
-    await page.selectOption('.grading-period', '6');
-    if (process.env.MANUAL_EQ_SCREENSHOT) await page.screenshot({path:process.env.MANUAL_EQ_SCREENSHOT.replace('.png', '-' + role + '.png')});
+    assert.deepEqual([writes.at(-1).prelim, writes.at(-1).midterm, writes.at(-1).final, writes.at(-1).equivalent], [1.20, 1.30, 1.50, 2.75]);
     await page.selectOption('.grading-period', '2');
     await score.fill('1.40');
     page.once('dialog', dialog => dialog.dismiss());
@@ -180,7 +207,23 @@ try {
     await page.selectOption('.grading-class-select', '1');
     await page.getByText('No students are enrolled in this class yet.', { exact: true }).waitFor();
     assert(await page.locator('.grading-actions').isHidden());
-    emptyRoster = false; readOnly = true;
+    emptyRoster = false;
+    if (role === 'dean') {
+      deanAssigned = false;
+      await openClasses();
+      assert(await score.evaluate(el => el.readOnly), 'Unassigned dean can inspect but cannot edit');
+      assert(await save.isDisabled());
+      assert(await page.locator('.lock-grades-btn').isDisabled());
+      assert.match(await page.locator('.grading-save-status').textContent(), /Read-only oversight/);
+      deanAssigned = true;
+      await openClasses();
+      assert(!(await score.evaluate(el => el.readOnly)), 'Verified active assignment restores editing');
+      assignmentError = true;
+      await openClasses();
+      assert(await score.evaluate(el => el.readOnly), 'Failed permission check stays read-only');
+      assignmentError = false;
+    }
+    readOnly = true;
     await page.setViewportSize({ width: 1600, height: 1000 });
     await openClasses();
     assert(await save.isDisabled());

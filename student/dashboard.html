@@ -54,6 +54,14 @@
       </div>
 
       <div class="nav-label">Main Menu</div>
+      <button class="nav-item" data-page="enrollment">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 20l9-5-9-5-9 5 9 5z" />
+          <path d="M12 12L3 7l9-5 9 5-9 5z" />
+        </svg>
+        Enrollment / Advising
+      </button>
+
       <button class="nav-item active" data-page="dashboard">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="3" width="7" height="9" rx="1.5" />
@@ -62,13 +70,6 @@
           <rect x="3" y="16" width="7" height="5" rx="1.5" />
         </svg>
         Dashboard
-      </button>
-      <button class="nav-item" data-page="enrollment">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 20l9-5-9-5-9 5 9 5z" />
-          <path d="M12 12L3 7l9-5 9 5-9 5z" />
-        </svg>
-        Enrollment
       </button>
       <button class="nav-item" data-page="billing">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -105,13 +106,6 @@
       <div id="ssoLinksNav"></div>
 
       <div class="nav-label">Academics</div>
-      <button class="nav-item" data-page="schedule">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="4" width="18" height="17" rx="2" />
-          <path d="M3 9h18M8 2v4M16 2v4M8 14h3M8 17h6" />
-        </svg>
-        Class Schedule
-      </button>
       <button class="nav-item" data-page="attendance">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -363,6 +357,9 @@
 
         <!-- ================= ENROLLMENT ================= -->
         <section class="page" id="page-enrollment">
+          <label for="enrollmentTerm">Enrollment term (including Summer)</label><select id="enrollmentTerm" class="field-input" aria-label="Enrollment term"></select>
+          <button type="button" id="refreshEnrollment" class="btn btn-ghost">Refresh enrollment</button>
+          <p id="enrollmentLockStatus" role="status"></p>
           <div class="steps" id="enrollSteps">
             <div class="step active" id="stepTab1">
               <div class="step-num">1</div>Course Selection
@@ -540,6 +537,7 @@
                   style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">Loading program
                   info…</span></h3>
               <div class="grades-tools">
+                <label for="gradeYearFilter">Filter by Year Level</label><select id="gradeYearFilter" class="field-input"><option value="">All year levels</option><option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option></select>
                 <span class="pill pill-soft" style="padding:6px 12px;" id="gradesTermPill">Loading…</span>
                 <button class="btn-ghost" id="prospectusBtn"
                   style="padding:6px 12px;border:1px solid var(--line);border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;background:var(--bg);color:var(--ink-700);transition:all 0.2s;font-weight:700;">View Degree Prospectus</button>
@@ -839,62 +837,7 @@
           </div>
         </section>
 
-        <section class="page" id="page-schedule">
-          <div class="grid-4">
-            <div class="stat">
-              <div class="stat-top"><span class="stat-label">ENROLLED SUBJECTS</span></div>
-              <div class="stat-value" id="sched-subjects">—</div>
-              <div class="stat-sub">Currently enrolled</div>
-            </div>
-            <div class="stat" style="border-left-color:var(--green);">
-              <div class="stat-top"><span class="stat-label">WEEKLY SESSIONS</span></div>
-              <div class="stat-value" style="color:var(--green);" id="sched-sessions">—</div>
-              <div class="stat-sub">Class meetings per week</div>
-            </div>
-            <div class="stat" style="border-left-color:var(--amber);">
-              <div class="stat-top"><span class="stat-label">UNITS</span></div>
-              <div class="stat-value" style="color:var(--amber);" id="sched-units">—</div>
-              <div class="stat-sub">Total credit units</div>
-            </div>
-            <div class="stat" style="border-left-color:var(--red);">
-              <div class="stat-top"><span class="stat-label">UNSCHEDULED</span></div>
-              <div class="stat-value" style="color:var(--red);" id="sched-unscheduled">—</div>
-              <div class="stat-sub">Enrolled, no time set</div>
-            </div>
-          </div>
 
-          <div class="card card-pad">
-            <div class="card-head">
-              <h3>Weekly Class Schedule</h3>
-              <button class="mini-btn" type="button" id="schedRefresh">Refresh</button>
-            </div>
-
-            <p class="sched-note" id="schedNote" hidden></p>
-
-            <div class="table-responsive">
-              <table class="sched-table">
-                <caption class="sr-only">
-                  Your enrolled subjects with meeting day, time, room and instructor
-                </caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Day</th>
-                    <th scope="col">Time</th>
-                    <th scope="col">Subject</th>
-                    <th scope="col">Units</th>
-                    <th scope="col">Room</th>
-                    <th scope="col">Instructor</th>
-                  </tr>
-                </thead>
-                <tbody id="schedBody">
-                  <tr>
-                    <td colspan="6" class="table-empty">Loading your schedule…</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
 
         <section class="page" id="page-attendance">
           <div class="grid-4">
@@ -948,7 +891,8 @@
         <section class="page" id="page-evaluation">
           <div class="card card-pad" style="margin-bottom:18px;">
             <div class="card-head">
-              <h3>Anonymous Faculty Evaluation</h3>
+              <h3>Faculty Evaluation</h3>
+              <label for="evalYearFilter">Filter by Year Level</label><select id="evalYearFilter" class="field-input"><option value="">All year levels</option><option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option></select>
               <span class="pill pill-soft" id="evalTermPill" style="padding:6px 12px;">Loading…</span>
             </div>
             <p style="font-size:13px;color:var(--ink-500);margin-top:-8px;margin-bottom:16px;">
@@ -1036,47 +980,11 @@
   </div>
 
   <!-- FAQ Chatbot FAB & Panel -->
-  <button class="chat-fab" id="chatFab" aria-label="Open FAQ assistant">
+  <button class="chat-fab" id="chatFab" aria-label="Open Help assistant" aria-controls="page-help">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
     </svg>
   </button>
-
-  <div class="chat-panel" id="chatPanel">
-    <div class="chat-header">
-      <div class="chat-header-title">
-        <div class="chat-avatar">MI</div>
-        <div>
-          <div class="chat-title">MyIMCC FAQ Assistant</div>
-          <div class="chat-subtitle">Answers grounded in official portal FAQ</div>
-        </div>
-      </div>
-      <button class="chat-close" id="chatClose" aria-label="Close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M18 6L6 18M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
-
-    <div class="chat-messages" id="chatMessages">
-      <div class="chat-msg bot">
-        <div class="chat-bubble">Hi! I can answer questions about enrollment, billing, grades, and clearance based on
-          the portal's official FAQ. What would you like to know?</div>
-      </div>
-    </div>
-
-    <div class="chat-input-row">
-      <input type="text" id="chatInput" class="chat-input" placeholder="Ask about enrollment, billing, clearance..."
-        autocomplete="off">
-      <button class="chat-send" id="chatSend" aria-label="Send">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M22 2L11 13" />
-          <path d="M22 2l-7 20-4-9-9-4 20-7z" />
-        </svg>
-      </button>
-    </div>
-    <div class="chat-footnote">Not sure? Contact the Registrar's Office at registrar@imcc.edu.ph</div>
-  </div>
 
   <!-- MFA Modal -->
   <div class="modal-backdrop" id="mfaModal" style="display:none;">
@@ -1132,6 +1040,7 @@
   <script src="../env-config.js"></script>
   <script src="../shared/supabase-config.js"></script>
 <script src="../shared/identity.js"></script>
+<script src="../shared/authGuard.js"></script>
 <script src="../shared/datetime.js"></script>
 <script src="../shared/loading.js"></script>
 <script src="../shared/grading.js"></script>

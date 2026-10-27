@@ -12,14 +12,21 @@
 <body><main class="enrollment-workspace">
   <a id="back" class="back-link" href="../index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 5-7 7 7 7M5 12h14"/></svg>Back to portal</a>
   <header class="workspace-heading"><span class="heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h4"/></svg></span><div><p class="eyebrow">MyIMCC · Academic Services</p><h1>Enrollment Requests</h1><p>Review proposed subject loads, make enrollment decisions, and keep track of each student's progress.</p></div></header>
-<section class="review-toolbar" aria-label="Request filters"><div class="filter-field"><label for="statusFilter">Request status</label>
+  <!-- REVIEW TERM TOOLS -->
+  <div class="enrollment-tools">
+    <details id="termManager" hidden><summary>Enrollment term settings</summary><p>Open or close enrollment for existing terms, including Summer. Add new subjects from the Dean dashboard.</p><label for="enrollmentTermSelect">Term</label><select id="enrollmentTermSelect"></select><button type="button" id="openTerm">Open enrollment</button><button type="button" id="closeTerm">Close enrollment</button></details>
+    <details><summary>Finalize a student's enrollment</summary><p>Resolve pending requests first. Finalizing locks the student's subjects for that term.</p><div id="finalizationGroups"></div></details>
+  </div>
+  <!-- END REVIEW TERM TOOLS -->
+  <section class="review-toolbar" aria-label="Request filters"><div class="filter-field"><label for="statusFilter">Request status</label>
   <select id="statusFilter">
     <option value="pending">Pending requests</option>
     <option value="approved">Approved history</option>
     <option value="rejected">Rejected history</option>
     <option value="all">All decisions</option>
   </select>
-  </div><button id="refresh" class="refresh-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 11-1l3 6M4 12l3 6a7 7 0 0 0 11-1"/></svg>Refresh requests</button></section>
+  </div><div class="filter-field"><label for="reviewTerm">Review semester</label><select id="reviewTerm"></select></div><button id="refresh" class="refresh-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 11-1l3 6M4 12l3 6a7 7 0 0 0 11-1"/></svg>Refresh requests</button></section>
+  <div class="filter-field"><label for="reviewYear">Student year level</label><select id="reviewYear"><option value="">All year levels</option><option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option></select></div>
   <p id="message" class="request-message" role="status" aria-live="polite"></p>
   <div id="requests"></div>
 </main>

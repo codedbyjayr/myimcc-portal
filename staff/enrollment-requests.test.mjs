@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const nodes = {};
-for (const id of ['back', 'requests', 'message', 'refresh', 'statusFilter', 'finalizationGroups', 'enrollmentTermSelect', 'termManager', 'openTerm', 'closeTerm']) {
+for (const id of ['back', 'requests', 'message', 'refresh', 'statusFilter', 'finalizationGroups', 'enrollmentTermSelect', 'termManager', 'openTerm', 'closeTerm', 'reviewTerm', 'reviewYear']) {
   nodes[id] = { innerHTML: '', textContent: '', addEventListener(event, handler) { this[event] = handler; } };
 }
 nodes.statusFilter.value = 'pending';
@@ -29,9 +29,15 @@ const context = vm.createContext({
   } },
 });
 context.window = context;
+vm.runInContext(readFileSync(new URL('../shared/identity.js', import.meta.url), 'utf8'), context);
+context.IMCC.dashboardForRole = () => '/faculty/dean-dashboard.html';
 vm.runInContext(readFileSync(new URL('../shared/ui.js', import.meta.url), 'utf8'), context);
 vm.runInContext(readFileSync(new URL('./enrollment-requests.js', import.meta.url), 'utf8'), context);
 await ready();
+assert.equal(nodes.reviewTerm.value, '2026-2027|2nd Semester');
+assert(!nodes.requests.innerHTML.includes('TEST101'), 'Default review shows only the newest semester');
+nodes.reviewTerm.value = '';
+await nodes.reviewTerm.change();
 assert(nodes.requests.innerHTML.includes('&lt;script&gt;'));
 assert(!nodes.requests.innerHTML.includes('<script>'));
 assert.equal((nodes.requests.innerHTML.match(/class="student-request"/g) || []).length, 3, 'Separate students and terms; group same student and term');
@@ -47,7 +53,14 @@ const row = { querySelectorAll: () => buttons };
 const button = { dataset: { id: 'request', decision: 'approved' }, closest: () => row };
 await nodes.requests.click({ target: { closest: () => button } });
 assert.equal(calls.find(c => c.name === 'review_enrollment_request').args.p_decision, 'approved');
-assert.equal(calls.filter(c => c.name === 'list_enrollment_request_history').length, 2);
+assert.equal(calls.filter(c => c.name === 'list_enrollment_request_history').length, 3);
+nodes.reviewYear.value='2';
+await nodes.reviewYear.change();
+assert(!nodes.requests.innerHTML.includes('TEST101'), 'Review excludes other year levels');
+nodes.reviewYear.value='1';
+await nodes.reviewYear.change();
+assert(nodes.requests.innerHTML.includes('TEST101'), 'Review includes matching year level');
+nodes.reviewYear.value='';
 button.dataset.decision = 'rejected';
 failure = { message: 'Access denied' };
 await nodes.requests.click({ target: { closest: () => button } });

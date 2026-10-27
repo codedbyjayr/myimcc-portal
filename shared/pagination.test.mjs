@@ -25,7 +25,7 @@ assert.equal(failed.error.message, 'Denied');
 console.log('Pagination: over 1,000 rows, lower server caps, stable order and later-page failures passed.');
 
 // Exercise each real startup loader with its own shared identity module.
-for (const [prefix, expectedRpc] of [['', 'get_dean_student_directory'], ['review-assets/', 'list_student_records']]) {
+for (const [prefix, expectedRpc] of [['', 'list_student_records'], ['review-assets/', 'list_student_records']]) {
   const context = vm.createContext({document:{currentScript:null}});
   vm.runInContext(readFileSync(new URL('../' + prefix + 'shared/identity.js', import.meta.url), 'utf8'), context);
   const dean = readFileSync(new URL('../' + prefix + 'faculty/dean-dashboard.js', import.meta.url), 'utf8');

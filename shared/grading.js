@@ -23,6 +23,9 @@
   function gradeDescription(value) {
     return isSchoolGrade(value) ? gradeScale.find(row => row[0] === Number(value))[3] : '';
   }
+  function termOrder(year, semester) {
+    return (parseInt(String(year).match(/\d{4}/)?.[0] || '0', 10) * 10) + (/summer/i.test(semester) ? 3 : /2nd/.test(semester) ? 2 : 1);
+  }
   // Exact percentage rows take priority over the supplied overlapping ranges.
   function computeEquivalent(avg) {
     if (avg === null || avg === undefined || avg === '' || !Number.isFinite(Number(avg)) || Number(avg) < 0 || Number(avg) > 100) return null;
@@ -62,6 +65,23 @@
     return eq !== null && eq <= 3.00 ? 'Passed' : 'Failed';
   }
 
+  async function saveGrade(client, row, offeringId) {
+    const fields = ['prelim', 'midterm', 'semifinal', 'final', 'equivalent'];
+    const values = record => fields.map(key => record?.[key] == null ? null : Number(record[key]));
+    if (JSON.stringify(values(row)) === JSON.stringify(values(row.savedGrade))) return { skipped: true };
+    const payload = Object.fromEntries(fields.map(key => [key, row[key] ?? null]));
+    Object.assign(payload, { student_id: row.student.id, offering_id: offeringId, grade_scale: 'school', remark: computeRemark(row) });
+    let query = client.from('grades');
+    if (row.savedGrade?.id) {
+      query = query.update(payload).eq('id', row.savedGrade.id).eq('student_id', row.student.id).eq('offering_id', offeringId);
+      query = row.savedGrade.graded_at == null ? query.is('graded_at', null) : query.eq('graded_at', row.savedGrade.graded_at);
+    } else query = query.insert(payload);
+    const result = await query.select().maybeSingle();
+    if (!result.error && !result.data) result.error = { message: 'Grade changed or editing is no longer allowed. Reload the class before retrying.' };
+    if (result.error?.code === '23505') result.error = { message: 'Another editor created this grade. Reload the class before retrying.' };
+    return result;
+  }
+
   function estimate(r) {
     if (r.grade_scale !== 'school' || r.final != null || r.remark === 'Dropped') return null;
     const values = [r.prelim, r.midterm, r.semifinal].filter(v => isSchoolGrade(v) && Number(v) !== 4);
@@ -84,7 +104,7 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  function renderHistoryRows(rows, targetStudent, onRevert) {
+  function renderHistoryRows(rows, targetStudent, onRevert, locked = false, readOnly = false) {
     var doc = typeof document !== 'undefined' ? document : null;
     if (!doc) return;
     var body = doc.getElementById('gradeHistoryBody');
@@ -119,7 +139,7 @@
         '<td><b>' + (h.equivalent != null ? Number(h.equivalent).toFixed(2) : '—') + '</b></td>' +
         '<td>' + (h.remark ? '<span class="badge ' + (h.remark === 'Passed' ? 'badge-green' : (h.remark === 'Failed' ? 'badge-red' : 'badge-amber')) + '">' + escapeHtml(h.remark) + '</span>' : '—') + '</td>' +
         '<td style="text-align:center;white-space:nowrap;">' +
-        '<button type="button" class="btn btn-outline revert-btn" data-hist-id="' + h.id + '" data-student-id="' + h.student_id + '" style="padding:3px 8px;font-size:11.5px;color:var(--pink-600);border-color:var(--pink-200);" title="Revert to this past version">⏪ Revert</button>' +
+        '<button type="button" class="btn btn-outline revert-btn" ' + (locked || readOnly || global.IMCC_DEVELOPER_VIEW ? 'disabled ' : '') + 'data-hist-id="' + h.id + '" data-student-id="' + h.student_id + '" style="padding:3px 8px;font-size:11.5px;color:var(--pink-600);border-color:var(--pink-200);" title="' + (locked ? 'Grades are finalized and locked' : readOnly ? 'Active teaching assignment required' : 'Revert to this past version') + '">⏪ Revert</button>' +
         '</td></tr>';
     }).join('');
 
@@ -142,6 +162,8 @@
     var onDone = options.onDone;
 
     if (!histEntry) return;
+    if (options.readOnly) { showToast('This class is read-only. An active teaching assignment is required.', true); return; }
+    if (options.locked) { showToast('Grades are finalized and locked.', true); return; }
     var studentName = histEntry.student_name || (studentRosterItem && studentRosterItem.student && studentRosterItem.student.full_name) || 'student';
     var formattedDate = new Date(histEntry.created_at).toLocaleString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
@@ -182,6 +204,7 @@
       studentRosterItem.remark = histEntry.remark || 'Pending';
       studentRosterItem.grade_scale = res.data?.grade_scale || histEntry.grade_scale || 'percentage';
       if (res.data && res.data.id) studentRosterItem.gradeId = res.data.id;
+      if (res.data && res.data.id) studentRosterItem.savedGrade = res.data;
     }
 
     if (onDone) onDone(res.data, studentRosterItem);
@@ -191,11 +214,14 @@
   function initWorkspace() {
     const page = document.getElementById('page-classes');
     const picker = page.querySelector('.grading-class-select');
+    const termPicker = page.querySelector('.grading-term-select');
+    const yearPicker = page.querySelector('.grading-year-select');
     const list = page.querySelector('.grading-course-list');
     const card = page.querySelector('.grading-card');
     const status = page.querySelector('.grading-save-status');
     const actions = page.querySelector('.grading-actions');
-    const saveButton = actions.querySelector('button');
+    const saveButton = actions.querySelector('button.btn-primary');
+    const lockButton = actions.querySelector('.lock-grades-btn');
     const period = page.querySelector('.grading-period');
     const details = page.querySelector('.grading-class-details');
     const compact = global.matchMedia('(max-width: 1199px)');
@@ -205,14 +231,30 @@
     const showPeriod = () => { page.dataset.gradingPeriod = period.value; };
     period.addEventListener('change', showPeriod);
     showPeriod();
-    const readOnly = !!global.IMCC_DEVELOPER_VIEW;
-    let baseline = '', saving = false, selectedId = '', courses = [], saveError = false;
+    const preview = !!global.IMCC_DEVELOPER_VIEW;
+    let readOnly = preview;
+    let baseline = '', saving = false, locked = false, selectedId = '', courses = [], saveError = false;
+    let selectedTerm = '', selectedYear = '', renderCourses;
+    const changeFilter = () => {
+      if (!canLeave()) { termPicker.value = selectedTerm; if (yearPicker) yearPicker.value = selectedYear; return; }
+      selectedTerm = termPicker.value;
+      selectedYear = yearPicker?.value || '';
+      selectedId = '';
+      card.hidden = true;
+      card.querySelector('tbody').replaceChildren();
+      actions.hidden = true;
+      markClean();
+      renderCourses();
+    };
+    termPicker.addEventListener('change', changeFilter);
+    yearPicker?.addEventListener('change', changeFilter);
     const inputs = () => [...card.querySelectorAll('tbody input[type="number"]')];
     const snapshot = () => JSON.stringify(inputs().map(input => input.value));
     const dirty = () => !readOnly && snapshot() !== baseline;
     function updateStatus() {
-      status.textContent = readOnly ? 'Read-only preview' : saving ? 'Saving…' : saveError ? 'Save failed · changes kept' : dirty() ? 'Unsaved changes' : 'No unsaved changes';
-      saveButton.disabled = readOnly || saving || !dirty() || !inputs().length;
+      status.textContent = preview ? 'Read-only preview' : readOnly ? 'Read-only oversight · active teaching assignment required' : locked ? 'Grades finalized · locked' : saving ? 'Saving…' : saveError ? 'Save failed · changes kept' : dirty() ? 'Unsaved changes' : 'No unsaved changes';
+      saveButton.disabled = readOnly || locked || saving || !dirty() || !inputs().length;
+      lockButton.disabled = readOnly || locked || saving || dirty() || !inputs().length;
     }
     function markClean() { baseline = snapshot(); saveError = false; updateStatus(); }
     function canLeave() {
@@ -241,18 +283,30 @@
     markClean();
     return {
       canLeave, markClean, refresh: updateStatus,
+      setReadOnly(value) { readOnly = preview || value; if (readOnly) inputs().forEach(input => { input.readOnly = true; }); updateStatus(); },
+      setLocked(value) { locked = value; inputs().forEach(input => { if (locked) input.readOnly = true; }); updateStatus(); },
+      canFinalize() { if (readOnly || locked || saving || dirty()) return false; return true; },
       saveFailed() { saveError = true; updateStatus(); },
-      setCourses(offerings, selected) {
-        courses = offerings;
+      setCourses(offerings, selected, render) {
+        renderCourses = render;
+        const terms = global.IMCC.termKeys(offerings);
+        if (!terms.includes(selectedTerm)) selectedTerm = terms[0] || '';
+        termPicker.replaceChildren(...terms.map(key => new Option(key.split('|').reverse().join(' · '), key)));
+        termPicker.value = selectedTerm;
+        termPicker.disabled = !terms.length;
+        courses = offerings.filter(course => global.IMCC.termKey(course) === selectedTerm && (!selectedYear || String(course.year) === selectedYear));
         picker.replaceChildren(new Option('Select a class', ''));
         for (const course of courses) {
-          picker.add(new Option(`${course.code || '—'} — ${course.title || 'Untitled'} · Section ${course.section || '—'}`, String(course.id)));
+          picker.add(new Option(`${course.code || '—'} — ${course.title || 'Untitled'} · ${course.semester} ${course.school_year} · Section ${course.section || '—'}`, String(course.id)));
         }
         picker.disabled = !courses.length;
         picker.value = selected == null ? '' : String(selected);
         if (!courses.length) { card.hidden = true; card.querySelector('tbody').replaceChildren(); markClean(); }
+        return courses;
       },
       startClass(id) {
+        readOnly = preview;
+        locked = false;
         selectedId = String(id);
         picker.value = selectedId;
         card.hidden = false;
@@ -280,7 +334,7 @@
         updateStatus();
       },
       validate() {
-        if (readOnly || saving) return false;
+        if (readOnly || locked || saving) return false;
         inputs().forEach(input => input.setCustomValidity(input.readOnly || input.value === '' || isSchoolGrade(input.value) ? '' : 'Choose a school grade from 1.00 to 3.00, 4.00, or 5.00.'));
         const invalid = inputs().find(input => !input.validity.valid);
         if (!invalid) {
@@ -308,8 +362,10 @@
   }
 
   var api = {
+    saveGrade: saveGrade,
     initWorkspace: initWorkspace,
     computeEquivalent: computeEquivalent,
+    termOrder: termOrder,
     isSchoolGrade: isSchoolGrade,
     gradeDescription: gradeDescription,
     estimate: estimate,
