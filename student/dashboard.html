@@ -357,7 +357,7 @@
 
         <!-- ================= ENROLLMENT ================= -->
         <section class="page" id="page-enrollment">
-          <label for="enrollmentTerm">Enrollment term (including Summer)</label><select id="enrollmentTerm" class="field-input" aria-label="Enrollment term"></select>
+          <label for="enrollmentTerm">Enrollment term</label><select id="enrollmentTerm" class="field-input" aria-label="Enrollment term"></select>
           <button type="button" id="refreshEnrollment" class="btn btn-ghost">Refresh enrollment</button>
           <p id="enrollmentLockStatus" role="status"></p>
           <div class="steps" id="enrollSteps">
@@ -634,48 +634,9 @@
         <!-- ================= HELP ================= -->
         <section class="page" id="page-help">
           <div class="card card-pad">
-            <div class="card-head">
-              <h3>Help</h3>
-            </div>
-            <p class="msg-note">
-              Ask how something works in the portal or at school. Answers come only
-              from the school's published articles, with the article shown so you can
-              check it. If the assistant cannot help, you can book a consultation and
-              a member of staff will be notified.
-            </p>
-
-            <div class="help-suggest" aria-label="Common questions">
-              <span class="help-suggest-label">Common questions:</span>
-              <button class="help-chip" type="button" data-ask="How do I enroll in a subject?">How do I enroll?</button>
-              <button class="help-chip" type="button" data-ask="How do I check my grades?">How do I check my grades?</button>
-              <button class="help-chip" type="button" data-ask="How do I get my online clearance?">Online clearance</button>
-              <button class="help-chip" type="button" data-ask="How do I view my class schedule?">Class schedule</button>
-              <button class="help-chip" type="button" data-ask="How do I see my balance and payment history?">Balance &amp; payments</button>
-              <button class="help-chip" type="button" data-ask="How do I get my Certificate of Registration?">Certificate of Registration</button>
-            </div>
-
-            <div class="help-log" id="helpLog" role="log" aria-live="polite"
-              aria-label="Conversation with the help assistant">
-              <article class="msg-item msg-item-bot">
-                <div class="msg-item-head"><span>Portal Assistant</span></div>
-                <div class="msg-item-body">
-                  Ask me a question about the portal or school processes, for example
-                  how to enroll or how to request your Certificate of Registration. I
-                  answer from published articles and show you which one I used.
-                </div>
-              </article>
-            </div>
-
-            <form class="msg-reply" id="helpForm">
-              <label class="sr-only" for="helpInput">Your question</label>
-              <textarea id="helpInput" rows="3" required maxlength="1000"
-                placeholder="Ask a question…"></textarea>
-              <button class="btn btn-primary" type="submit" id="helpSend">Ask</button>
-            </form>
-            <p class="help-footnote">
-              The assistant cannot read your grades, balances or medical information,
-              and cannot change anything on your account.
-            </p>
+            <div class="card-head"><h3>Help</h3></div>
+            <p class="msg-note">Use the chat button to ask about the portal. You can also book a consultation below.</p>
+            <button class="btn btn-primary" type="button" onclick="toggleChat(true)">Open assistant</button>
           </div>
 
           <!-- Booking. Shown once the assistant says it could not help, and
@@ -757,7 +718,7 @@
               </p>
 
               <!-- There is deliberately no composer here.
-                   The assistant on the Help page is the single front door for a
+                   The assistant in the chat popup is the single front door for a
                    question, so a student cannot start a second, untracked
                    conversation that bypasses the articles staff have published.
                    Staff still start conversations from their side, and the
@@ -980,11 +941,50 @@
   </div>
 
   <!-- FAQ Chatbot FAB & Panel -->
-  <button class="chat-fab" id="chatFab" aria-label="Open Help assistant" aria-controls="page-help">
+  <button class="chat-fab" id="chatFab" type="button" popovertarget="chatPanel" aria-label="Open Help assistant" aria-controls="chatPanel" aria-expanded="false" aria-haspopup="dialog">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
     </svg>
   </button>
+
+  <div class="chat-panel" id="chatPanel" popover="auto" role="dialog" aria-labelledby="chatTitle">
+    <div class="card-head">
+      <h3 id="chatTitle">Portal Assistant</h3>
+      <button class="btn btn-ghost" type="button" id="chatClose" popovertarget="chatPanel" popovertargetaction="hide" aria-label="Close assistant">&times;</button>
+    </div>
+    <div class="help-suggest" aria-label="Common questions">
+      <span class="help-suggest-label">Common questions:</span>
+      <button class="help-chip" type="button" data-ask="How do I enroll in a subject?">How do I enroll?</button>
+      <button class="help-chip" type="button" data-ask="How do I check my grades?">How do I check my grades?</button>
+      <button class="help-chip" type="button" data-ask="How do I get my online clearance?">Online clearance</button>
+      <button class="help-chip" type="button" data-ask="How do I view my class schedule?">Class schedule</button>
+      <button class="help-chip" type="button" data-ask="How do I see my balance and payment history?">Balance &amp; payments</button>
+      <button class="help-chip" type="button" data-ask="How do I get my Certificate of Registration?">Certificate of Registration</button>
+    </div>
+
+    <div class="help-log" id="helpLog" role="log" aria-live="polite"
+      aria-label="Conversation with the help assistant">
+      <article class="msg-item msg-item-bot">
+        <div class="msg-item-head"><span>Portal Assistant</span></div>
+        <div class="msg-item-body">
+          Ask me a question about the portal or school processes, for example
+          how to enroll or how to request your Certificate of Registration. I
+          answer from published articles and show you which one I used.
+        </div>
+      </article>
+    </div>
+
+    <form class="msg-reply" id="helpForm">
+      <label class="sr-only" for="helpInput">Your question</label>
+      <textarea id="helpInput" rows="2" required maxlength="1000"
+        placeholder="Ask a question…"></textarea>
+      <button class="btn btn-primary" type="submit" id="helpSend">Ask</button>
+    </form>
+    <p class="help-footnote">
+      The assistant cannot read your grades, balances or medical information,
+      and cannot change anything on your account.
+    </p>
+  </div>
 
   <!-- MFA Modal -->
   <div class="modal-backdrop" id="mfaModal" style="display:none;">

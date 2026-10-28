@@ -1854,12 +1854,15 @@ document.addEventListener('click', event => {
 });
 
 // One assistant owns retrieval, citations and consultation handoff.
-function toggleChat() {
-  goto('help');
-  requestAnimationFrame(() => getEl('helpInput')?.focus());
+function toggleChat(force) {
+  getEl('chatPanel')?.togglePopover(force);
 }
 window.toggleChat = toggleChat;
-getEl('chatFab')?.addEventListener('click', toggleChat);
+getEl('chatPanel')?.addEventListener('toggle', event => {
+  const open = event.newState === 'open';
+  getEl('chatFab')?.setAttribute('aria-expanded', String(open));
+  if (open) getEl('helpInput')?.focus();
+});
 
 // ── MFA Configuration Module (Built-in Supabase Auth TOTP) ─────────
 let currentMfaFactorId = null;
@@ -2744,6 +2747,8 @@ async function askHelpAssistant(question) {
 
 // ── Booking ───────────────────────────────────────────────────────────
 function revealBooking(question) {
+  toggleChat(false);
+  goto('help');
   const card = getEl('bookCard');
   if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
