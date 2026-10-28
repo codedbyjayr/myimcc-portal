@@ -134,8 +134,7 @@ h1.display { font-size: clamp(22px, 4.5vw, 32px); line-height: 1.15; }
 
 /* ── Fixed elements respect device safe areas (notches) ────────────── */
 .toast,
-.chat-fab,
-.chat-panel {
+.chat-fab {
   bottom: max(16px, env(safe-area-inset-bottom, 16px)) !important;
 }
 .sidebar {
