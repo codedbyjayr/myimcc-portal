@@ -34,6 +34,8 @@ try {
   await run('Existing school grading', await readFile(new URL('../supabase/migrations/20261021035015_production_school_grading.sql', import.meta.url), 'utf8'));
   await run('Existing school scale', await readFile(new URL('../supabase/migrations/20261021040134_exact_school_grade_scale.sql', import.meta.url), 'utf8'));
   await run('Adviser migration', await readFile(new URL('../supabase/pending/20261021111506_adviser_requirements.sql', import.meta.url), 'utf8'));
+  await run('Prevent repeat term enrollment', await readFile(new URL('../supabase/migrations/20261029063928_prevent_repeat_term_enrollment.sql', import.meta.url), 'utf8'));
+  await run('Repeat term enrollment boundary', await readFile(new URL('../supabase/tests/repeat_term_enrollment.sql', import.meta.url), 'utf8'));
   await run('Adviser role and workflow regression', await readFile(new URL('../supabase/tests/adviser_requirements.sql', import.meta.url), 'utf8'));
   let demo = await buildDemoReview();
   demo = demo.replace(/^CREATE INDEX[^\n]*USING hnsw[^\n]*\n/gm,'').replace(/\bvector(?:\(384\))?/g,'text');
