@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="subject-picker.css">
   <link rel="stylesheet" href="../shared/loading.css">
   <link rel="stylesheet" href="../shared/rwd.css">
-  <script>(function(){try{var t=localStorage.getItem('myimcc_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(_){}})();</script>
+  <script>(function () { try { var t = localStorage.getItem('myimcc_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); document.documentElement.setAttribute('data-theme', t); } catch (_) { } })();</script>
 </head>
 
 <body>
@@ -26,13 +26,17 @@
     <aside class="sidebar" id="sidebar">
       <div class="brand">
         <div class="brand-mark">
-          <svg viewBox="0 0 42 42" class="brand-mark-svg" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <rect width="42" height="42" rx="10" fill="#E32B4F"/>
-            <circle cx="21" cy="11.5" r="2.2" fill="#FFFFFF"/>
-            <path d="M21 15V28.5" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"/>
-            <path d="M9.5 27.5V14L19.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M32.5 27.5V14L22.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M9.5 27.5C13.5 25 17.5 25.5 21 28.5C24.5 25.5 28.5 25 32.5 27.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+          <svg viewBox="0 0 42 42" class="brand-mark-svg" fill="none" xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true">
+            <rect width="42" height="42" rx="10" fill="#E32B4F" />
+            <circle cx="21" cy="11.5" r="2.2" fill="#FFFFFF" />
+            <path d="M21 15V28.5" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" />
+            <path d="M9.5 27.5V14L19.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round"
+              stroke-linejoin="round" />
+            <path d="M32.5 27.5V14L22.5 21.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round"
+              stroke-linejoin="round" />
+            <path d="M9.5 27.5C13.5 25 17.5 25.5 21 28.5C24.5 25.5 28.5 25 32.5 27.5" stroke="#FFFFFF" stroke-width="2"
+              stroke-linecap="round" />
           </svg>
         </div>
         <div>
@@ -50,13 +54,19 @@
       <div class="user-chip">
         <div class="avatar" id="sidebarAvatar"></div>
         <div>
-          <div class="name" id="sidebarName"><span class="imcc-skel imcc-skel-inline" style="width:110px;height:16px;"></span></div>
-          <div class="id" id="sidebarDept"><span class="imcc-skel imcc-skel-inline" style="width:70px;height:12px;"></span></div>
+          <div class="name" id="sidebarName"><span class="imcc-skel imcc-skel-inline"
+              style="width:110px;height:16px;"></span></div>
+          <div class="id" id="sidebarDept"><span class="imcc-skel imcc-skel-inline"
+              style="width:70px;height:12px;"></span></div>
         </div>
       </div>
 
       <div class="nav-label">Main Menu</div>
-      <a class="nav-item" href="../staff/enrollment-requests.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h4"/></svg><span>Enrollment Requests</span></a>
+      <a class="nav-item" href="../staff/enrollment-requests.html"><svg viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="5" y="4" width="14" height="18" rx="2" />
+          <path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h4" />
+        </svg><span>Enrollment Requests</span></a>
       <button class="nav-item" data-page="records">View Records</button>
       <button class="nav-item active" data-page="dashboard">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -163,7 +173,13 @@
 
         <!-- ================= DASHBOARD (Strategic Analytics) ================= -->
         <section class="page active" id="page-dashboard">
-          <div class="card card-pad" style="margin-bottom:16px"><div class="card-head"><h3>Enrollment Notifications</h3><button type="button" class="btn btn-ghost" id="refreshEnrollmentNotifications">Refresh</button></div><div id="enrollmentNotifications" aria-live="polite">Loading notifications…</div></div>
+          <div class="card card-pad" style="margin-bottom:16px">
+            <div class="card-head">
+              <h3>Enrollment Notifications</h3><button type="button" class="btn btn-ghost"
+                id="refreshEnrollmentNotifications">Refresh</button>
+            </div>
+            <div id="enrollmentNotifications" aria-live="polite">Loading notifications…</div>
+          </div>
           <div class="hero">
             <div>
               <h2>Welcome!</h2>
@@ -239,15 +255,27 @@
           <div class="grid-2 grading-layout">
             <div class="card card-pad class-picker">
               <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;">
-                <h3>Course Offerings</h3>
+                <h3>Classes &amp; Grading</h3>
                 <button class="btn btn-primary" id="deanAddClassBtn" style="padding:6px 12px;font-size:12px;">+ Add
                   Subject</button>
               </div>
               <div style="display:flex;gap:6px;margin-bottom:12px;">
-                <button type="button" class="btn btn-primary" id="deanScopeMyBtn" style="flex:1;font-size:12px;padding:6px;">My Classes</button>
-                <button type="button" class="btn btn-ghost" id="deanScopeAllBtn" style="flex:1;font-size:12px;padding:6px;">All Classes</button>
+                <button type="button" class="btn btn-primary" id="deanScopeMyBtn"
+                  style="flex:1;font-size:12px;padding:6px;">My Classes</button>
+                <button type="button" class="btn btn-ghost" id="deanScopeAllBtn"
+                  style="flex:1;font-size:12px;padding:6px;">All Classes</button>
               </div>
-              <label class="mobile-class-picker">Class<select class="field-input grading-class-select" aria-label="Select class"></select></label>
+              <label>Semester and Academic Year<select class="field-input grading-term-select"
+                  aria-label="Class semester and academic year"></select></label>
+              <label>Year level<select class="field-input grading-year-select" aria-label="Class year level">
+                  <option value="">All year levels</option>
+                  <option value="1">1st Year</option>
+                  <option value="2">2nd Year</option>
+                  <option value="3">3rd Year</option>
+                  <option value="4">4th Year</option>
+                </select></label>
+              <label class="mobile-class-picker">Class<select class="field-input grading-class-select"
+                  aria-label="Select class"></select></label>
               <div id="myCourseList" class="grading-course-list"></div>
               <div id="noMyCoursesMsg" class="empty-state" style="display:none;">No course offerings found.</div>
             </div>
@@ -257,17 +285,37 @@
                   <h3 id="selectedMyCourseTitle">Select a class</h3>
 
                 </div>
-                <details class="grading-class-details"><summary>Class details</summary><div class="sub" id="selectedMyCourseSub"></div>
-                  <button type="button" class="btn btn-ghost" id="deanClassAuditLogBtn" style="display:none;align-items:center;gap:6px;font-size:12px;padding:6px 12px;" title="View all grade changes for this class">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <details class="grading-class-details">
+                  <summary>Class details</summary>
+                  <div class="sub" id="selectedMyCourseSub"></div>
+                  <button type="button" class="btn btn-ghost" id="deanClassAuditLogBtn"
+                    style="display:none;align-items:center;gap:6px;font-size:12px;padding:6px 12px;"
+                    title="View all grade changes for this class">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                     Class Grade History
                   </button>
 
                 </details>
               </div>
-              <details class="grading-help"><summary>Grading help</summary><p>Enter school grades directly, such as 1.00, 1.10, or 2.75. Enter the official Equivalent manually after Final; 4.00 is conditional and 5.00 is failed. Legacy percentage records are read-only pending school review. Use History beside a student to view saved revisions or revert a mistake. Save your changes before switching classes.</p></details>
-              <label class="grading-period-control">Grading period<select class="field-input grading-period" aria-label="Grading period"><option value="2">Prelim</option><option value="3">Midterm</option><option value="4">Semifinal</option><option value="5">Final</option><option value="6">Equivalent</option></select></label>
-              <div class="table-responsive grading-table-wrap" tabindex="0" role="region" aria-label="Class grade table">
+              <details class="grading-help">
+                <summary>Grading help</summary>
+                <p>Enter school grades directly, such as 1.00, 1.10, or 2.75. Enter the official Equivalent manually
+                  after Final; 4.00 is conditional and 5.00 is failed. Legacy percentage records are read-only pending
+                  school review. Use History beside a student to view saved revisions or revert a mistake. Save your
+                  changes before switching classes.</p>
+              </details>
+              <label class="grading-period-control">Grading period<select class="field-input grading-period"
+                  aria-label="Grading period">
+                  <option value="2">Prelim</option>
+                  <option value="3">Midterm</option>
+                  <option value="4">Semifinal</option>
+                  <option value="5">Final</option>
+                  <option value="6">Equivalent</option>
+                </select></label>
+              <div class="table-responsive grading-table-wrap" tabindex="0" role="region"
+                aria-label="Class grade table">
                 <table id="myRosterTable" style="display:none;">
                   <thead>
                     <tr>
@@ -285,7 +333,9 @@
                 </table>
               </div>
               <div id="noMyRosterMsg" class="empty-state">Pick a class from the left to view its roster.</div>
-              <div class="grading-actions"><button type="button" class="btn btn-ghost lock-grades-btn" disabled>Lock Grades</button><span class="grading-save-status" role="status">No unsaved changes</span><button class="btn btn-primary" id="saveMyGradesBtn" disabled>Save Grades</button></div>
+              <div class="grading-actions"><button type="button" class="btn btn-ghost lock-grades-btn" disabled>Lock
+                  Grades</button><span class="grading-save-status" role="status">No unsaved changes</span><button
+                  class="btn btn-primary" id="saveMyGradesBtn" disabled>Save Grades</button></div>
             </div>
           </div>
         </section>
@@ -305,8 +355,7 @@
                   <tr>
                     <th>Faculty</th>
                     <th>Sections</th>
-                    <th>Total Units</th>
-                    <th>Load</th>
+                    <th>Total Load (Units)</th>
                   </tr>
                 </thead>
                 <tbody id="workloadBody"></tbody>
@@ -325,6 +374,13 @@
               <div style="display:flex;gap:10px;align-items:center;">
                 <select id="assignSemesterFilter" class="field-input" style="width:auto;"
                   aria-label="Filter by Semester" title="Filter by Semester"></select>
+                <select id="assignYearFilter" class="field-input" aria-label="Assignment year level">
+                  <option value="">All year levels</option>
+                  <option value="1">1st Year</option>
+                  <option value="2">2nd Year</option>
+                  <option value="3">3rd Year</option>
+                  <option value="4">4th Year</option>
+                </select>
                 <button class="btn btn-primary" data-modal="courseOffering">+ Add Subject Offering</button>
               </div>
             </div>
@@ -346,132 +402,84 @@
             <div id="noOfferingsMsg" class="empty-state" style="display:none;">No course offerings found for this term.
             </div>
           </div>
-
-
-          <div class="card card-pad" style="margin-top:20px;">
-            <div class="card-head">
-              <div>
-                <h3>Student Evaluation Ratings</h3>
-                <div class="sub">Aggregated student feedback averages per instructor</div>
-              </div>
-            </div>
-            <div class="table-responsive">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Faculty Member</th>
-                    <th>Term</th>
-                    <th>Evaluations</th>
-                    <th>Clarity</th>
-                    <th>Knowledge</th>
-                    <th>Availability</th>
-                    <th>Fairness</th>
-                    <th>Punctuality</th>
-                    <th>Overall Rating</th>
-                  </tr>
-                </thead>
-                <tbody id="deanEvalBody"></tbody>
-              </table>
-            </div>
-            <div id="noDeanEvalMsg" class="empty-state" style="display:none;">No student evaluations recorded yet.</div>
-          </div>
-
-          <div class="card card-pad" style="margin-top:20px;">
-            <div class="card-head">
-              <div>
-                <h3>Faculty Performance Log</h3>
-                <div class="sub">Evaluations, publications, and tenure-track notes</div>
-              </div>
-              <button class="btn btn-primary" data-modal="facultyNote">+ Add Note</button>
-            </div>
-            <div class="table-responsive">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Faculty</th>
-                    <th>Type</th>
-                    <th>Note</th>
-                    <th>Logged</th>
-                  </tr>
-                </thead>
-                <tbody id="notesBody"></tbody>
-              </table>
-            </div>
-            <div id="noNotesMsg" class="empty-state" style="display:none;">No performance notes logged yet.</div>
-          </div>
         </section>
 
         <!-- ================= STUDENT COMPLIANCE ================= -->
         <section class="page" id="page-compliance">
           <div class="grid-2 record-layout">
-            <div class="card card-pad record-picker"><h3>Student Clearance</h3>
-              <label for="clearanceSearch">Search students</label><input id="clearanceSearch" class="field-input" type="search" placeholder="Name, student number, or program">
+            <div class="card card-pad record-picker">
+              <h3>Student Clearance</h3>
+              <label for="clearanceSearch">Search students</label><input id="clearanceSearch" class="field-input"
+                type="search" placeholder="Name, student number, or program">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;margin-bottom:8px;">
+                <div>
+                  <label for="clearanceCourseFilter" style="font-size:12px;color:var(--ink-500);display:block;margin-bottom:4px;">Course</label>
+                  <select id="clearanceCourseFilter" class="field-input" aria-label="Filter by course or program">
+                    <option value="">All courses</option>
+                    <option value="BSIT">BSIT</option>
+                    <option value="BSCS">BSCS</option>
+                    <option value="BSIS">BSIS</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="clearanceYearFilter" style="font-size:12px;color:var(--ink-500);display:block;margin-bottom:4px;">Year level</label>
+                  <select id="clearanceYearFilter" class="field-input" aria-label="Filter by year level">
+                    <option value="">All year levels</option>
+                    <option value="1">1st Year</option>
+                    <option value="2">2nd Year</option>
+                    <option value="3">3rd Year</option>
+                    <option value="4">4th Year</option>
+                  </select>
+                </div>
+              </div>
               <div id="clearanceStudents" class="record-student-list" role="group" aria-label="Students"></div>
             </div>
-            <div class="card card-pad record-detail"><h3 id="clearanceTitle">Select a student</h3><div id="clearanceDetails" role="status">Choose a student to view clearance.</div><details class="department-compliance"><summary>Graduation readiness &amp; appeals</summary>          <div class="card card-pad">
-            <div class="card-head">
-              <div>
-                <h3>Graduation Readiness</h3>
-                <div class="sub">Final-year students below the expected earned-units threshold</div>
-              </div>
-              <div style="display:flex;align-items:center;gap:8px;">
-                <label for="requiredUnitsInput" style="font-size:12px;color:var(--ink-500);">Required units:</label>
-                <input type="number" id="requiredUnitsInput" class="field-input" value="144" style="width:80px;"
-                  title="Required units" aria-label="Required units">
-              </div>
+            <div class="card card-pad record-detail">
+              <h3 id="clearanceTitle">Select a student</h3>
+              <div id="clearanceDetails" role="status">Choose a student to view clearance.</div>
+              <details class="department-compliance">
+                <summary>Appeals &amp; Approvals</summary>
+                <div class="card card-pad">
+                  <div class="card-head">
+                    <div>
+                      <h3>Appeals &amp; Approvals</h3>
+                      <div class="sub">Grade change requests, prerequisite waivers, credit transfers</div>
+                    </div>
+                    <button class="btn btn-primary" data-modal="appeal">+ Log New Appeal</button>
+                  </div>
+                  <div class="table-responsive">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Student</th>
+                          <th>Type</th>
+                          <th>Course</th>
+                          <th>Reason</th>
+                          <th>Status</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody id="appealsBody"></tbody>
+                    </table>
+                  </div>
+                  <div id="noAppealsMsg" class="empty-state" style="display:none;">No appeals on file.</div>
+                </div>
+              </details>
             </div>
-            <div class="table-responsive">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th>Program</th>
-                    <th>Units Earned</th>
-                    <th>Progress</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody id="gradReadinessBody"></tbody>
-              </table>
-            </div>
-            <div id="noSeniorsMsg" class="empty-state" style="display:none;">No final-year students found.</div>
-          </div>
-
-          <div class="card card-pad" style="margin-top:20px;">
-            <div class="card-head">
-              <div>
-                <h3>Appeals &amp; Approvals</h3>
-                <div class="sub">Grade change requests, prerequisite waivers, credit transfers</div>
-              </div>
-              <button class="btn btn-primary" data-modal="appeal">+ Log New Appeal</button>
-            </div>
-            <div class="table-responsive">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th>Type</th>
-                    <th>Course</th>
-                    <th>Reason</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="appealsBody"></tbody>
-              </table>
-            </div>
-            <div id="noAppealsMsg" class="empty-state" style="display:none;">No appeals on file.</div>
-          </div>
-</details></div>
           </div>
         </section>
         <section class="page" id="page-records">
           <div class="grid-2 record-layout">
-            <div class="card card-pad record-picker"><h3>Student Records</h3>
-              <label for="recordSearch">Search students</label><input id="recordSearch" class="field-input" type="search" placeholder="Name, student number, or program">
+            <div class="card card-pad record-picker">
+              <h3>Student Records</h3>
+              <label for="recordSearch">Search students</label><input id="recordSearch" class="field-input"
+                type="search" placeholder="Name, student number, or program">
               <div id="recordStudents" class="record-student-list" role="group" aria-label="Students"></div>
             </div>
-            <div class="card card-pad record-detail"><h3 id="recordTitle">Select a student</h3><div id="recordDetails" role="status">Choose a student to view their records.</div></div>
+            <div class="card card-pad record-detail">
+              <h3 id="recordTitle">Select a student</h3>
+              <div id="recordDetails" role="status">Choose a student to view their records.</div>
+            </div>
           </div>
         </section>
 
@@ -507,17 +515,21 @@
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
         <div>
           <h3 id="gradeHistoryModalTitle" style="margin:0 0 4px 0;">Grade Revision History</h3>
-          <div class="sub" id="gradeHistoryModalSub" style="font-size:13px;color:var(--ink-500);">Student and course details</div>
+          <div class="sub" id="gradeHistoryModalSub" style="font-size:13px;color:var(--ink-500);">Student and course
+            details</div>
         </div>
-        <button type="button" class="btn btn-ghost" id="gradeHistoryCloseBtn" style="padding:4px 8px;font-size:20px;line-height:1;" aria-label="Close">&times;</button>
+        <button type="button" class="btn btn-ghost" id="gradeHistoryCloseBtn"
+          style="padding:4px 8px;font-size:20px;line-height:1;" aria-label="Close">&times;</button>
       </div>
 
       <!-- Current Grade Card -->
-      <div id="gradeHistoryCurrentBox" style="background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;">
+      <div id="gradeHistoryCurrentBox"
+        style="background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;">
       </div>
 
       <!-- History Table -->
-      <div class="table-responsive" style="max-height:360px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius);">
+      <div class="table-responsive"
+        style="max-height:360px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius);">
         <table style="margin:0;font-size:12.5px;">
           <thead style="position:sticky;top:0;background:var(--card);z-index:2;">
             <tr>
@@ -537,11 +549,16 @@
           <tbody id="gradeHistoryBody"></tbody>
         </table>
       </div>
-      <div id="noGradeHistoryMsg" class="empty-state" style="display:none;padding:24px 0;">No previous revisions found. When grades are edited or updated, previous entries are archived here automatically.</div>
+      <div id="noGradeHistoryMsg" class="empty-state" style="display:none;padding:24px 0;">No previous revisions found.
+        When grades are edited or updated, previous entries are archived here automatically.</div>
 
       <div class="modal-actions" style="margin-top:16px;justify-content:space-between;align-items:center;">
         <div style="font-size:12px;color:var(--ink-500);display:flex;align-items:center;gap:6px;">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
           Clicking "Revert" restores that exact past version and preserves the current version in audit logs.
         </div>
         <button type="button" class="btn btn-primary" id="gradeHistoryDoneBtn">Done</button>

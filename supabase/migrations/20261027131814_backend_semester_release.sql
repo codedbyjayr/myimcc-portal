@@ -2,11 +2,12 @@ BEGIN;
 
 -- 20261027000000_normalize_academic_terms.sql
 -- Unique-key conflicts abort the whole migration; never merge school records silently.
+-- Normalize assignments first so the offering trigger reuses them instead of creating duplicate canonical rows.
+UPDATE public.teacher_assignments SET academic_year=translate(academic_year,'–—','--') WHERE academic_year<>translate(academic_year,'–—','--');
 UPDATE public.course_offerings SET school_year=translate(school_year,'–—','--') WHERE school_year<>translate(school_year,'–—','--');
 UPDATE public.student_semesters SET school_year=translate(school_year,'–—','--') WHERE school_year<>translate(school_year,'–—','--');
 UPDATE public.misc_fees SET school_year=translate(school_year,'–—','--') WHERE school_year<>translate(school_year,'–—','--');
 UPDATE public.faculty_evaluations SET school_year=translate(school_year,'–—','--') WHERE school_year<>translate(school_year,'–—','--');
-UPDATE public.teacher_assignments SET academic_year=translate(academic_year,'–—','--') WHERE academic_year<>translate(academic_year,'–—','--');
 
 CREATE FUNCTION private.normalize_academic_year() RETURNS trigger
 LANGUAGE plpgsql SET search_path='' AS $$
@@ -278,10 +279,10 @@ BEGIN
   IF NOT public.is_mfa_compliant() OR NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id=auth.uid() AND p.role IN ('dean','admin','registrar','staff') AND p.status='approved' AND p.is_active IS TRUE) THEN RAISE EXCEPTION 'Active enrollment reviewer access required' USING ERRCODE='42501'; END IF;
   RETURN jsonb_build_object(
     'groups',coalesce((SELECT jsonb_agg(to_jsonb(g) ORDER BY g.student_name,g.school_year,g.semester) FROM (
-      SELECT e.student_id,p.full_name AS student_name,coalesce(p.student_no,p.id_number) AS student_no,o.school_year,o.semester,sum(o.units) AS units,l.locked_at
+      SELECT e.student_id,p.full_name AS student_name,coalesce(p.student_no,p.id_number) AS student_no,p.year_level,o.school_year,o.semester,sum(o.units) AS units,l.locked_at
       FROM public.enrollments e JOIN public.profiles p ON p.id=e.student_id JOIN public.course_offerings o ON o.id=e.offering_id
       LEFT JOIN public.enrollment_locks l ON l.student_id=e.student_id AND l.school_year=o.school_year AND l.semester=o.semester
-      WHERE e.status='enrolled' GROUP BY e.student_id,p.full_name,p.student_no,p.id_number,o.school_year,o.semester,l.locked_at
+      WHERE e.status='enrolled' GROUP BY e.student_id,p.full_name,p.student_no,p.id_number,p.year_level,o.school_year,o.semester,l.locked_at
     ) g),'[]'::jsonb),
     'terms',coalesce((SELECT jsonb_agg(to_jsonb(t) ORDER BY t.school_year DESC,t.semester) FROM (SELECT school_year,semester,bool_or(enrollment_open) AS is_open FROM public.course_offerings GROUP BY school_year,semester) t),'[]'::jsonb)
   );
@@ -290,6 +291,35 @@ $$;
 CREATE FUNCTION public.get_enrollment_workspace() RETURNS jsonb LANGUAGE sql STABLE SECURITY INVOKER SET search_path='' AS $$ SELECT private.get_enrollment_workspace(); $$;
 REVOKE ALL ON FUNCTION private.get_enrollment_workspace(),public.get_enrollment_workspace() FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION private.get_enrollment_workspace(),public.get_enrollment_workspace() TO authenticated;
+
+-- An unassigned new class has no assignment to synchronize; instructor changes retain the manager guard.
+DROP TRIGGER trg_sync_teacher_assignment ON public.course_offerings;
+CREATE TRIGGER trg_sync_teacher_assignment AFTER UPDATE OF instructor_id,school_year,semester ON public.course_offerings FOR EACH ROW EXECUTE FUNCTION public.sync_teacher_assignment();
+CREATE TRIGGER trg_sync_teacher_assignment_insert AFTER INSERT ON public.course_offerings FOR EACH ROW WHEN (NEW.instructor_id IS NOT NULL) EXECUTE FUNCTION public.sync_teacher_assignment();
+
+CREATE FUNCTION private.publish_summer_offering(p_source_offering_id integer,p_school_year text,p_schedule text DEFAULT NULL) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE result jsonb;
+BEGIN
+  IF NOT public.is_mfa_compliant() OR NOT EXISTS (
+    SELECT 1 FROM public.profiles WHERE id=auth.uid() AND role IN ('dean','admin','registrar') AND status='approved' AND is_active IS TRUE
+  ) THEN RAISE EXCEPTION 'Active registrar, dean, or admin access required' USING ERRCODE='42501'; END IF;
+  IF p_school_year IS NULL OR p_school_year !~ '^\d{4}[-–—]\d{4}$' THEN
+    RAISE EXCEPTION 'A school year is required' USING ERRCODE='23514';
+  END IF;
+  INSERT INTO public.course_offerings(code,title,units,program,year,semester,school_year,schedule,is_major)
+  SELECT code,title,units,program,year,'Summer',translate(p_school_year,'–—','--'),nullif(btrim(p_schedule),''),is_major
+  FROM public.course_offerings WHERE id=p_source_offering_id AND year BETWEEN 1 AND 4 AND units>0
+  RETURNING to_jsonb(course_offerings) INTO result;
+  IF result IS NULL THEN RAISE EXCEPTION 'Choose an existing subject with a valid year level and units' USING ERRCODE='P0002'; END IF;
+  RETURN result;
+END;
+$$;
+CREATE FUNCTION public.publish_summer_offering(p_source_offering_id integer,p_school_year text,p_schedule text DEFAULT NULL) RETURNS jsonb
+LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$ SELECT private.publish_summer_offering(p_source_offering_id,p_school_year,p_schedule); $$;
+REVOKE ALL ON FUNCTION private.publish_summer_offering(integer,text,text),public.publish_summer_offering(integer,text,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION private.publish_summer_offering(integer,text,text),public.publish_summer_offering(integer,text,text) TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.update_grade_calculations() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $function$
 DECLARE
