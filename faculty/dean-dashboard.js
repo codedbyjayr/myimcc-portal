@@ -642,6 +642,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const button = event.target.closest('button[data-clearance-id]');
         const studentId = selectedRecord.clearance;
         if (!button || button.disabled || !studentId) return;
+        const studentName = state.profiles.find(profile => String(profile.id) === String(studentId))?.full_name || 'this student';
+        if (!window.confirm('Do you want to clear the College Dean requirement for ' + studentName + '?')) return;
         button.disabled = true;
         try {
             const { data, error } = await supabaseClient.from('clearances')
