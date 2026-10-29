@@ -8,7 +8,8 @@ INSERT INTO adviser_ids VALUES
  ('teacher','10000000-0000-0000-0000-000000000002'),
  ('dean','10000000-0000-0000-0000-000000000003'),
  ('admin','10000000-0000-0000-0000-000000000004'),
- ('other_teacher','10000000-0000-0000-0000-000000000005');
+ ('other_teacher','10000000-0000-0000-0000-000000000005'),
+ ('registrar','10000000-0000-0000-0000-000000000006');
 INSERT INTO auth.users(id,email,raw_user_meta_data) SELECT id,'adviser-'||role||'@example.invalid',jsonb_build_object('full_name','Adviser '||role) FROM adviser_ids;
 INSERT INTO public.profiles(id,email,full_name,role,status,is_active,program,year_level)
 SELECT id,'adviser-'||role||'@example.invalid','Adviser '||role,CASE WHEN role='other_teacher' THEN 'teacher' ELSE role END,'approved',true,'BSIT','1st Year' FROM adviser_ids
@@ -36,6 +37,7 @@ DO $$ BEGIN
  BEGIN PERFORM public.get_student_record(auth.uid()); RAISE EXCEPTION 'Student read dean records'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.lock_class_grades((SELECT id FROM adviser_offerings LIMIT 1)); RAISE EXCEPTION 'Student locked grades'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  BEGIN PERFORM public.finalize_enrollment(auth.uid(),'2098-2099','Summer'); RAISE EXCEPTION 'Student finalized enrollment'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN PERFORM public.publish_summer_offering((SELECT id FROM adviser_offerings LIMIT 1),'2099-2100',NULL); RAISE EXCEPTION 'Student published a subject'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  IF (SELECT count(*) FROM public.instructor_notifications)<>0 THEN RAISE EXCEPTION 'Student read instructor notifications'; END IF;
 END $$;
 RESET ROLE;
@@ -94,5 +96,26 @@ DO $$ BEGIN
  BEGIN UPDATE public.course_offerings SET grades_locked=false WHERE id=(SELECT id FROM adviser_offerings WHERE kind='summer'); RAISE EXCEPTION 'Finalization silently reversed'; EXCEPTION WHEN object_not_in_prerequisite_state THEN NULL; END;
 END $$;
 SELECT public.set_enrollment_term('2098-2099','Summer',false);
+RESET ROLE;
+UPDATE public.course_offerings SET is_major=true WHERE id=(SELECT id FROM adviser_offerings WHERE kind='first');
+SELECT set_config('request.jwt.claims',jsonb_build_object('sub',id,'role','authenticated','aal','aal2')::text,true) FROM adviser_ids WHERE role='registrar';
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE published jsonb; BEGIN
+ published:=public.publish_summer_offering((SELECT id FROM adviser_offerings WHERE kind='first'),'2099–2100','MWF 09:00-10:00');
+ IF published->>'semester'<>'Summer' OR published->>'school_year'<>'2099-2100' OR published->>'year'<>'1' OR (published->>'units')::numeric<>3 OR published->>'is_major'<>'true' OR published->>'instructor_id' IS NOT NULL OR published->>'enrollment_open'<>'false' THEN RAISE EXCEPTION 'Registrar Summer publication changed subject facts or opened enrollment'; END IF;
+ BEGIN UPDATE public.course_offerings SET instructor_id=(SELECT id FROM adviser_ids WHERE role='teacher') WHERE id=(published->>'id')::integer; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ IF EXISTS(SELECT 1 FROM public.course_offerings WHERE id=(published->>'id')::integer AND instructor_id IS NOT NULL) THEN RAISE EXCEPTION 'Registrar assigned an instructor'; END IF;
+ BEGIN PERFORM public.publish_summer_offering((published->>'id')::integer,'invalid',NULL); RAISE EXCEPTION 'Invalid school year accepted'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN PERFORM public.publish_summer_offering(-1,'2099-2100',NULL); RAISE EXCEPTION 'Missing source accepted'; EXCEPTION WHEN no_data_found THEN NULL; END;
+ published:=public.publish_summer_offering((SELECT id FROM adviser_offerings WHERE kind='summer'),'2099-2100',NULL);
+ IF published->>'is_major'<>'false' OR EXISTS(SELECT 1 FROM public.grades WHERE offering_id=(published->>'id')::integer) OR EXISTS(SELECT 1 FROM public.enrollments WHERE offering_id=(published->>'id')::integer) THEN RAISE EXCEPTION 'GE offering copied old student records or changed category'; END IF;
+ IF EXISTS(SELECT 1 FROM jsonb_array_elements(public.get_enrollment_workspace()->'groups') g WHERE g->>'student_id'=(SELECT id::text FROM adviser_ids WHERE role='student') AND g->>'year_level' IS DISTINCT FROM '1st Year') THEN RAISE EXCEPTION 'Review year level missing'; END IF;
+END $$;
+RESET ROLE;
+UPDATE public.profiles SET is_active=false WHERE id=(SELECT id FROM adviser_ids WHERE role='registrar');
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ BEGIN PERFORM public.publish_summer_offering((SELECT id FROM adviser_offerings LIMIT 1),'2099-2100',NULL); RAISE EXCEPTION 'Inactive registrar published'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
 RESET ROLE;
 ROLLBACK;

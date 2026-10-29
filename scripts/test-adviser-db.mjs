@@ -2,12 +2,13 @@ import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { buildDemoReview } from './build-demo-review.mjs';
 
-// Optional test runtime only: npm install --prefix .temp/adviser-db --no-save --package-lock=false @electric-sql/pglite@0.5.10
+// Test tools only: npm install --prefix .temp/adviser-db --no-save --package-lock=false @electric-sql/pglite@0.5.11 @electric-sql/pglite-pgvector@0.0.12
 const moduleUrl = process.env.PGLITE_MODULE || pathToFileURL(`${process.cwd()}/.temp/adviser-db/node_modules/@electric-sql/pglite/dist/index.js`).href;
 const { PGlite } = await import(moduleUrl);
 const { uuid_ossp } = await import(new URL('./contrib/uuid_ossp.js', moduleUrl));
 const { pgcrypto } = await import(new URL('./contrib/pgcrypto.js', moduleUrl));
-const db = new PGlite({ extensions: { uuid_ossp, pgcrypto } });
+const { vector } = await import(new URL('../../pglite-pgvector/dist/index.js', moduleUrl));
+const db = new PGlite({ extensions: { uuid_ossp, pgcrypto, vector } });
 async function run(label, sql) {
   try { await db.exec(sql); console.log(label + ': passed'); }
   catch (error) { console.error(label + ': ' + error.message + (error.where ? '\n' + error.where : '')); process.exitCode = 1; throw error; }
@@ -25,20 +26,24 @@ try {
     GRANT USAGE ON SCHEMA auth,public,extensions TO anon,authenticated,service_role;
     GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO anon,authenticated,service_role;
   `);
-  // FAQ vector storage is unrelated to these workflows. No FAQ query is executed here.
-  let baseline = await readFile(new URL('../supabase/test-environment/schema.sql', import.meta.url), 'utf8');
-  baseline = baseline.replace(/CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;/g, '').replace(/^CREATE INDEX[^\n]*USING hnsw[^\n]*\n/gm, '').replace(/\bvector(?:\(384\))?/g, 'text');
+  const baseline = await readFile(new URL('../supabase/test-environment/schema.sql', import.meta.url), 'utf8');
   await run('Existing portal schema', baseline);
   // The snapshot predates the five role-workflow increments promoted in this migration.
   await run('Existing role workflows', await readFile(new URL('../supabase/migrations/20261015164009_production_role_workflows.sql', import.meta.url), 'utf8'));
   await run('Existing school grading', await readFile(new URL('../supabase/migrations/20261021035015_production_school_grading.sql', import.meta.url), 'utf8'));
   await run('Existing school scale', await readFile(new URL('../supabase/migrations/20261021040134_exact_school_grade_scale.sql', import.meta.url), 'utf8'));
-  await run('Adviser migration', await readFile(new URL('../supabase/pending/20261021111506_adviser_requirements.sql', import.meta.url), 'utf8'));
+  await run('Production manual school equivalents', await readFile(new URL('../supabase/migrations/20261023002020_manual_school_equivalent.sql', import.meta.url), 'utf8'));
+  await run('Grade revert MFA guard', await readFile(new URL('../supabase/migrations/20261027120911_grade_revert_mfa_guard.sql', import.meta.url), 'utf8'));
+  await run('Ordered backend release', await readFile(new URL('../supabase/migrations/20261027131814_backend_semester_release.sql', import.meta.url), 'utf8'));
+  await run('FAQ vector retrieval and content invalidation', await readFile(new URL('../supabase/tests/faq_search.sql', import.meta.url), 'utf8'));
   await run('Prevent repeat term enrollment', await readFile(new URL('../supabase/migrations/20261029063928_prevent_repeat_term_enrollment.sql', import.meta.url), 'utf8'));
   await run('Repeat term enrollment boundary', await readFile(new URL('../supabase/tests/repeat_term_enrollment.sql', import.meta.url), 'utf8'));
   await run('Adviser role and workflow regression', await readFile(new URL('../supabase/tests/adviser_requirements.sql', import.meta.url), 'utf8'));
-  let demo = await buildDemoReview();
-  demo = demo.replace(/^CREATE INDEX[^\n]*USING hnsw[^\n]*\n/gm,'').replace(/\bvector(?:\(384\))?/g,'text');
+  await run('Backend boundary regression', await readFile(new URL('../supabase/tests/backend_access_controls.sql', import.meta.url), 'utf8'));
+  await run('Semester integrity regression', await readFile(new URL('../supabase/tests/semester_integrity.sql', import.meta.url), 'utf8'));
+  await run('Attendance assignment and enrollment regression', await readFile(new URL('../supabase/tests/attendance_assignment_writes.sql', import.meta.url), 'utf8'));
+  await run('Evaluation anonymity and stable instructor identity', await readFile(new URL('../supabase/tests/faculty_evaluation_identity.sql', import.meta.url), 'utf8'));
+  const demo = await buildDemoReview();
   await run('Isolated review schema',demo);
   await run('Enable local review fixtures',"UPDATE imcc_review_private.control SET enabled_until=now()+interval '1 hour';");
   const regression = (await readFile(new URL('../supabase/tests/adviser_requirements.sql',import.meta.url),'utf8'))

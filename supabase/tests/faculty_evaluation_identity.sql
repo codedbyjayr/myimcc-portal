@@ -18,6 +18,13 @@ SET role = CASE WHEN p.id = i.student THEN 'student'
 FROM evaluation_test_ids i
 WHERE p.id IN (i.teacher_a, i.teacher_b, i.student, i.admin);
 
+INSERT INTO public.course_offerings(code,title,units,school_year,semester,instructor_id,instructor_name,enrollment_open)
+SELECT 'IDENTITY-'||id,'Identity course',3,'identity-test','1st Semester',id,'Same Name Identity Test',true
+FROM evaluation_test_ids,LATERAL unnest(ARRAY[teacher_a,teacher_b]) AS teachers(id);
+INSERT INTO public.enrollments(student_id,offering_id,status)
+SELECT i.student,o.id,'enrolled' FROM evaluation_test_ids i,public.course_offerings o
+WHERE o.code IN ('IDENTITY-'||i.teacher_a,'IDENTITY-'||i.teacher_b);
+
 SELECT set_config('request.jwt.claims', jsonb_build_object('sub',student,'role','authenticated','aal','aal2')::text, true)
 FROM evaluation_test_ids;
 SET LOCAL ROLE authenticated;
@@ -47,7 +54,7 @@ FROM evaluation_test_ids;
 SET LOCAL ROLE authenticated;
 DO $$
 BEGIN
-  IF (SELECT count(*) FROM public.faculty_evaluations WHERE school_year='identity-test') <> 1
+  IF (SELECT count(*) FROM public.faculty_evaluations WHERE school_year='identity-test') <> 0
      OR EXISTS (SELECT 1 FROM public.faculty_evaluations e, evaluation_test_ids i
                 WHERE e.school_year='identity-test' AND e.instructor_id=i.teacher_b)
      OR (SELECT count(*) FROM public.instructor_evaluation_summary WHERE school_year='identity-test') <> 1 THEN
@@ -59,7 +66,7 @@ $$;
 UPDATE public.profiles SET full_name='Renamed Identity Test' WHERE id=(SELECT teacher_a FROM evaluation_test_ids);
 DO $$
 BEGIN
-  IF (SELECT count(*) FROM public.faculty_evaluations WHERE school_year='identity-test') <> 1
+  IF (SELECT count(*) FROM public.faculty_evaluations WHERE school_year='identity-test') <> 0
      OR (SELECT count(*) FROM public.instructor_evaluation_summary WHERE school_year='identity-test') <> 1 THEN
     RAISE EXCEPTION 'Renaming lost legitimate evaluation access';
   END IF;
@@ -81,7 +88,7 @@ FROM evaluation_test_ids;
 SET LOCAL ROLE authenticated;
 DO $$
 BEGIN
-  IF (SELECT count(*) FROM public.faculty_evaluations WHERE school_year='identity-test') <> 1
+  IF (SELECT count(*) FROM public.faculty_evaluations WHERE school_year='identity-test') <> 0
      OR EXISTS (SELECT 1 FROM public.instructor_evaluation_summary s, evaluation_test_ids i
                 WHERE s.school_year='identity-test' AND s.instructor_id=i.teacher_a) THEN
     RAISE EXCEPTION 'Second teacher isolation failed';

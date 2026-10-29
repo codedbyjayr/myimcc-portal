@@ -51,6 +51,11 @@
       ]
     }
   ],
+  "git": {
+    "deploymentEnabled": {
+      "codex/backend-semester-release": false
+    }
+  },
   "buildCommand": "npm run check:release",
   "outputDirectory": "."
 }

@@ -69,7 +69,7 @@ observational evaluation, not evidence that the estimate is a validated AI model
 
 ## Checks and deployment settings
 
-Run `npm test`, `npm run check:edge`, and `npm run check:edge:parse`.
+Run `npm test`, `npm run check:edge`, and `npm run test:db`.
 `scripts/grading-workspace.browser.test.mjs` exercises teacher and dean entry
 with mocked requests on desktop and mobile, including errors and validation.
 

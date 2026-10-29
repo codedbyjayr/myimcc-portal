@@ -54,4 +54,20 @@ assert.match(toasts.at(-1)[0], /No clearance was changed/);
 clearances[0].status = 'cleared';
 await context.loadStudentRecord('clearance', 'student');
 assert(!getEl('clearanceDetails').innerHTML.includes('data-clearance-id='), 'Already cleared requirements have no approval button');
-console.log('Dean clearance: scoped action, safe rendering, verified save, double click and failed-save retry passed.');
+getEl('clearanceCourseFilter').options = [];
+context.state.profiles.push(
+  { id: 'year-1', role: 'student', full_name: 'Year One', year_level: '1st Year' },
+  { id: 'year-2', role: 'student', full_name: 'Year Two', year_level: '2nd Year' },
+  { id: 'written-year-2', role: 'student', full_name: 'Written Year Two', year_level: 'Second Year' },
+  { id: 'ambiguous-year-2', role: 'student', full_name: 'Year 2 Format', year_level: 'Year 2' },
+);
+getEl('clearanceYearFilter').value = '1';
+context.renderStudentPicker('clearance');
+assert.match(getEl('clearanceStudents').innerHTML, /Year One/);
+assert.doesNotMatch(getEl('clearanceStudents').innerHTML, /Year Two|Written Year Two|Year 2 Format/, 'Year 1 excludes all year 2 encodings');
+getEl('clearanceYearFilter').value = '2';
+context.renderStudentPicker('clearance');
+assert.match(getEl('clearanceStudents').innerHTML, /Year Two/);
+assert.match(getEl('clearanceStudents').innerHTML, /Written Year Two/);
+assert.doesNotMatch(getEl('clearanceStudents').innerHTML, /Year One|Year 2 Format/, 'Year 2 excludes other and unrecognized formats');
+console.log('Dean clearance: scoped action, safe rendering, verified save, year filtering, and failed-save retry passed.');

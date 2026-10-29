@@ -1,9 +1,9 @@
 -- Keep the existing Admin UI contracts scoped to the review schema.
-CREATE FUNCTION imcc_review.set_user_role(target_id uuid,new_role text) RETURNS void
+CREATE OR REPLACE FUNCTION imcc_review.set_user_role(target_id uuid,new_role text) RETURNS void
 LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$ SELECT imcc_review.admin_set_profile_access(target_id,new_role,NULL); $$;
-CREATE FUNCTION imcc_review.set_user_approval(target_id uuid,approved boolean,approved_role text DEFAULT NULL) RETURNS void
+CREATE OR REPLACE FUNCTION imcc_review.set_user_approval(target_id uuid,approved boolean,approved_role text DEFAULT NULL) RETURNS void
 LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$ SELECT imcc_review.admin_set_profile_access(target_id,approved_role,CASE WHEN approved THEN 'approved' ELSE 'rejected' END); $$;
-CREATE FUNCTION imcc_review.set_user_active(target_id uuid,active boolean) RETURNS void
+CREATE OR REPLACE FUNCTION imcc_review.set_user_active(target_id uuid,active boolean) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN
  IF NOT imcc_review.is_admin() OR NOT imcc_review.is_mfa_compliant() THEN RAISE EXCEPTION 'Active demo Admin required' USING ERRCODE='42501'; END IF;
  UPDATE imcc_review.profiles SET is_active=active WHERE id=target_id;
