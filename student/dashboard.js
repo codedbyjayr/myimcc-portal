@@ -600,7 +600,6 @@ async function loadEnrollment(background = false, requestedTerm = state.enrollme
     termSelect.value = state.enrollmentTerm;
   };
   const isOpen = offerings.some(o => o.enrollment_open);
-  setText('enrollmentLockStatus', state.enrollmentLocked ? 'Enrollment finalized and locked. Subject changes are disabled.' : isOpen ? 'Enrollment is open for subject requests.' : 'Enrollment is closed. Your existing subjects remain visible.');
   const sectionTitle = getEl('enrollmentSectionTitle');
   state.courses = offerings.map(o => ({
     offering_id: String(o.id),
@@ -618,7 +617,8 @@ async function loadEnrollment(background = false, requestedTerm = state.enrollme
 
   state.miscFees = misc || [];
   state.selectedOfferingIds = background ? new Set([...state.selectedOfferingIds].filter(id => state.courses.some(c => c.enrollment_open && String(c.offering_id) === String(id) && !['pending','approved','enrolled','completed'].includes(c.enrollmentStatus)))) : new Set();
-  state.enrollmentComplete = state.courses.length > 0 && state.courses.every(c => c.enrollmentStatus === 'enrolled');
+  state.enrollmentComplete = state.courses.some(c => c.enrollmentStatus === 'enrolled' || c.enrollmentStatus === 'approved');
+  setText('enrollmentLockStatus', state.enrollmentComplete ? 'You are already enrolled for this semester. Another enrollment request is disabled.' : state.enrollmentLocked ? 'Enrollment finalized and locked. Subject changes are disabled.' : isOpen ? 'Enrollment is open for subject requests.' : 'Enrollment is closed. Your existing subjects remain visible.');
   const steps = getEl('enrollSteps');
   const summary = getEl('enrollmentBillingSummary');
   const completeNote = getEl('enrollmentCompleteNote');
@@ -639,7 +639,7 @@ async function loadEnrollment(background = false, requestedTerm = state.enrollme
   renderCourseList();
   renderMiscFees();
   renderBillingSummary();
-  if (state.enrollmentLocked) {
+  if (state.enrollmentLocked || state.enrollmentComplete) {
     getEl('page-enrollment').querySelectorAll('input[type="checkbox"], #proceedBtn, #confirmEnrollBtn').forEach(el => { el.disabled = true; });
   }
 }
@@ -670,7 +670,8 @@ function renderCourseList() {
   const container = getEl('courseList');
   if (!container) return;
 
-  container.innerHTML = state.courses.map(c => {
+  const courses = state.enrollmentComplete ? state.courses.filter(c => ['enrolled', 'approved', 'pending'].includes(c.enrollmentStatus)) : state.courses;
+  container.innerHTML = courses.map(c => {
     const checked = state.selectedOfferingIds.has(c.offering_id);
     return `
     <div class="course-row ${checked ? 'checked' : ''}" data-id="${c.offering_id}">
@@ -695,7 +696,7 @@ function renderCourseList() {
 
   container.querySelectorAll('.course-row').forEach(row => {
     row.addEventListener('click', () => {
-      if (state.enrollmentLocked || state.enrollmentReadFailed) return;
+      if (state.enrollmentLocked || state.enrollmentComplete || state.enrollmentReadFailed) return;
       const id = String(row.dataset.id);
       const course = state.courses.find(c => c.offering_id === id);
       if (!course?.enrollment_open || ['pending', 'approved', 'enrolled', 'completed'].includes(course?.enrollmentStatus)) return;
@@ -747,7 +748,7 @@ function renderBillingSummary() {
   setText('feeSub', `${units} units · ${selected.length} subject${selected.length === 1 ? '' : 's'}`);
 
   const proceedBtn = getEl('proceedBtn');
-  if (proceedBtn) proceedBtn.disabled = selected.length === 0 || state.enrollmentReadFailed || state.enrollmentLocked;
+  if (proceedBtn) proceedBtn.disabled = selected.length === 0 || state.enrollmentReadFailed || state.enrollmentLocked || state.enrollmentComplete;
 }
 
 function renderReviewList() {
@@ -806,10 +807,13 @@ getEl('proceedBtn')?.addEventListener('click', () => setEnrollStep(2));
 getEl('backToStep1')?.addEventListener('click', () => setEnrollStep(1));
 
 async function confirmEnrollment() {
+  if (state.enrollmentSubmitting) return;
+  if (state.enrollmentComplete) { showToast('You are already enrolled for this semester.', true); return; }
   if (state.enrollmentReadFailed) { showToast('Refresh enrollment successfully before submitting.', true); return; }
   if (state.enrollmentLocked) { showToast('Enrollment is finalized and locked.', true); return; }
   const profile = state.studentProfile;
   if (!profile || state.selectedOfferingIds.size === 0) return;
+  state.enrollmentSubmitting = true;
   const btn = getEl('confirmEnrollBtn');
   if (btn) {
     btn.disabled = true;
@@ -833,6 +837,8 @@ async function confirmEnrollment() {
       btn.disabled = false;
       btn.textContent = 'Submit Enrollment Request →';
     }
+  } finally {
+    state.enrollmentSubmitting = false;
   }
 }
 

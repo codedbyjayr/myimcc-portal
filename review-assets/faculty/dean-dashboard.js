@@ -654,11 +654,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!rows?.length) return '<p>No records.</p>';
         return '<div class="table-responsive"><table><thead><tr>' + columns.map(([label]) => '<th>' + escapeHtml(label) + '</th>').join('') + '</tr></thead><tbody>' + rows.map(row => '<tr>' + columns.map(([, value]) => '<td>' + escapeHtml(value(row) ?? '—') + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
     }
-    for (const kind of ['record', 'clearance']) {
-        getEl(kind + 'Search').addEventListener('input', () => renderStudentPicker(kind));
-        getEl(kind + 'Students').addEventListener('click', async event => {
-            const id = event.target.closest('[data-student]')?.dataset.student;
-            if (!id) return;
+    async function loadStudentRecord(kind, id) {
             selectedRecord[kind] = id;
             const target = getEl(kind + 'Details');
             target.textContent = 'Loading records…';
@@ -667,7 +663,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (selectedRecord[kind] !== id) return;
             if (error) { target.textContent = 'Could not load records: ' + error.message; return; }
             const clearance = recordsTable(data.clearances, [['Office', r => r.department_name], ['Status', r => r.status], ['Note', r => r.note], ['Cleared', r => fmtDate(r.cleared_at)]]);
-            if (kind === 'clearance') { target.innerHTML = clearance; return; }
+            if (kind === 'clearance') {
+                target.innerHTML = clearance + (data.clearances || []).filter(r => r.department_code === 'dean' && r.status !== 'cleared').map(r =>
+                    '<button type="button" class="mini-btn success" data-clearance-id="' + escapeHtml(r.id) + '">✓ Clear College Dean requirement</button>').join('');
+                return;
+            }
             const p = data.profile;
             target.innerHTML = '<h4>Student Information</h4>' + recordsTable([p], [['Student No.', r => r.student_no || r.id_number], ['Program', r => r.program], ['Year / Section', r => [r.year_level, r.section].filter(Boolean).join(' / ')], ['Email', r => r.email], ['Phone', r => r.phone], ['Address', r => r.address]]) +
                 '<h4>Enrollment & Terms</h4>' + recordsTable(data.enrollments, [['Subject', r => r.code + ' — ' + r.title], ['Term', r => r.semester + ' ' + r.school_year], ['Status', r => r.status], ['Units', r => r.units]]) +
@@ -677,8 +677,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                 '<h4>Payment Records</h4>' + recordsTable(data.transactions, [['Receipt', r => r.or_number], ['Date', r => fmtDate(r.txn_date)], ['Description', r => r.description], ['Amount', r => peso(r.amount)]]) +
                 '<h4>Balance</h4><p>' + escapeHtml(peso(data.billing?.balance)) + '</p>' +
                 '<h4>Installments</h4>' + recordsTable(data.installments, [['Name', r => r.name], ['Due', r => fmtDate(r.due_date)], ['Amount', r => peso(r.amount)], ['Status', r => r.status]]);
+    }
+    for (const kind of ['record', 'clearance']) {
+        getEl(kind + 'Search').addEventListener('input', () => renderStudentPicker(kind));
+        getEl(kind + 'Students').addEventListener('click', event => {
+            const id = event.target.closest('[data-student]')?.dataset.student;
+            if (id) loadStudentRecord(kind, id);
         });
     }
+    getEl('clearanceDetails').addEventListener('click', async event => {
+        const button = event.target.closest('button[data-clearance-id]');
+        const studentId = selectedRecord.clearance;
+        if (!button || button.disabled || !studentId) return;
+        button.disabled = true;
+        try {
+            const { data, error } = await supabaseClient.from('clearances')
+                .update({ status: 'cleared', cleared_at: new Date().toISOString() })
+                .eq('id', button.dataset.clearanceId).eq('student_id', studentId).eq('department_code', 'dean')
+                .select('id').single();
+            if (error) throw error;
+            if (!data?.id) throw new Error('No clearance was changed. Refresh and retry.');
+            showToast('College Dean clearance approved.');
+            if (selectedRecord.clearance === studentId) await loadStudentRecord('clearance', studentId);
+        } catch (error) {
+            showToast('Could not approve clearance: ' + error.message, true);
+        } finally {
+            button.disabled = false;
+        }
+    });
 
     // ══════════════════════════════════════════════════════════════════
     // PROFILE
