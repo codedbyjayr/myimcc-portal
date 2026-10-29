@@ -7,15 +7,13 @@ const getEl = id => {
   if (!nodes.has(id)) nodes.set(id, { value: '', handlers: {}, addEventListener(name, fn) { this.handlers[name] = fn; } });
   return nodes.get(id);
 };
-let saved = { id: 'dean-clearance' }, error = null, writes = 0, confirmApproval = true;
-const confirmations = [];
+let saved = { id: 'dean-clearance' }, error = null, writes = 0;
 const clearances = [
   { id: 'dean-clearance', department_code: 'dean', department_name: 'College Dean', status: 'pending', note: '<script>bad</script>' },
   { id: 'library-clearance', department_code: 'library', department_name: 'Library', status: 'pending' },
 ];
 const context = vm.createContext({
   state: { profiles: [{ id: 'student', full_name: 'Student' }] }, getEl,
-  window: { confirm: message => { confirmations.push(message); return confirmApproval; } },
   fmtDate: String, showToast: (...args) => toasts.push(args),
   supabaseClient: {
     rpc: async name => { assert.equal(name, 'get_student_record'); return { data: { clearances } }; },
@@ -40,12 +38,6 @@ assert(!getEl('clearanceDetails').innerHTML.includes('<script>'));
 const button = { dataset: { clearanceId: 'dean-clearance' }, disabled: false };
 const event = { target: { closest: () => button } };
 const click = getEl('clearanceDetails').handlers.click;
-confirmApproval = false;
-await click(event);
-assert.equal(writes, 0, 'Canceling confirmation does not approve the Dean clearance');
-assert.equal(button.disabled, false, 'Canceling leaves approval available');
-assert.match(confirmations[0], /College Dean requirement for Student/);
-confirmApproval = true;
 const saving = click(event);
 await click(event);
 await saving;

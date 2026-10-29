@@ -1,71 +1,37 @@
 # Backend release
 
+## Independent enrollment terms
+
+`20261029124809_independent_enrollment_terms.sql` gives each school year and
+semester its own saved enrollment status. The Registrar term dropdown includes
+1st Semester, 2nd Semester, and Summer even before subjects exist. New offerings
+inherit that saved status; opening an empty term uses the same student notices.
+The migration is applied on Supabase, preserves existing offering status, and
+does not open any term. `20261029125355_review_enrollment_term_parity.sql` applies
+the same contract to existing isolated demo schemas.
+
 ## Enrollment opening notifications
 
 `20261029114553_enrollment_open_notifications.sql` is applied to Supabase.
 The existing Enrollment / Advising → Enrollment term settings controls open or
-close 1st Semester, 2nd Semester, and Summer for a school year with subject offerings.
+close 1st Semester, 2nd Semester, and Summer for a configured school year.
 Opening a closed term inserts an activity for every active, approved student;
 the existing student notification bell receives these activities through Realtime
 and its refresh fallback. Opening an already-open term sends no duplicate notice.
 Closing sends no notice; reopening sends a new notice. The update and notices
-commit together, and concurrent changes to the same term serialize on its offerings.
+commit together, and concurrent changes serialize on the saved term row.
 Existing Registrar/Dean/Admin and MFA checks remain in place. No email is sent.
 
 Verification: `npm run test:db` covers all three terms, duplicate opens, closing,
 reopening, recipient filtering, student visibility, access checks, and rollback
 when notification insertion fails. No real term was opened during deployment.
 
-## Earlier backend release
 
-The backend release is `supabase/migrations/20261027131814_backend_semester_release.sql`.
+The backend release is `supabase/migrations/20261027020245_backend_semester_release.sql`.
 It combines the five previously unapplied scripts in one transaction, in dependency
 order: school-year normalization, adviser workflows, access controls, semester
-totals, then FAQ retrieval/content. The 34 original production migrations are unchanged.
-This migration is applied to production. The complete production archive was
-restored into an isolated Supabase PostgreSQL 17 container before promotion;
-all 68 public/Auth table checksums and public policies, functions, RLS and
-sequence state matched. Protected school/Auth checksums remained unchanged
-after promotion; semester-total mismatches are zero.
-
-The independent authorization-only migration
-`20261027120911_grade_revert_mfa_guard.sql` is already applied to production.
-It adds a fail-closed MFA check inside grade reversion without rewriting grades.
-It preserves the existing policy for accounts without verified MFA factors.
-Both migrations are recorded in production and local filenames match their
-recorded versions. The academic migration normalizes instructor assignments before
-offerings so the existing synchronization trigger reuses canonical assignments.
-
-The FAQ assistant and service-only reindexer are deployed. The indexer verifies
-service credentials through Supabase Auth's admin endpoint instead of comparing
-them to one runtime key string. All 24 active articles were indexed. Hosted
-anonymous/invalid-token rejection and the database's 10-per-minute limit passed.
-Matching frontend assets are still local; GitHub and Vercel were not published.
-
-Grade entry saves only edited students. Existing rows use the original server
-`graded_at` as an atomic update condition; new rows use INSERT so a concurrent
-creation fails instead of overwriting. A conflict keeps local edits and asks the
-user to reload the class. Unassigned deans can inspect classes and history but
-cannot edit or revert from the oversight view; active assignment is checked on
-the server before enabling those controls. Admin access is preserved.
-
-## Summer enrollment
-
-Registrar, dean and admin accounts can publish an existing subject as a Summer
-offering from the registrar Prospectus page. This preserves its code, units,
-year level, program and GE/major classification. It does not copy old enrollments,
-grades or instructor assignments. A new Summer term starts closed; offerings added
-to an existing term follow that term's enrollment status. The dean assigns the
-instructor, and a registrar/dean/admin explicitly manages term opening from
-Enrollment Requests. Summer retakes do not waive prerequisites for later subjects.
-
-Semester and year-level filters apply to registrar subject/student lists,
-enrollment reviews and finalization groups, dean assignments, and teacher/dean
-class pickers. Student lists use the student's current year level; subject lists
-use the subject's year. Use All year levels for students retaking earlier subjects.
-Teachers can lock their assigned classes; deans/admins can lock classes they manage.
-The database requires saved Final and Equivalent values for all enrolled students,
-rejects pending enrollment requests, and blocks later grade edits and reverts.
+totals, then FAQ retrieval/content. The 34 recorded production migrations are unchanged.
+Production backup and restore verification are prerequisites to applying it.
 
 ## Local checks
 
@@ -120,11 +86,11 @@ Database archives exclude hosted service settings and Storage file contents.
 1. Verify production backup restoration and preserve a pre-change data checksum.
 2. Reconcile live migration history; recovered migrations are history, not new work.
 3. From the backend release branch, run `supabase db push --linked --dry-run`.
-   This completed release should now list no pending migrations. Stop if any
-   recorded or unrelated migration appears. Check that the
+   It must list only `20261027020245_backend_semester_release.sql`. No `--include-all`
+   is needed; stop if any recorded or unrelated migration appears. Check that the
    linked project is `dusiokpfmkhutptomrqg` before proceeding. If CLI login is
    unavailable, use the connected Supabase tools instead: compare the recorded
-   migration history against the 36 preserved local files, then apply only a
+   migration history against the 34 preserved local files, then apply only the
    reviewed forward migration with `apply_migration` after backup/restore verification.
 4. After recovery verification, run `supabase db push --linked`. Never apply the
    baseline snapshot or demo seed there. Unique-key conflicts abort the transaction;

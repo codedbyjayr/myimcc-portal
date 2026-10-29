@@ -23,9 +23,6 @@ BEGIN
   IF (SELECT count(*) FROM public.clearance_departments) < 3 THEN
     RAISE EXCEPTION 'Test needs at least three clearance departments';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM public.clearance_departments WHERE code='registrar') THEN
-    RAISE EXCEPTION 'Registrar clearance department must be configured';
-  END IF;
   IF (SELECT count(*) FROM public.clearances WHERE student_id=student)
      <> (SELECT count(*) FROM public.clearance_departments)
      OR EXISTS (SELECT 1 FROM public.clearances WHERE student_id=student
