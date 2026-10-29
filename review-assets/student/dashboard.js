@@ -550,7 +550,9 @@ async function loadEnrollment(background = false) {
 
   const { data: available, error: offeringError } = await supabaseClient.from('course_offerings').select('*').eq('enrollment_open', true);
   if (offeringError) { showToast('Could not load open enrollment terms.', true); return; }
-  const terms = [...new Set((available || []).map(o => o.school_year + '|' + o.semester))].sort((a,b) => { const [ay,as] = a.split('|'), [by,bs] = b.split('|'); return Grading.termOrder(by,bs) - Grading.termOrder(ay,as); });
+  const { data: openTerms, error: termError } = await supabaseClient.from('enrollment_terms').select('school_year,semester').eq('is_open', true);
+  if (termError) { showToast('Could not load enrollment terms. Refresh enrollment to retry.', true); return; }
+  const terms = [...new Set([...(available || []), ...(openTerms || [])].map(o => o.school_year + '|' + o.semester))].sort((a,b) => { const [ay,as] = a.split('|'), [by,bs] = b.split('|'); return Grading.termOrder(by,bs) - Grading.termOrder(ay,as); });
   const termSelect = getEl('enrollmentTerm');
   const currentKey = (currentSem?.school_year || '').replace(/[\u2013\u2014]/g, '-') + '|' + (currentSem?.semester || '1st Semester');
   const selected = terms.includes(state.enrollmentTerm) ? state.enrollmentTerm : terms.includes(currentKey) ? currentKey : terms[0];
@@ -3125,11 +3127,11 @@ function startAcademicUpdates() {
   window.imccLiveRefresh(supabaseClient, [
     {table:'enrollment_requests',filter:own}, {table:'enrollments',filter:own},
     {table:'grades',filter:own}, {table:'activities',filter:own},
-    {table:'courses'}, {table:'course_offerings'}
+    {table:'courses'}, {table:'course_offerings'}, {table:'enrollment_terms'}
   ], async changes => {
     const all = !changes.length;
     const jobs = [];
-    if (all || changes.some(t => ['enrollment_requests','enrollments','course_offerings'].includes(t))) {
+    if (all || changes.some(t => ['enrollment_requests','enrollments','course_offerings','enrollment_terms'].includes(t))) {
       // A live refresh must never discard a student's proposed subjects or in-flight submission.
       if (!state.selectedOfferingIds.size && !state.enrollmentSubmitting) jobs.push(loadEnrollment(true));
       jobs.push(loadDashboard());

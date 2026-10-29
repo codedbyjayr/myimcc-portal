@@ -573,7 +573,9 @@ async function loadEnrollment(background = false, requestedTerm = state.enrollme
   const studentYear = Number(yearText.match(/^[1-4]/)?.[0]) || ({ first: 1, second: 2, third: 3, fourth: 4 }[yearText.split(/\s+/)[0]]);
   const visibleOfferings = (available || []).filter(o => enrolledIds.has(String(o.id)) || requestedIds.has(String(o.id)) ||
     (o.enrollment_open && (!o.program || o.program === profile.program) && (!o.year || o.year === studentYear)));
-  const terms = IMCC.termKeys(visibleOfferings);
+  const { data: openTerms, error: termError } = await supabaseClient.from('enrollment_terms').select('school_year,semester').eq('is_open', true);
+  if (termError) { fail('Could not load enrollment terms.'); return; }
+  const terms = IMCC.termKeys([...visibleOfferings, ...(openTerms || [])]);
   const termSelect = getEl('enrollmentTerm');
   const currentKey = IMCC.termKey(currentSem || {});
   const selected = terms.includes(requestedTerm) ? requestedTerm : terms.includes(currentKey) ? currentKey : terms[0] || '';
@@ -592,7 +594,7 @@ async function loadEnrollment(background = false, requestedTerm = state.enrollme
     await loadEnrollment(false, termSelect.value);
     termSelect.value = state.enrollmentTerm;
   };
-  const isOpen = offerings.some(o => o.enrollment_open);
+  const isOpen = offerings.some(o => o.enrollment_open) || (openTerms || []).some(t => IMCC.termKey(t) === selected);
   const sectionTitle = getEl('enrollmentSectionTitle');
   state.courses = offerings.map(o => ({
     offering_id: String(o.id),
@@ -3165,11 +3167,11 @@ function startAcademicUpdates() {
   window.imccLiveRefresh(supabaseClient, [
     {table:'enrollment_requests',filter:own}, {table:'enrollments',filter:own},
     {table:'grades',filter:own}, {table:'activities',filter:own},
-    {table:'courses'}, {table:'course_offerings'}
+    {table:'courses'}, {table:'course_offerings'}, {table:'enrollment_terms'}
   ], async changes => {
     const all = !changes.length;
     const jobs = [];
-    if (all || changes.some(t => ['enrollment_requests','enrollments','course_offerings'].includes(t))) {
+    if (all || changes.some(t => ['enrollment_requests','enrollments','course_offerings','enrollment_terms'].includes(t))) {
       // A live refresh must never discard a student's proposed subjects or in-flight submission.
       if (!state.selectedOfferingIds.size && !state.enrollmentSubmitting) jobs.push(loadEnrollment(true));
       jobs.push(loadDashboard());

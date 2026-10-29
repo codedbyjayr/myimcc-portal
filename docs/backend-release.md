@@ -1,15 +1,25 @@
 # Backend release
 
+## Independent enrollment terms
+
+`20261029124809_independent_enrollment_terms.sql` gives each school year and
+semester its own saved enrollment status. The Registrar term dropdown includes
+1st Semester, 2nd Semester, and Summer even before subjects exist. New offerings
+inherit that saved status; opening an empty term uses the same student notices.
+The migration is applied on Supabase, preserves existing offering status, and
+does not open any term. `20261029125355_review_enrollment_term_parity.sql` applies
+the same contract to existing isolated demo schemas.
+
 ## Enrollment opening notifications
 
 `20261029114553_enrollment_open_notifications.sql` is applied to Supabase.
 The existing Enrollment / Advising → Enrollment term settings controls open or
-close 1st Semester, 2nd Semester, and Summer for a school year with subject offerings.
+close 1st Semester, 2nd Semester, and Summer for a configured school year.
 Opening a closed term inserts an activity for every active, approved student;
 the existing student notification bell receives these activities through Realtime
 and its refresh fallback. Opening an already-open term sends no duplicate notice.
 Closing sends no notice; reopening sends a new notice. The update and notices
-commit together, and concurrent changes to the same term serialize on its offerings.
+commit together, and concurrent changes serialize on the saved term row.
 Existing Registrar/Dean/Admin and MFA checks remain in place. No email is sent.
 
 Verification: `npm run test:db` covers all three terms, duplicate opens, closing,

@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 const source = readFileSync(new URL('./dashboard.js', import.meta.url), 'utf8');
 const loader = source.slice(source.indexOf('let enrollmentLoadVersion'), source.indexOf('// Schedule parser'));
-for (const failed of ['student_semesters','course_offerings','enrollments','enrollment_requests','enrollment_locks',null]) {
+for (const failed of ['student_semesters','course_offerings','enrollments','enrollment_requests','enrollment_locks','enrollment_terms',null]) {
   const alerts = [], nodes = {};
   const current = {school_year:'2026-2027',semester:'1st Semester'};
   const subject = {id:1,code:'ENROLLED',...current,program:'BSIT',year:1,units:3,fee:100,enrollment_open:false};
