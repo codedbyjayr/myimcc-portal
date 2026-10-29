@@ -290,6 +290,23 @@ body {
     font-weight: 700;
 }
 
+.nav-item.soon {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+.soon-badge {
+    margin-left: auto;
+    white-space: nowrap;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .05em;
+    background: var(--line);
+    color: var(--ink-500);
+    padding: 2px 6px;
+    border-radius: 5px;
+}
+
 .nav-item .ic {
     width: 18px;
     text-align: center;
