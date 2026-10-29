@@ -1,12 +1,13 @@
 :root {
-    --pink-500: #E7338A;
-    --pink-600: #E32B4F;
+    color-scheme: only light;
+    --pink-500: #C92370;
+    --pink-600: #C22143;
     --pink-50: #fdecf2;
     --pink-100: #fbd9e6;
     --pink-200: #f5b6cf;
     --ink-900: #1f2430;
     --ink-600: #5b6172;
-    --ink-400: #8b90a0;
+    --ink-400: #666c7b;
     --line: #ece9ee;
     --bg: #ffffff;
     --white: #ffffff;

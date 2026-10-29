@@ -871,6 +871,10 @@ textarea.field-input {
     margin-bottom: 16px;
 }
 
+#page-faculty .offering-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+#page-faculty .offering-toolbar select { width: auto; max-width: 100%; }
+#page-faculty .offering-toolbar .btn { flex-shrink: 0; white-space: nowrap; padding: 10px 14px; }
+
 .card-head h3 {
     margin: 0;
     font-size: 15.5px;

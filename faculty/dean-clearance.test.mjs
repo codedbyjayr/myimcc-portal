@@ -31,7 +31,7 @@ const context = vm.createContext({
   },
 });
 vm.runInContext(readFileSync(new URL('../shared/ui.js', import.meta.url), 'utf8'), context);
-vm.runInContext('const escapeHtml = UIM.escapeHtml;', context);
+vm.runInContext('const escapeHtml = window.UIM.escapeHtml;', context);
 vm.runInContext(source.slice(source.indexOf('    let selectedRecord'), source.indexOf('    // ══', source.indexOf('    let selectedRecord'))), context);
 await context.loadStudentRecord('clearance', 'student');
 assert.match(getEl('clearanceDetails').innerHTML, /✓ Clear College Dean requirement/);

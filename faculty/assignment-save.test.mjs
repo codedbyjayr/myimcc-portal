@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const source = readFileSync(new URL('./dean-dashboard.js', import.meta.url), 'utf8');
-const actual = source.slice(source.indexOf('    async function assignFaculty(sel)'), source.indexOf('    // ── Appeals & Approvals'));
+const actual = source.slice(source.indexOf('    async function assignFaculty(sel)'), source.indexOf('    let selectedRecord'));
 const offering = { id: 1, instructor_id: 'old', instructor_name: 'Old Teacher' };
 const select = { dataset: { id: '1' }, value: 'new', disabled: false };
 const calls = [], toasts = [];

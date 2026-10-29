@@ -4,13 +4,20 @@ import { embedFaq } from '../_shared/faq-embedding.ts';
 
 // Maintenance only: never expose the service-role credential in a browser.
 serve(async (req) => {
-  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!key || req.headers.get('Authorization') !== `Bearer ${key}`) {
+  const key = req.headers.get('Authorization')?.trim().match(/^Bearer\s+(\S+)$/i)?.[1];
+  if (!key) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const client = createClient(Deno.env.get('SUPABASE_URL')!, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  try {
+    // Auth's admin endpoint verifies the credential; user tokens and forged role claims cannot pass.
+    const { data, error } = await client.auth.admin.listUsers({ page: 1, perPage: 1 });
+    if (error || !Array.isArray(data?.users)) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  } catch {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
   if (req.method !== 'POST') return Response.json({ error: 'Only POST is allowed' }, { status: 405 });
   try {
-    const client = createClient(Deno.env.get('SUPABASE_URL')!, key, { auth: { persistSession: false } });
     const { data: rows, error } = await client.from('faq_articles')
       .select('id,category,question,answer,keywords').eq('is_active', true)
       .is('embedding', null).order('id').limit(10);

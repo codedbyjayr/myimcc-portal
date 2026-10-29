@@ -124,13 +124,14 @@
       </button>
 
       <div class="nav-label">Account</div>
-      <button class="nav-item" data-page="help">
+      <button class="nav-item soon" type="button" disabled title="Coming soon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="9" />
           <path d="M9.2 9a2.8 2.8 0 015.6 0c0 1.9-2.8 2.4-2.8 2.4" />
           <path d="M12 17h.01" />
         </svg>
         Help
+        <span class="soon-badge">Coming soon</span>
       </button>
       <button class="nav-item soon" type="button" disabled title="Coming soon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -507,15 +508,20 @@
           </div>
 
           <div class="card card-pad">
-            <div class="card-head wrap">
+            <div class="card-head wrap grades-header">
               <h3 id="gradesTitle">Grades — Loading…<br><span
                   style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">Loading program
                   info…</span></h3>
               <div class="grades-tools">
-                <label for="gradeYearFilter">Filter by Year Level</label><select id="gradeYearFilter" class="field-input"><option value="">All year levels</option><option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option></select>
-                <span class="pill pill-soft" style="padding:6px 12px;" id="gradesTermPill">Loading…</span>
-                <button class="btn-ghost" id="prospectusBtn"
-                  style="padding:6px 12px;border:1px solid var(--line);border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;background:var(--bg);color:var(--ink-700);transition:all 0.2s;font-weight:700;">View Degree Prospectus</button>
+                <div class="grades-filter">
+                  <label for="gradeTermSelect">Semester</label>
+                  <select id="gradeTermSelect" class="field-input"></select>
+                </div>
+                <div class="grades-filter">
+                  <label for="gradeYearFilter">Year level</label>
+                  <select id="gradeYearFilter" class="field-input"><option value="">All year levels</option><option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option></select>
+                </div>
+                <button class="btn btn-outline" id="prospectusBtn" type="button">View Degree Prospectus</button>
               </div>
             </div>
             <div class="table-responsive">

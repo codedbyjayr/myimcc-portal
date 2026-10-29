@@ -64,7 +64,7 @@
 
             <nav aria-label="Registrar sections">
                 <div class="nav-label">Main Menu</div>
-                <a class="nav-item" href="enrollment-requests.html">Enrollment / Advising</a>
+                <a class="nav-item" href="enrollment-requests.html"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21z"/><path d="M4 5.5v13A2.5 2.5 0 0 1 6.5 16H20M8 7h8M8 10h8"/></svg>Enrollment</a>
                 <button class="nav-item active" data-view="dashboard" type="button" aria-current="page">
                     <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10l9-7 9 7v10a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg></span>
                     Dashboard
@@ -81,15 +81,15 @@
                     <span class="ic" aria-hidden="true">✓</span>
                     Clearance
                 </button>
-                <button class="nav-item" data-view="appointments" type="button">
+                <button class="nav-item soon" type="button" disabled title="Coming soon">
                     <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M9 15l2 2 4-4"/></svg></span>
                     Appointments
-                    <span class="nav-badge" id="apptPendingBadge" hidden>0</span>
+                    <span class="soon-badge">Coming soon</span>
                 </button>
-                <button class="nav-item" data-view="messages" type="button">
+                <button class="nav-item soon" type="button" disabled title="Coming soon">
                     <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v12H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg></span>
                     Messages
-                    <span class="nav-badge" id="msgUnreadBadge" hidden>0</span>
+                    <span class="soon-badge">Coming soon</span>
                 </button>
             </nav>
 
@@ -308,7 +308,7 @@
             </section>
 
             <section id="view-messages" class="hidden" aria-labelledby="pageTitle">
-                <div class="card">
+                <div class="panel">
                     <div class="card-head">
                         <h2>Messages</h2>
                         <button class="btn btn-primary" type="button" id="btnNewMessage">New message</button>
@@ -395,7 +395,7 @@
             </section>
 
             <section id="view-appointments" class="hidden" aria-labelledby="pageTitle">
-                <div class="card">
+                <div class="panel">
                     <div class="card-head">
                         <h2>Appointments</h2>
                         <button class="btn" type="button" id="btnRefreshAppt">Refresh</button>
@@ -429,7 +429,7 @@
                     </div>
                 </div>
 
-                <div class="card hidden" id="apptDetailCard">
+                <div class="panel hidden" id="apptDetailCard">
                     <div class="card-head">
                         <h2 id="apptDetailTitle">Request</h2>
                         <button class="btn" type="button" id="btnCloseApptDetail">Close</button>

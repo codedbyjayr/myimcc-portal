@@ -15,13 +15,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const showToast = FC.showToast;
     const isMissingTableError = FC.isMissingTableError;
     const peso = n => '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-    function statusBadgeClass(status) {
-        const map = {
-            pending: 'badge-amber', approved: 'badge-green', active: 'badge-green', compliant: 'badge-green',
-            rejected: 'badge-red', at_risk: 'badge-red', failed: 'badge-red', closed: 'badge-blue',
-        };
-        return map[status] || 'badge-blue';
-    }
 
     const SEMESTER_ORDER = { '1st Semester': 1, '2nd Semester': 2, 'Summer': 3, 'Summer Semester': 3 };
     function termKey(schoolYear, semester) { return `${schoolYear || '—'} · ${semester || '—'}`; }
@@ -36,7 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let darkMode = false;
     const state = {
         profiles: [], offerings: [], grades: [], enrollments: [], facultyList: [],
-        courses: [], appeals: [],
+        courses: [],
         // Instructor options loaded from the get_subject_instructor_options RPC.
         // Each entry: { id, full_name, role }
         instructorOptions: null,   // null = not yet loaded; [] = loaded but empty
@@ -491,56 +484,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadMyClasses();
     }
 
-    // ── Appeals & Approvals ──────────────────────────────────────────────
-    async function loadAppeals() {
-        const { data, error } = await supabaseClient.from('appeals').select('*').order('created_at', { ascending: false });
-        if (isMissingTableError(error)) {
-            state.appeals = [];
-            getEl('appealsBody').innerHTML = '';
-            const msg = getEl('noAppealsMsg');
-            msg.style.display = 'block';
-            msg.textContent = 'This workflow needs the appeals table — run dean-dashboard-schema.sql, then reload.';
-            return;
-        }
-        state.appeals = data || [];
-        renderAppeals();
-    }
-
-    function renderAppeals() {
-        const body = getEl('appealsBody');
-        const msg = getEl('noAppealsMsg');
-        if (!state.appeals.length) { body.innerHTML = ''; msg.style.display = 'block'; msg.textContent = 'No appeals on file.'; return; }
-        msg.style.display = 'none';
-        const typeLabel = { grade_change: 'Grade Change', prerequisite_waiver: 'Prerequisite Waiver', credit_transfer: 'Credit Transfer' };
-
-        body.innerHTML = state.appeals.map(a => `
-      <tr>
-        <td><b>${escapeHtml(a.student_name)}</b></td>
-        <td>${escapeHtml(typeLabel[a.appeal_type] || a.appeal_type)}</td>
-        <td>${escapeHtml(a.course_code || '—')}</td>
-        <td>${escapeHtml(a.reason)}</td>
-        <td><span class="badge ${statusBadgeClass(a.status)}">${escapeHtml(a.status)}</span></td>
-        <td>
-          ${a.status === 'pending' ? `
-            <button class="mini-btn success" data-id="${a.id}" data-action="approved">Approve</button>
-            <button class="mini-btn danger" data-id="${a.id}" data-action="rejected">Reject</button>
-          ` : `<span style="color:var(--ink-500);font-size:12px;">Reviewed ${fmtDate(a.reviewed_at)}</span>`}
-        </td>
-      </tr>
-    `).join('');
-
-        document.querySelectorAll('#appealsBody .mini-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const { error } = await supabaseClient
-                    .from('appeals')
-                    .update({ status: btn.dataset.action, reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
-                    .eq('id', btn.dataset.id);
-                if (error) { showToast('Failed to update appeal: ' + error.message, true); return; }
-                showToast(`Appeal ${btn.dataset.action}.`);
-                loadAppeals();
-            });
-        });
-    }
 
 
     let selectedRecord = { record: null, clearance: null };
@@ -1134,18 +1077,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showToast('Subject offering saved successfully.');
             },
         },
-        appeal: {
-            title: 'Log New Appeal',
-            table: 'appeals',
-            fields: [
-                { name: 'appeal_type', label: 'Type', type: 'select', required: true, options: [{ value: 'grade_change', label: 'Grade Change' }, { value: 'prerequisite_waiver', label: 'Prerequisite Waiver' }, { value: 'credit_transfer', label: 'Credit Transfer' }] },
-                { name: 'student_name', label: 'Student Name', type: 'text', required: true },
-                { name: 'course_code', label: 'Course Code', type: 'text', required: false },
-                { name: 'reason', label: 'Reason / Request Details', type: 'textarea', required: true },
-            ],
-            transform: (values) => ({ ...values, status: 'pending', requested_by: currentUserId }),
-            onSaved: loadAppeals,
-        },
     };
 
     let activeModalKey = null;
@@ -1402,7 +1333,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // Standard save logic for faculty notes and appeals.
+        // Standard save logic for faculty notes.
         const payload = cfg.transform ? cfg.transform(values) : values;
         let saveRes;
         if (editingOfferingId) {
@@ -1456,7 +1387,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderOverview();
     renderFacultyPage();
     await loadMyClasses();
-    await loadAppeals();
     renderStudentPicker('clearance');
     renderStudentPicker('record');
 

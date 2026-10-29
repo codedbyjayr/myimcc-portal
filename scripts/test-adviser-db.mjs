@@ -62,6 +62,9 @@ try {
       OR NOT EXISTS(SELECT 1 FROM imcc_review_private.control WHERE retired AND enabled_until IS NULL)
     THEN RAISE EXCEPTION 'Demo retirement did not revoke access'; END IF;
   END $$;`);
+  await run('Approved BSIT curriculum', await readFile(new URL('../supabase/migrations/20261029170737_align_bsit_curriculum.sql', import.meta.url), 'utf8'));
+  await run('Admin role departments', await readFile(new URL('../supabase/migrations/20261029172328_admin_role_departments.sql', import.meta.url), 'utf8'));
+  await run('Admin role department regression', await readFile(new URL('../supabase/tests/admin_role_departments.sql', import.meta.url), 'utf8'));
 } catch (error) {
   if (!process.exitCode) { console.error(error.message); process.exitCode = 1; }
 } finally { await db.close(); }
