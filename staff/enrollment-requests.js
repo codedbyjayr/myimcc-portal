@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let reviewTerm = null;
   const finalizations = document.getElementById('finalizationGroups');
   const termSelect = document.getElementById('enrollmentTermSelect');
+  const termStatus = document.getElementById('termStatus');
   document.getElementById('termManager').hidden = !['dean', 'admin', 'registrar'].includes(session.profile.role);
   async function askReview(text, reason = false) {
     if (window.IMCC_DEVELOPER_VIEW !== false) return reason ? window.prompt(text) : window.confirm(text);
@@ -135,12 +136,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (refresh.disabled || !termSelect.value) return;
       const [year, semester] = JSON.parse(termSelect.value);
       refresh.disabled = true;
+      termStatus.textContent = 'Updating enrollment…';
+      for (const id of ['openTerm', 'closeTerm']) document.getElementById(id).disabled = true;
       try {
         const { error } = await supabaseClient.rpc('set_enrollment_term', { p_school_year: year, p_semester: semester, p_open: open });
         if (error) throw error;
         await load();
-      } catch (error) { message.textContent = 'Could not update term: ' + error.message; }
-      finally { refresh.disabled = false; }
+        termStatus.textContent = `Enrollment ${open ? 'opened' : 'closed'} for ${semester}, ${year}.`;
+      } catch (error) { termStatus.textContent = 'Could not update term: ' + error.message; }
+      finally {
+        refresh.disabled = false;
+        for (const id of ['openTerm', 'closeTerm']) document.getElementById(id).disabled = false;
+      }
     });
   }
   await load();

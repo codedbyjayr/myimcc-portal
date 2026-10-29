@@ -16,7 +16,6 @@ const state = {
   apiOnline: false,
   dashboard: null,
   courses: [],
-  miscFees: [],
   selectedOfferingIds: new Set(),
   enrollmentComplete: false,
   billing: { totalPaid: 0, installments: [], transactions: [] },
@@ -587,12 +586,6 @@ async function loadEnrollment(background = false) {
   if (requestError) { showToast('Could not load enrollment requests: ' + requestError.message, true); return; }
   const enrolledIds = new Set((enrolled || []).map(e => String(e.offering_id)));
 
-  const { data: misc } = await supabaseClient
-    .from('misc_fees')
-    .select('*')
-    .eq('semester', activeSemester)
-    .eq('school_year', activeSchoolYear);
-
   const yearText = String(profile.year_level || '').trim().toLowerCase();
   const studentYear = Number(yearText.match(/^[1-4]/)?.[0]) || ({ first: 1, second: 2, third: 3, fourth: 4 }[yearText.split(/\s+/)[0]]);
   state.courses = (offerings || []).filter(o =>
@@ -610,12 +603,11 @@ async function loadEnrollment(background = false) {
     reviewNote: (requests || []).find(r => String(r.offering_id) === String(o.id))?.review_note,
   }));
 
-  state.miscFees = misc || [];
   state.selectedOfferingIds = background ? new Set([...state.selectedOfferingIds].filter(id => state.courses.some(c => String(c.offering_id) === String(id) && !['pending','approved','enrolled','completed'].includes(c.enrollmentStatus)))) : new Set();
   state.enrollmentComplete = state.courses.some(c => c.enrollmentStatus === 'enrolled' || c.enrollmentStatus === 'approved');
   if (state.enrollmentComplete) setText('enrollmentLockStatus', 'You are already enrolled for this semester. Another enrollment request is disabled.');
   const steps = getEl('enrollSteps');
-  const summary = getEl('enrollmentBillingSummary');
+  const summary = getEl('enrollmentSummary');
   const completeNote = getEl('enrollmentCompleteNote');
   const enrollmentGrid = summary?.parentElement;
   if (steps) steps.style.display = state.enrollmentComplete ? 'none' : '';
@@ -632,10 +624,9 @@ async function loadEnrollment(background = false) {
   }
 
   renderCourseList();
-  renderMiscFees();
-  renderBillingSummary();
+  renderEnrollmentSummary();
   if (state.enrollmentLocked || state.enrollmentComplete) {
-    getEl('page-enrollment').querySelectorAll('input[type="checkbox"], #proceedBtn, #confirmEnrollBtn').forEach(el => { el.disabled = true; });
+    getEl('page-enrollment').querySelectorAll('input[type="checkbox"], #proceedBtn').forEach(el => { el.disabled = true; });
   }
 }
 
@@ -677,7 +668,6 @@ function renderCourseList() {
       </div>
       <div class="fee">
         <div class="units">${c.units} units</div>
-        <div class="amt">${peso(c.fee)}</div>
       </div>
     </div>`;
   }).join('');
@@ -696,7 +686,7 @@ function renderCourseList() {
       if (state.selectedOfferingIds.has(id)) {
         state.selectedOfferingIds.delete(id);
         renderCourseList();
-        renderBillingSummary();
+        renderEnrollmentSummary();
       } else {
         const conflict = checkScheduleConflict(id);
         if (conflict) {
@@ -706,98 +696,38 @@ function renderCourseList() {
         }
         state.selectedOfferingIds.add(id);
         renderCourseList();
-        renderBillingSummary();
+        renderEnrollmentSummary();
       }
     });
   });
 }
 
-function renderMiscFees() {
-  const el = getEl('miscFeeLines');
-  if (!el) return;
-  el.innerHTML = state.miscFees
-    .map(f => `<div class="fee-line"><span>${escapeHtml(f.name)}</span><b>${peso(f.amount)}</b></div>`)
-    .join('');
-}
-
-function miscTotal() {
-  return state.miscFees.reduce((s, f) => s + Number(f.amount || 0), 0);
-}
-
-function renderBillingSummary() {
+function renderEnrollmentSummary() {
   const selected = state.courses.filter(c => state.selectedOfferingIds.has(c.offering_id));
-  const tLines = getEl('tuitionLines');
-  if (tLines) {
-    tLines.innerHTML = selected.length
-      ? selected.map(c => `<div class="fee-line"><span>${escapeHtml(c.code)}</span><b>${peso(c.fee)}</b></div>`).join('')
-      : `<div class="fee-line" style="color:var(--ink-300);">No subjects selected yet</div>`;
-  }
-
-  const tuitionSum = selected.reduce((s, c) => s + Number(c.fee || 0), 0);
-  const total = tuitionSum + miscTotal();
-
-  setText('feeTotal', peso(total));
   const units = selected.reduce((s, c) => s + Number(c.units || 0), 0);
-  setText('feeSub', `${units} units · ${selected.length} subject${selected.length === 1 ? '' : 's'}`);
-
+  setText('enrollmentSelectionCount', `${units} units · ${selected.length} subject${selected.length === 1 ? '' : 's'}`);
   const proceedBtn = getEl('proceedBtn');
-  if (proceedBtn) proceedBtn.disabled = selected.length === 0 || state.enrollmentLocked || state.enrollmentComplete;
-}
-
-function renderReviewList() {
-  const container = getEl('reviewCourseList');
-  if (!container) return;
-
-  const selected = state.courses.filter(c => state.selectedOfferingIds.has(c.offering_id));
-  const tuitionSum = selected.reduce((s, c) => s + Number(c.fee || 0), 0);
-
-  container.innerHTML = selected.map(c => `
-    <div class="course-row checked" style="cursor:default;">
-      <div class="chk">✓</div>
-      <div>
-        <div class="code">${escapeHtml(c.code)}</div>
-        <div class="title">${escapeHtml(c.title)}</div>
-        <div class="meta">${escapeHtml(c.instructor_name || 'TBA')} · ${escapeHtml(c.schedule || 'Schedule TBA')}</div>
-      </div>
-      <div class="fee">
-        <div class="units">${c.units} units</div>
-        <div class="amt">${peso(c.fee)}</div>
-      </div>
-    </div>`).join('') + `
-    <div style="display:flex;justify-content:space-between;padding:14px 16px;background:var(--pink-50, #fdf2f8);border-radius:12px;margin-top:12px;">
-      <b>Total Amount Due</b><b style="color:var(--pink-600, #db2777);">${peso(tuitionSum + miscTotal())}</b>
-    </div>
-    <button class="btn btn-primary" id="confirmEnrollBtn" style="width:100%;justify-content:center;margin-top:16px;">Submit Enrollment Request →</button>`;
-
-  const confirmBtn = getEl('confirmEnrollBtn');
-  if (confirmBtn) {
-    confirmBtn.replaceWith(confirmBtn.cloneNode(true));
-    getEl('confirmEnrollBtn')?.addEventListener('click', confirmEnrollment);
-  }
+  if (proceedBtn) proceedBtn.disabled = selected.length === 0 || state.enrollmentReadFailed || state.enrollmentLocked || state.enrollmentComplete || state.enrollmentSubmitting;
 }
 
 function setEnrollStep(step) {
   state.enrollStep = step;
   const s1 = getEl('enrollStep1');
   const s2 = getEl('enrollStep2');
-  const s3 = getEl('enrollStep3');
   if (s1) s1.style.display = step === 1 ? 'block' : 'none';
   if (s2) s2.style.display = step === 2 ? 'block' : 'none';
-  if (s3) s3.style.display = step === 3 ? 'block' : 'none';
 
-  [1, 2, 3].forEach(n => {
+  [1, 2].forEach(n => {
     const tab = getEl('stepTab' + n);
     if (tab) {
       tab.classList.toggle('active', n === step);
       tab.classList.toggle('done', n < step);
     }
   });
-  if (step === 2) renderReviewList();
 }
 window.setEnrollStep = setEnrollStep;
 
-getEl('proceedBtn')?.addEventListener('click', () => setEnrollStep(2));
-getEl('backToStep1')?.addEventListener('click', () => setEnrollStep(1));
+getEl('proceedBtn')?.addEventListener('click', confirmEnrollment);
 
 async function confirmEnrollment() {
   if (state.enrollmentSubmitting) return;
@@ -807,7 +737,7 @@ async function confirmEnrollment() {
   const profile = state.studentProfile;
   if (!profile || state.selectedOfferingIds.size === 0) return;
   state.enrollmentSubmitting = true;
-  const btn = getEl('confirmEnrollBtn');
+  const btn = getEl('proceedBtn');
   if (btn) {
     btn.disabled = true;
     btn.textContent = 'Submitting…';
@@ -821,17 +751,19 @@ async function confirmEnrollment() {
     const { error } = await supabaseClient.from('enrollment_requests').insert(inserts);
     if (error) throw error;
 
-    setEnrollStep(3);
+    setEnrollStep(2);
     showToast('Enrollment request submitted for staff/dean approval');
     await Promise.all([loadDashboard(), loadEnrollment()]);
   } catch (err) {
     showToast('Could not submit enrollment request: ' + err.message, true);
     if (btn) {
       btn.disabled = false;
-      btn.textContent = 'Submit Enrollment Request →';
+      btn.textContent = 'Enroll Now →';
     }
   } finally {
     state.enrollmentSubmitting = false;
+    if (btn) btn.textContent = 'Enroll Now →';
+    renderEnrollmentSummary();
   }
 }
 
@@ -1980,7 +1912,7 @@ async function loadSSOLinks() {
   if (!nav) return;
   const role = state.studentProfile?.role || 'student';
   const visible = (links || []).filter(l => (l.roles || '').split(',').map(r => r.trim()).includes(role))
-    .filter(l => (l.label || '').trim().toLowerCase() !== 'library');
+    .filter(l => !['library', 'email'].includes((l.label || '').trim().toLowerCase()));
   nav.innerHTML = visible.map(l => `
     <a href="${l.url}" target="_blank" class="nav-item" style="text-decoration:none;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
@@ -3199,7 +3131,7 @@ function startAcademicUpdates() {
     const jobs = [];
     if (all || changes.some(t => ['enrollment_requests','enrollments','course_offerings'].includes(t))) {
       // A live refresh must never discard a student's proposed subjects or in-flight submission.
-      if (!state.selectedOfferingIds.size && !getEl('confirmEnrollBtn')?.textContent.includes('Submitting')) jobs.push(loadEnrollment(true));
+      if (!state.selectedOfferingIds.size && !state.enrollmentSubmitting) jobs.push(loadEnrollment(true));
       jobs.push(loadDashboard());
     }
     if (all || changes.includes('grades')) jobs.push(loadGrades());

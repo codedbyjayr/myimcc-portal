@@ -14,7 +14,7 @@
   <header class="workspace-heading"><span class="heading-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h4"/></svg></span><div><p class="eyebrow">MyIMCC · Academic Services</p><h1>Enrollment Requests</h1><p>Review proposed subject loads, make enrollment decisions, and keep track of each student's progress.</p></div></header>
   <!-- REVIEW TERM TOOLS -->
   <div class="enrollment-tools">
-    <details id="termManager" hidden><summary>Enrollment term settings</summary><p>Open or close enrollment for existing terms, including Summer. Add new subjects from the Dean dashboard.</p><label for="enrollmentTermSelect">Term</label><select id="enrollmentTermSelect"></select><button type="button" id="openTerm">Open enrollment</button><button type="button" id="closeTerm">Close enrollment</button></details>
+    <details id="termManager" hidden><summary>Enrollment term settings</summary><p>Open or close 1st Semester, 2nd Semester, or Summer for the selected school year. Opening a closed term automatically notifies all active, approved students through their notification bell. Subject offerings must be added from the Dean dashboard first.</p><label for="enrollmentTermSelect">Term</label><select id="enrollmentTermSelect"></select><button type="button" id="openTerm">Open enrollment</button><button type="button" id="closeTerm">Close enrollment</button><p id="termStatus" role="status" aria-live="polite"></p></details>
     <details><summary>Finalize a student's enrollment</summary><p>Resolve pending requests first. Finalizing locks the student's subjects for that term.</p><div id="finalizationGroups"></div></details>
   </div>
   <!-- END REVIEW TERM TOOLS -->

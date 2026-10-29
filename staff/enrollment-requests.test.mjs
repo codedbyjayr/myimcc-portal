@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const nodes = {};
-for (const id of ['back', 'requests', 'message', 'refresh', 'statusFilter', 'finalizationGroups', 'enrollmentTermSelect', 'termManager', 'openTerm', 'closeTerm', 'reviewTerm', 'reviewYear']) {
+for (const id of ['back', 'requests', 'message', 'refresh', 'statusFilter', 'finalizationGroups', 'enrollmentTermSelect', 'termManager', 'termStatus', 'openTerm', 'closeTerm', 'reviewTerm', 'reviewYear']) {
   nodes[id] = { innerHTML: '', textContent: '', addEventListener(event, handler) { this[event] = handler; } };
 }
 nodes.statusFilter.value = 'pending';
@@ -82,3 +82,22 @@ await nodes.requests.click({target:{closest:()=>({dataset:{history:'all'}})}});
 assert.equal(nodes.statusFilter.value,'all');
 assert(nodes.message.textContent.startsWith('No requests found.'));
 console.log('Enrollment review: student/term grouping, unit totals, escaping, approval, empty state and failure recovery passed');
+
+for (const semester of ['1st Semester', '2nd Semester', 'Summer']) {
+  nodes.enrollmentTermSelect.value = JSON.stringify(['2026-2027', semester]);
+  failure = null;
+  await nodes.openTerm.click();
+  const call = calls.findLast(c => c.name === 'set_enrollment_term');
+  assert.equal(call.args.p_school_year, '2026-2027');
+  assert.equal(call.args.p_semester, semester);
+  assert.equal(call.args.p_open, true);
+  assert(nodes.termStatus.textContent.includes('opened for ' + semester));
+  await nodes.closeTerm.click();
+  assert.equal(calls.findLast(c => c.name === 'set_enrollment_term').args.p_open, false);
+}
+failure = {message:'Access denied'};
+await nodes.openTerm.click();
+assert(nodes.termStatus.textContent.includes('Could not update term: Access denied'));
+assert.equal(nodes.openTerm.disabled, false);
+assert.equal(nodes.closeTerm.disabled, false);
+console.log('Enrollment term controls: all three terms, opening, closing, failure and retry passed.');
