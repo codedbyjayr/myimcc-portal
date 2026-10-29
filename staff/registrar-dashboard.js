@@ -39,6 +39,10 @@
   let selectedStudent = null;
   let closeOfferDialog = null;
   let selectedTerm = null;
+  let currentRole = null;
+  let registrarClearances = [];
+  let registrarClearancesLoaded = false;
+  let selectedRegistrarStudentId = null;
 
   // ── Messaging state ────────────────────────────────────────────────
   // The messages table is flat (sender_id, recipient_id, subject, body)
@@ -98,11 +102,13 @@
     dashboard: 'Dashboard',
     prospectus: 'Prospectus',
     offers: 'Student Offers',
+    clearance: 'Clearance',
     appointments: 'Appointments',
     messages: 'Messages'
   };
 
   function goTo(view) {
+    if (view === 'clearance' && !['registrar', 'admin'].includes(currentRole)) return;
     const target = getEl('view-' + view);
     if (!target) return;
 
@@ -133,6 +139,13 @@
     }
 
     closeMobileNav();
+
+    if (view === 'clearance' && !registrarClearancesLoaded) {
+      loadRegistrarClearances().catch(err => {
+        console.warn('[clearance] load error:', err);
+        toast('Could not load Registrar clearances', { type: 'error' });
+      });
+    }
 
     // Messages are loaded on first open, not on every navigation.
     if (view === 'messages' && !messagesLoaded) {
@@ -252,12 +265,13 @@
   function renderProspectus() {
     const input = getEl('prospectusSearch');
     const q = (input && input.value ? input.value : '').trim().toLowerCase();
+    const searchField = getEl('prospectusSearchField')?.value || 'all';
 
     const rows = allSubjects.filter(subject => {
       const matchCategory = category === 'ALL' || categoryOf(subject) === category;
       const matchQuery = !q
-        || String(subject.code || '').toLowerCase().includes(q)
-        || String(subject.title || '').toLowerCase().includes(q);
+        || (searchField !== 'title' && String(subject.code || '').toLowerCase().includes(q))
+        || (searchField !== 'code' && String(subject.title || '').toLowerCase().includes(q));
       const year = getEl('registrarYear').value;
       return matchCategory && matchQuery && (!selectedTerm || IMCC.termKey(subject) === selectedTerm) && (!year || String(subject.year) === year);
     });
@@ -291,13 +305,14 @@
   function renderStudents() {
     const input = getEl('studentSearch');
     const q = (input && input.value ? input.value : '').trim().toLowerCase();
+    const searchField = getEl('studentSearchField')?.value || 'name';
 
     const rows = allStudents.filter(student => {
       const year = getEl('registrarYear').value;
       if (year && String(parseInt(student.year_level, 10)) !== year) return false;
       if (!q) return true;
-      return String(student.full_name || '').toLowerCase().includes(q)
-        || String(student.student_no || '').toLowerCase().includes(q);
+      const value = searchField === 'studentNo' ? student.student_no : student.full_name;
+      return String(value || '').toLowerCase().includes(q);
     });
 
     const body = getEl('studentBody');
@@ -320,6 +335,93 @@
       setText(empty, allStudents.length
         ? 'No students match this search.'
         : 'No approved students yet.');
+    }
+  }
+
+  function renderRegistrarClearanceStudents() {
+    const query = (getEl('registrarClearanceSearch')?.value || '').trim().toLowerCase();
+    const year = getEl('registrarClearanceYear')?.value || '';
+    const rows = registrarClearances.filter(row => {
+      const student = row.profiles || {};
+      const haystack = [student.full_name, student.student_no, student.program].join(' ').toLowerCase();
+      return (!query || haystack.includes(query))
+        && (!year || String(parseInt(student.year_level, 10)) === year);
+    });
+    const target = getEl('registrarClearanceStudents');
+    if (target) target.innerHTML = rows.length ? rows.map(row => {
+      const student = row.profiles || {};
+      const status = row.status || 'pending';
+      return html`<button type="button" data-registrar-student="${row.student_id}"
+        aria-pressed="${String(row.student_id) === String(selectedRegistrarStudentId)}">
+        <b>${student.full_name || 'Unnamed student'}</b>
+        <small>${student.student_no || 'No student number'} · ${student.program || 'No program'} · ${status.replace('_', ' ')}</small>
+      </button>`;
+    }) : '<p>No students match this filter.</p>';
+  }
+
+  function renderRegistrarClearanceDetails() {
+    const target = getEl('registrarClearanceDetails');
+    if (!target) return;
+    const row = registrarClearances.find(item => String(item.student_id) === String(selectedRegistrarStudentId));
+    if (!row) {
+      target.innerHTML = '<div class="panel-head"><h3>Select a student</h3></div><p>Choose a student to review their Registrar clearance.</p>';
+      return;
+    }
+    const student = row.profiles || {};
+    const clearances = row.clearances || [];
+    const clearanceRows = clearances.map(item => {
+      const status = item.status || 'pending';
+      const cleared = status === 'cleared';
+      const action = item.department_code === 'registrar'
+        ? (cleared ? '✓ Registrar clearance approved' : raw('<button class="btn btn-primary" type="button" data-clearance-id="' + escapeHtml(row.id) + '">Approve Registrar clearance</button>'))
+        : (cleared ? '✓ Cleared' : 'Awaiting office approval');
+      return html`<tr><td>${item.department_name || item.department_code}</td>
+        <td><span class="badge ${cleared ? 'badge-green' : 'badge-amber'}">${status.replace('_', ' ')}</span></td>
+        <td>${action}</td><td>${item.note || '—'}</td>
+        <td>${item.cleared_at ? new Date(item.cleared_at).toLocaleDateString() : '—'}</td></tr>`;
+    });
+    target.innerHTML = html`<div class="panel-head"><h3>${student.full_name || 'Student'} — Registrar Clearance</h3></div>
+      <p>${student.student_no || 'No student number'} · ${student.program || 'No program'} · ${student.year_level || 'Year level not set'}</p>
+      <div class="table-responsive"><table><thead><tr><th>Office / Department</th><th>Status</th><th>Approval / Action</th><th>Note</th><th>Cleared Date</th></tr></thead>
+      <tbody>${clearanceRows}</tbody></table></div>`;
+  }
+
+  async function loadRegistrarClearances() {
+    const target = getEl('registrarClearanceStudents');
+    if (target && !registrarClearancesLoaded) target.textContent = 'Loading Registrar clearances…';
+    const { data, error } = await supabaseClient.rpc('get_registrar_clearance_workspace');
+    if (error) {
+      if (target && !registrarClearancesLoaded) target.textContent = 'Could not load Registrar clearances.';
+      throw new Error(error.message);
+    }
+    registrarClearances = data || [];
+    registrarClearancesLoaded = true;
+    renderRegistrarClearanceStudents();
+    renderRegistrarClearanceDetails();
+    announce(pluralize(registrarClearances.length, 'Registrar clearance'));
+  }
+
+  async function approveRegistrarClearance(button) {
+    const row = registrarClearances.find(item => String(item.id) === String(button.dataset.clearanceId)
+      && String(item.student_id) === String(selectedRegistrarStudentId)
+      && item.department_code === 'registrar');
+    if (!row || (row.status || 'pending') === 'cleared' || !['registrar', 'admin'].includes(currentRole)) return;
+    const studentName = row.profiles?.full_name || 'this student';
+    if (!window.confirm('Do you want to clear the Registrar requirement for ' + studentName + '?')) return;
+    button.disabled = true;
+    try {
+      const { data, error } = await supabaseClient.from('clearances')
+        .update({ status: 'cleared', cleared_at: new Date().toISOString() })
+        .eq('id', row.id).eq('student_id', row.student_id).eq('department_code', 'registrar')
+        .eq('status', row.status).select('id').single();
+      if (error) throw error;
+      if (!data?.id) throw new Error('No clearance was changed. Refresh and retry.');
+      toast('Registrar clearance approved.', { type: 'success' });
+      await loadRegistrarClearances();
+    } catch (error) {
+      toast('Could not approve clearance: ' + error.message, { type: 'error' });
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -1024,8 +1126,24 @@
 
     const search = getEl('prospectusSearch');
     if (search) search.addEventListener('input', renderProspectus);
+    const searchField = getEl('prospectusSearchField');
+    if (searchField) searchField.addEventListener('change', renderProspectus);
     const studentSearch = getEl('studentSearch');
     if (studentSearch) studentSearch.addEventListener('input', renderStudents);
+    const studentSearchField = getEl('studentSearchField');
+    if (studentSearchField) studentSearchField.addEventListener('change', renderStudents);
+    getEl('registrarClearanceSearch').addEventListener('input', renderRegistrarClearanceStudents);
+    getEl('registrarClearanceYear').addEventListener('change', renderRegistrarClearanceStudents);
+    on(document, 'click', '#registrarClearanceStudents [data-registrar-student]', (event, button) => {
+      selectedRegistrarStudentId = button.dataset.registrarStudent;
+      renderRegistrarClearanceStudents();
+      renderRegistrarClearanceDetails();
+    });
+    on(document, 'click', '#registrarClearanceDetails [data-clearance-id]', (event, button) => approveRegistrarClearance(button));
+    on(document, 'click', '#registrarClearanceRefresh', () => loadRegistrarClearances().catch(err => {
+      console.warn('[clearance] refresh failed:', err);
+      toast('Could not refresh Registrar clearances', { type: 'error' });
+    }));
     getEl('summerOfferingForm').addEventListener('submit', publishSummerOffering);
     getEl('registrarYear').addEventListener('change', () => {
       closeOfferModal();
@@ -1386,6 +1504,8 @@
     const auth = await initAuthGuard(['registrar', 'admin', 'staff', 'dean']);
     if (!auth) return;
     getEl('summerPublisher').hidden = !['registrar','admin','dean'].includes(auth.profile.role);
+    currentRole = auth.profile.role;
+    getEl('registrarClearanceNav').hidden = !['registrar', 'admin'].includes(currentRole);
 
     currentUserId = auth.user.id;
 
