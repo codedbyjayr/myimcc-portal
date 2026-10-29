@@ -52,6 +52,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const previousTerm = termSelect.value;
       termSelect.innerHTML = (workspace.data.terms || []).map(t => UIM.html`<option value="${JSON.stringify([t.school_year, t.semester])}">${t.semester} ${t.school_year} — ${t.is_open ? 'Open' : 'Closed'}</option>`).join('');
       if ([...termSelect.options].some(o => o.value === previousTerm)) termSelect.value = previousTerm;
+      if (!termSelect.options.length) { termSelect.innerHTML = '<option value="">No academic years configured</option>'; termStatus.textContent = 'Configure an academic year before opening enrollment.'; }
+      for (const id of ['openTerm', 'closeTerm']) document.getElementById(id).disabled = !termSelect.value;
       const groups = new Map();
       for (const request of data || []) {
         const key = JSON.stringify([request.student_id, request.school_year, request.semester]);

@@ -1,4 +1,5 @@
 :root {
+    color-scheme: only light;
     --pink-500: #E7338A;
     --pink-600: #E32B4F;
     --pink-50: #fdecf2;
@@ -8,7 +9,7 @@
     --ink-600: #5b6172;
     --ink-400: #8b90a0;
     --line: #ece9ee;
-    --bg: #f6f5f8;
+    --bg: #ffffff;
     --white: #ffffff;
     --danger: #c0392b;
     --ok: #1e8e5a;
@@ -19,6 +20,7 @@
 }
 
 [data-theme="dark"] {
+    color-scheme: dark;
     --pink-500: #F43F5E;
     --pink-600: #FB7185;
     --pink-50: #261222;
@@ -263,6 +265,7 @@ body {
 }
 
 .nav-item {
+    text-decoration: none;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -1268,3 +1271,6 @@ section h3[tabindex="-1"]:focus-visible { outline: 2px solid #B81568; outline-of
     display: none !important;
   }
 }
+
+.nav-item.soon { opacity: .55; cursor: not-allowed; }
+.soon-badge { margin-left: auto; font-size: 9px; white-space: nowrap; padding: 2px 5px; border-radius: 5px; background: var(--line); }

@@ -39,6 +39,8 @@ try {
   await run('Prevent repeat term enrollment', await readFile(new URL('../supabase/migrations/20261029063928_prevent_repeat_term_enrollment.sql', import.meta.url), 'utf8'));
   await run('Enrollment opening notifications', await readFile(new URL('../supabase/migrations/20261029114553_enrollment_open_notifications.sql', import.meta.url), 'utf8'));
   await run('Enrollment opening notification regression', await readFile(new URL('../supabase/tests/enrollment_open_notifications.sql', import.meta.url), 'utf8'));
+  await run('Independent enrollment terms', await readFile(new URL('../supabase/migrations/20261029124809_independent_enrollment_terms.sql', import.meta.url), 'utf8'));
+  await run('Empty enrollment terms regression', await readFile(new URL('../supabase/tests/independent_enrollment_terms.sql', import.meta.url), 'utf8'));
   await run('Repeat term enrollment boundary', await readFile(new URL('../supabase/tests/repeat_term_enrollment.sql', import.meta.url), 'utf8'));
   await run('Adviser role and workflow regression', await readFile(new URL('../supabase/tests/adviser_requirements.sql', import.meta.url), 'utf8'));
   await run('Backend boundary regression', await readFile(new URL('../supabase/tests/backend_access_controls.sql', import.meta.url), 'utf8'));
@@ -47,6 +49,8 @@ try {
   await run('Evaluation anonymity and stable instructor identity', await readFile(new URL('../supabase/tests/faculty_evaluation_identity.sql', import.meta.url), 'utf8'));
   const demo = await buildDemoReview();
   await run('Isolated review schema',demo);
+  await run('Reproduce existing review schema without independent terms', 'DROP TABLE imcc_review.enrollment_terms; DROP TRIGGER z_apply_enrollment_term ON imcc_review.course_offerings; DROP FUNCTION imcc_review_private.apply_enrollment_term();');
+  await run('Upgrade existing review terms', await readFile(new URL('../supabase/migrations/20261029125355_review_enrollment_term_parity.sql', import.meta.url), 'utf8'));
   await run('Enable local review fixtures',"UPDATE imcc_review_private.control SET enabled_until=now()+interval '1 hour';");
   const regression = (await readFile(new URL('../supabase/tests/adviser_requirements.sql',import.meta.url),'utf8'))
     .replace(/\bpublic\b/g,'imcc_review').replace(/\bprivate\b/g,'imcc_review_private');
