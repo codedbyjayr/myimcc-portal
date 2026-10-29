@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import './grading.js';
 
 const Grading = globalThis.Grading;
+assert(Grading.termOrder('2026-2027','Summer') > Grading.termOrder('2026-2027','2nd Semester'));
+assert(Grading.termOrder('2027-2028','1st Semester') > Grading.termOrder('2026-2027','Summer'));
 
 // computeEquivalent
 assert.equal(Grading.computeEquivalent(null), null);
@@ -29,17 +31,18 @@ assert.equal(Grading.periodAverage({ prelim: 100, midterm: 90, semifinal: 80, fi
 
 // computeRemark & previewEquivalent
 assert.equal(Grading.computeRemark({ prelim: 80, midterm: 80, semifinal: 80, final: null }), 'Pending');
-assert.equal(Grading.computeRemark({ prelim: 1.5, midterm: 1.5, semifinal: 1.5, final: 1 }), 'Passed');
-assert.equal(Grading.computeRemark({ prelim: 60, midterm: 60, semifinal: 60, final: 60 }), 'Failed');
+assert.equal(Grading.computeRemark({ prelim: 1.5, midterm: 1.5, semifinal: 1.5, final: 1, equivalent: 2.75 }), 'Passed');
+assert.equal(Grading.computeRemark({ final: 1, equivalent: 5 }), 'Failed', 'Official Equivalent determines the remark');
+assert.equal(Grading.computeRemark({ final: 1 }), 'Pending', 'Missing manual Equivalent stays pending');
 
 assert.equal(Grading.previewEquivalent({ prelim: null }), '—');
-assert.equal(Grading.previewEquivalent({ prelim: 1.5, midterm: 1.5, semifinal: 1.5, final: 1 }), '1.00');
+assert.equal(Grading.previewEquivalent({ prelim: 1.5, midterm: 1.5, semifinal: 1.5, final: 1, equivalent: 2.75 }), '2.75');
 assert.equal(Grading.computeEquivalent(98), 1.10);
 for (const grade of [1,1.1,1.2,1.25,1.3,1.4,1.5,1.6,1.7,1.75,1.8,1.9,2,2.1,2.2,2.25,2.3,2.4,2.5,2.6,2.7,2.75,2.8,2.9,3,4,5]) assert(Grading.isSchoolGrade(grade));
 for (const grade of [null,undefined,'',NaN,Infinity,0,1.11,3.5,4.5,98]) assert(!Grading.isSchoolGrade(grade));
-assert.equal(Grading.computeRemark({ final:4 }), 'Conditional');
+assert.equal(Grading.computeRemark({ final:1,equivalent:4 }), 'Conditional');
 assert.equal(Grading.computeRemark({ final:null,remark:'Dropped' }), 'Dropped');
-assert.equal(Grading.computeRemark({ final:5 }), 'Failed');
+assert.equal(Grading.computeRemark({ final:1,equivalent:5 }), 'Failed');
 assert.equal(Grading.formatGrade(1.1), '1.10');
 assert.equal(Grading.estimate({ grade_scale:'school',prelim:1,midterm:2,semifinal:3 }), 2);
 assert.equal(Grading.estimate({ grade_scale:'school',prelim:4,midterm:2 }), 2);

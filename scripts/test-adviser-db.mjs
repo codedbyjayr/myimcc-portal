@@ -33,8 +33,11 @@ try {
   await run('Existing school grading', await readFile(new URL('../supabase/migrations/20261021035015_production_school_grading.sql', import.meta.url), 'utf8'));
   await run('Existing school scale', await readFile(new URL('../supabase/migrations/20261021040134_exact_school_grade_scale.sql', import.meta.url), 'utf8'));
   await run('Production manual school equivalents', await readFile(new URL('../supabase/migrations/20261023002020_manual_school_equivalent.sql', import.meta.url), 'utf8'));
-  await run('Ordered backend release', await readFile(new URL('../supabase/migrations/20261027020245_backend_semester_release.sql', import.meta.url), 'utf8'));
+  await run('Grade revert MFA guard', await readFile(new URL('../supabase/migrations/20261027120911_grade_revert_mfa_guard.sql', import.meta.url), 'utf8'));
+  await run('Ordered backend release', await readFile(new URL('../supabase/migrations/20261027131814_backend_semester_release.sql', import.meta.url), 'utf8'));
   await run('FAQ vector retrieval and content invalidation', await readFile(new URL('../supabase/tests/faq_search.sql', import.meta.url), 'utf8'));
+  await run('Prevent repeat term enrollment', await readFile(new URL('../supabase/migrations/20261029063928_prevent_repeat_term_enrollment.sql', import.meta.url), 'utf8'));
+  await run('Repeat term enrollment boundary', await readFile(new URL('../supabase/tests/repeat_term_enrollment.sql', import.meta.url), 'utf8'));
   await run('Adviser role and workflow regression', await readFile(new URL('../supabase/tests/adviser_requirements.sql', import.meta.url), 'utf8'));
   await run('Backend boundary regression', await readFile(new URL('../supabase/tests/backend_access_controls.sql', import.meta.url), 'utf8'));
   await run('Semester integrity regression', await readFile(new URL('../supabase/tests/semester_integrity.sql', import.meta.url), 'utf8'));

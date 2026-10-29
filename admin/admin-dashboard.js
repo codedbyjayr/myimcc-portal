@@ -297,11 +297,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2. Fetch Pending Requests
     async function loadPendingUsers() {
-        const { data: users, error } = await supabaseClient
+        const { data: users, error } = await IMCC.fetchAll(() => supabaseClient
             .from('profiles')
             .select('*')
             .eq('status', 'pending')
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: true }));
 
         if (error) return;
 
@@ -314,11 +314,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 3. Fetch Approved Users & Render Interactive Select Dropdowns
     async function loadApprovedUsers() {
-        const { data: users, error } = await supabaseClient
+        const { data: users, error } = await IMCC.fetchAll(() => supabaseClient
             .from('profiles')
             .select('*')
             .eq('status', 'approved')
-            .order('full_name', { ascending: true });
+            .order('full_name', { ascending: true }));
 
         if (error) return;
 

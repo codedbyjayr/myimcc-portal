@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/env-config.js",
-      "destination": "/api/env-config.js"
+      "destination": "/api/env-config"
     }
   ],
   "headers": [
@@ -55,5 +55,7 @@
     "deploymentEnabled": {
       "codex/backend-semester-release": false
     }
-  }
+  },
+  "buildCommand": "npm run check:release",
+  "outputDirectory": "."
 }

@@ -38,6 +38,7 @@
   let category = 'ALL';
   let selectedStudent = null;
   let closeOfferDialog = null;
+  let selectedTerm = null;
 
   // ── Messaging state ────────────────────────────────────────────────
   // The messages table is flat (sender_id, recipient_id, subject, body)
@@ -168,32 +169,33 @@
   }
 
   async function loadStudents() {
-    const { data, error } = await supabaseClient
+    const { data, error } = await IMCC.fetchAll(() => supabaseClient
       .from(TABLES.students)
       .select('id, full_name, student_no, program, year_level, section, status, is_active')
       // Only approved, active students can be given subjects.
       .eq('role', 'student')
       .eq('status', 'approved')
-      .order('full_name');
+      .order('full_name'));
 
     if (error) throw new Error('Could not load students: ' + error.message);
     allStudents = data || [];
   }
 
   async function loadSubjects() {
-    const { data, error } = await supabaseClient
+    const { data, error } = await IMCC.fetchAll(() => supabaseClient
       .from(TABLES.subjects)
       .select('id, code, title, units, program, year, semester, school_year, is_major')
-      .order('code');
+      .order('code'));
 
     if (error) throw new Error('Could not load the prospectus: ' + error.message);
     allSubjects = data || [];
+    getEl('summerSubject').innerHTML = '<option value="">Select a subject</option>' + allSubjects.map(s => html`<option value="${s.id}">${s.code} — ${s.title} · Year ${s.year || 'not set'} · ${categoryOf(s)} · ${s.semester} ${s.school_year}</option>`).join('');
   }
 
   async function loadOffers() {
-    const { data, error } = await supabaseClient
+    const { data, error } = await IMCC.fetchAll(() => supabaseClient
       .from(TABLES.offers)
-      .select('id, student_id, offering_id, status, course_offerings(id, code, title, units, is_major, year, semester)');
+      .select('id, student_id, offering_id, status, course_offerings(id, code, title, units, is_major, year, semester, school_year)'));
 
     if (error) throw new Error('Could not load subject offers: ' + error.message);
     allOffers = data || [];
@@ -211,6 +213,16 @@
       announce('Some data could not be loaded: ' + message);
     }
 
+    const termSelect = getEl('registrarTerm');
+    const terms = IMCC.termKeys(allSubjects);
+    if (selectedTerm === null || (selectedTerm && !terms.includes(selectedTerm))) selectedTerm = terms[0] || '';
+    termSelect.innerHTML = '<option value="">All terms (history)</option>' + terms.map(t => html`<option value="${t}">${t.split('|').reverse().join(' · ')}</option>`).join('');
+    termSelect.value = selectedTerm;
+    termSelect.onchange = () => {
+      selectedTerm = termSelect.value;
+      closeOfferModal();
+      renderProspectus(); renderStudentOffers(); renderDashboardStats();
+    };
     renderStudents();
     renderProspectus();
     renderStudentOffers();
@@ -229,10 +241,11 @@
   }
 
   function renderDashboardStats() {
-    setText(getEl('statStudents'), String(allStudents.length));
-    setText(getEl('statSubjects'), String(allSubjects.length));
+    const year = getEl('registrarYear').value;
+    setText(getEl('statStudents'), String(allStudents.filter(s => !year || String(parseInt(s.year_level, 10)) === year).length));
+    setText(getEl('statSubjects'), String(allSubjects.filter(s => (!selectedTerm || IMCC.termKey(s) === selectedTerm) && (!year || String(s.year) === year)).length));
 
-    const pending = allOffers.filter(o => o.status === 'pending').length;
+    const pending = allOffers.filter(o => o.status === 'pending' && (!selectedTerm || (o.course_offerings && IMCC.termKey(o.course_offerings) === selectedTerm)) && (!year || String(o.course_offerings?.year) === year)).length;
     setText(getEl('statPending'), String(pending));
   }
 
@@ -245,7 +258,8 @@
       const matchQuery = !q
         || String(subject.code || '').toLowerCase().includes(q)
         || String(subject.title || '').toLowerCase().includes(q);
-      return matchCategory && matchQuery;
+      const year = getEl('registrarYear').value;
+      return matchCategory && matchQuery && (!selectedTerm || IMCC.termKey(subject) === selectedTerm) && (!year || String(subject.year) === year);
     });
 
     const body = getEl('prospectusBody');
@@ -279,6 +293,8 @@
     const q = (input && input.value ? input.value : '').trim().toLowerCase();
 
     const rows = allStudents.filter(student => {
+      const year = getEl('registrarYear').value;
+      if (year && String(parseInt(student.year_level, 10)) !== year) return false;
       if (!q) return true;
       return String(student.full_name || '').toLowerCase().includes(q)
         || String(student.student_no || '').toLowerCase().includes(q);
@@ -327,7 +343,7 @@
       .filter(offer => String(offer.student_id) === String(selectedStudent.id))
       .filter(offer => offer.status === null || ACTIVE_OFFER_STATUSES.indexOf(offer.status) !== -1)
       .map(offer => ({ ...offer, subject: offer.course_offerings || null }))
-      .filter(offer => offer.subject);
+      .filter(offer => offer.subject && (!selectedTerm || IMCC.termKey(offer.subject) === selectedTerm) && (!getEl('registrarYear').value || String(offer.subject.year) === getEl('registrarYear').value));
   }
 
   function renderStudentOffers() {
@@ -340,7 +356,7 @@
     body.innerHTML = rows.map(offer => html`
       <tr>
         <th scope="row">${offer.subject.code}</th>
-        <td>${offer.subject.title}</td>
+        <td>${offer.subject.title}<small> · ${offer.subject.semester} ${offer.subject.school_year}</small></td>
         <td>${offer.subject.units}</td>
         <td>${categoryBadge(offer.subject)}</td>
         <td><span class="badge ${raw(offer.status === 'enrolled' ? 'enrolled' : 'offered')}">${offer.status || 'enrolled'}</span></td>
@@ -362,8 +378,9 @@
   // ── Offer dialog ────────────────────────────────────────────────────
   function openOfferModal() {
     if (!selectedStudent) return;
+    if (!selectedTerm) { toast('Choose a semester before assigning a subject.', { type: 'error' }); return; }
     setText(getEl('offerModalSub'),
-      'Assign a prospectus subject to ' + selectedStudent.full_name + '.');
+      'Assign a subject to ' + selectedStudent.full_name + ' · ' + selectedTerm.split('|').reverse().join(' ') + '.');
     setText(getEl('offerCategory'), 'ALL');
     category = 'ALL';
     populateOfferSubjects();
@@ -394,6 +411,8 @@
     );
 
     const options = allSubjects.filter(subject => {
+      if (!selectedTerm || IMCC.termKey(subject) !== selectedTerm) return false;
+      if (getEl('registrarYear').value && String(subject.year) !== getEl('registrarYear').value) return false;
       if (taken.has(String(subject.id))) return false;
       return chosen === 'ALL' || categoryOf(subject) === chosen;
     });
@@ -407,6 +426,7 @@
     const select = getEl('offerSubject');
     const subjectId = select && select.value;
     if (!subjectId || !selectedStudent) return;
+    if (!selectedTerm || !allSubjects.some(s => String(s.id) === String(subjectId) && IMCC.termKey(s) === selectedTerm && (!getEl('registrarYear').value || String(s.year) === getEl('registrarYear').value))) return;
 
     await withBusy(button, 'Saving…', async () => {
       const { error } = await supabaseClient
@@ -429,16 +449,38 @@
     });
   }
 
+  async function publishSummerOffering(event) {
+    event.preventDefault();
+    const form = getEl('summerOfferingForm');
+    if (!form.reportValidity()) return;
+    await withBusy(form.querySelector('button[type="submit"]'), 'Publishing…', async () => {
+      const { data, error } = await supabaseClient.rpc('publish_summer_offering', {
+        p_source_offering_id: Number(getEl('summerSubject').value),
+        p_school_year: getEl('summerSchoolYear').value.trim(),
+        p_schedule: getEl('summerSchedule').value.trim() || null,
+      });
+      if (error) { getEl('summerPublishStatus').textContent = 'Could not publish: ' + error.message; return; }
+      selectedTerm = IMCC.termKey(data);
+      getEl('registrarYear').value = '';
+      await loadAll();
+      getEl('summerPublishStatus').textContent = 'Summer offering published. The dean can assign its instructor; check the term enrollment status before accepting students.';
+    });
+  }
+
   async function removeOffer(offeringId, button) {
     if (!selectedStudent) return;
-    const ok = window.confirm('Remove this subject from ' + selectedStudent.full_name + "'s load?");
+    const offer = offersForStudent().find(o => String(o.id) === String(offeringId));
+    if (!offer) return;
+    const ok = window.confirm('Remove ' + offer.subject.code + ' from ' + selectedStudent.full_name + "'s load for " + offer.subject.semester + ' ' + offer.subject.school_year + '?');
     if (!ok) return;
 
     await withBusy(button, 'Removing…', async () => {
       const { error } = await supabaseClient
         .from(TABLES.offers)
-        .update({ status: 'removed' })
-        .eq('id', offeringId);
+        .update({ status: 'dropped' })
+        .eq('id', offeringId)
+        .select('id')
+        .single();
 
       if (error) {
         toast('Could not remove this subject. Please try again.', { type: 'error' });
@@ -984,6 +1026,11 @@
     if (search) search.addEventListener('input', renderProspectus);
     const studentSearch = getEl('studentSearch');
     if (studentSearch) studentSearch.addEventListener('input', renderStudents);
+    getEl('summerOfferingForm').addEventListener('submit', publishSummerOffering);
+    getEl('registrarYear').addEventListener('change', () => {
+      closeOfferModal();
+      renderStudents(); renderProspectus(); renderStudentOffers(); renderDashboardStats();
+    });
     const offerCategory = getEl('offerCategory');
     if (offerCategory) offerCategory.addEventListener('change', populateOfferSubjects);
 
@@ -1338,6 +1385,7 @@
     // redirected away from the registrar portal.
     const auth = await initAuthGuard(['registrar', 'admin', 'staff', 'dean']);
     if (!auth) return;
+    getEl('summerPublisher').hidden = !['registrar','admin','dean'].includes(auth.profile.role);
 
     currentUserId = auth.user.id;
 

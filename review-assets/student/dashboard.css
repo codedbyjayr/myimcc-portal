@@ -1852,6 +1852,37 @@ tr:last-child td {
   height: 24px;
 }
 
+.chat-panel {
+  position: fixed;
+  inset: auto 16px calc(84px + env(safe-area-inset-bottom, 0px)) auto;
+  margin: 0;
+  box-sizing: border-box;
+  width: min(390px, calc(100vw - 32px));
+  height: min(580px, calc(100dvh - 110px));
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--ink-900);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .18);
+  overflow-y: auto;
+}
+
+.chat-panel:popover-open {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-panel .card-head { flex-shrink: 0; }
+.chat-panel #chatClose { min-width: 44px; min-height: 44px; font-size: 20px; }
+.chat-panel .help-log { flex: 1; min-height: 100px; }
+.chat-panel .help-suggest { flex-shrink: 0; gap: 6px; margin-bottom: 8px; padding-bottom: 8px; }
+.chat-panel .help-chip { font-size: 12px; padding: 5px 9px; }
+.chat-panel .msg-reply { flex-shrink: 0; }
+.chat-panel .msg-item { max-width: 100%; }
+.chat-panel .msg-item-body { white-space: normal; overflow-wrap: anywhere; }
+.chat-panel .help-footnote { margin-bottom: 0; }
+
 @media(max-width:480px) {
   .chat-fab { right: 16px; }
 }

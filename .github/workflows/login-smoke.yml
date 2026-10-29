@@ -1,0 +1,19 @@
+name: Live login configuration
+on:
+  deployment_status:
+permissions:
+  contents: read
+jobs:
+  check:
+    if: github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/check-live-login.mjs "$DEPLOYMENT_URL"
+        env:
+          DEPLOYMENT_URL: https://myimcc-portal.vercel.app

@@ -10,6 +10,7 @@ const b = '00000000-0000-0000-0000-000000000002';
 let existing = [];
 let inserted;
 let selected;
+const yearFilter = { value: '' };
 const list = {
   innerHTML: '',
   querySelectorAll(selector) {
@@ -40,7 +41,7 @@ const client = {
         }
         assert(selected.includes('instructor_id'));
         return resolve({ data: [a, b, null].map((id, index) => ({
-          course_offerings: { id: index, instructor_id: id, instructor_name: 'Same Name', code: 'C', title: 'Course' },
+          course_offerings: { id: index, instructor_id: id, instructor_name: 'Same Name', code: 'C', title: 'Course', year: index + 1, school_year: '2026-2027', semester: '1st Semester' },
         })) });
       },
     };
@@ -49,7 +50,7 @@ const client = {
 };
 const context = vm.createContext({
   state: { studentProfile: { id: 'student' } }, supabaseClient: client,
-  getEl: id => id === 'evalList' ? list : { style: {} }, setText() {},
+  getEl: id => id === 'evalList' ? list : id === 'evalYearFilter' ? yearFilter : { style: {} }, setText() {},
   escapeHtml: value => value, showToast() {},
 });
 vm.runInContext(loader, context);
@@ -64,4 +65,14 @@ buttons = [];
 existing = [{ instructor_id: a }];
 await context.loadFacultyEval();
 assert.deepEqual(buttons.map(button => button.dataset.instructorId), [b]);
+buttons = [];
+existing = [];
+yearFilter.value = '1';
+await context.loadFacultyEval();
+assert.deepEqual(buttons.map(button => button.dataset.instructorId), [a]);
+buttons = [];
+yearFilter.value = '4';
+await context.loadFacultyEval();
+assert.deepEqual(buttons, []);
+assert.equal(list.innerHTML, '', 'An empty year filter result must clear the previous instructor list');
 console.log('Faculty evaluations: same-name grouping, ID submission, and dedup passed.');

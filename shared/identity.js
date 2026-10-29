@@ -353,8 +353,35 @@
       .join(' ');
   }
 
+  // Stable ordering is required so adjacent pages cannot repeat or skip tied rows.
+  async function fetchAll(query) {
+    const rows = [];
+    for (;;) {
+      const { data, error } = await query().order('id').range(rows.length, rows.length + 499);
+      if (error) return { data: null, error };
+      if (!Array.isArray(data)) return { data: null, error: { message: 'Expected a row list.' } };
+      if (!data.length) return { data: rows, error: null };
+      rows.push(...data);
+    }
+  }
+
+  function termKey(row) {
+    return String(row.school_year || '').replace(/[\u2013\u2014]/g, '-') + '|' + (row.semester || '');
+  }
+
+  function termKeys(rows) {
+    const semesterOrder = ['1st Semester', '2nd Semester', 'Summer'];
+    return [...new Set(rows.map(termKey))].sort((a, b) => {
+      const [ay, as] = a.split('|'), [by, bs] = b.split('|');
+      return by.localeCompare(ay) || semesterOrder.indexOf(bs) - semesterOrder.indexOf(as);
+    });
+  }
+
   // ── Export ──────────────────────────────────────────────────────────
   global.IMCC = Object.assign(global.IMCC || {}, {
+    fetchAll,
+    termKey,
+    termKeys,
     ROLES,
     REQUESTABLE_ROLES,
     PORTALS,

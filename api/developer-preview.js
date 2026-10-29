@@ -57,7 +57,7 @@ export default async function handler(req, res) {
     const resource = new URL(req.url, 'http://localhost').searchParams.get('resource');
     if (resource !== null) {
       const target = new URL(resource, url);
-      const readRpc = 'get_class_roster|get_subject_instructor_options|get_dean_student_directory|list_student_records|get_student_record|helpdesk_recipient_id|list_enrollment_request_history|get_enrollment_workspace';
+      const readRpc = 'get_class_roster|get_subject_instructor_options|get_dean_student_directory|helpdesk_recipient_id|list_enrollment_request_history';
       if (!resource.startsWith('/rest/v1/') || resource.includes('\\')
         || target.origin !== new URL(url).origin
         || !new RegExp(`^/rest/v1/(?:[a-z_][a-z_0-9]*|rpc/(?:${readRpc}))$`).test(target.pathname)) {

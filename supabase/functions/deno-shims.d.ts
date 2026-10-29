@@ -33,3 +33,10 @@ declare module 'https://*' {
   const mod: any;
   export default mod;
 }
+
+declare module 'https://esm.sh/@xenova/transformers@2.17.2' {
+  export const env: { allowLocalModels: boolean };
+  export function pipeline(task: 'feature-extraction', model: string): Promise<
+    (text: string, options: { pooling: 'mean'; normalize: boolean }) => Promise<{ data: Float32Array }>
+  >;
+}

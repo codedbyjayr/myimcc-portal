@@ -612,7 +612,8 @@ async function loadEnrollment(background = false) {
 
   state.miscFees = misc || [];
   state.selectedOfferingIds = background ? new Set([...state.selectedOfferingIds].filter(id => state.courses.some(c => String(c.offering_id) === String(id) && !['pending','approved','enrolled','completed'].includes(c.enrollmentStatus)))) : new Set();
-  state.enrollmentComplete = state.courses.length > 0 && state.courses.every(c => c.enrollmentStatus === 'enrolled');
+  state.enrollmentComplete = state.courses.some(c => c.enrollmentStatus === 'enrolled' || c.enrollmentStatus === 'approved');
+  if (state.enrollmentComplete) setText('enrollmentLockStatus', 'You are already enrolled for this semester. Another enrollment request is disabled.');
   const steps = getEl('enrollSteps');
   const summary = getEl('enrollmentBillingSummary');
   const completeNote = getEl('enrollmentCompleteNote');
@@ -633,7 +634,7 @@ async function loadEnrollment(background = false) {
   renderCourseList();
   renderMiscFees();
   renderBillingSummary();
-  if (state.enrollmentLocked) {
+  if (state.enrollmentLocked || state.enrollmentComplete) {
     getEl('page-enrollment').querySelectorAll('input[type="checkbox"], #proceedBtn, #confirmEnrollBtn').forEach(el => { el.disabled = true; });
   }
 }
@@ -662,7 +663,8 @@ function renderCourseList() {
   const container = getEl('courseList');
   if (!container) return;
 
-  container.innerHTML = state.courses.map(c => {
+  const courses = state.enrollmentComplete ? state.courses.filter(c => ['enrolled', 'approved', 'pending'].includes(c.enrollmentStatus)) : state.courses;
+  container.innerHTML = courses.map(c => {
     const checked = state.selectedOfferingIds.has(c.offering_id);
     return `
     <div class="course-row ${checked ? 'checked' : ''}" data-id="${c.offering_id}">
@@ -687,7 +689,7 @@ function renderCourseList() {
 
   container.querySelectorAll('.course-row').forEach(row => {
     row.addEventListener('click', () => {
-      if (state.enrollmentLocked) return;
+      if (state.enrollmentLocked || state.enrollmentComplete) return;
       const id = String(row.dataset.id);
       const course = state.courses.find(c => c.offering_id === id);
       if (['pending', 'enrolled'].includes(course?.enrollmentStatus)) return;
@@ -739,7 +741,7 @@ function renderBillingSummary() {
   setText('feeSub', `${units} units · ${selected.length} subject${selected.length === 1 ? '' : 's'}`);
 
   const proceedBtn = getEl('proceedBtn');
-  if (proceedBtn) proceedBtn.disabled = selected.length === 0;
+  if (proceedBtn) proceedBtn.disabled = selected.length === 0 || state.enrollmentLocked || state.enrollmentComplete;
 }
 
 function renderReviewList() {
@@ -798,9 +800,13 @@ getEl('proceedBtn')?.addEventListener('click', () => setEnrollStep(2));
 getEl('backToStep1')?.addEventListener('click', () => setEnrollStep(1));
 
 async function confirmEnrollment() {
+  if (state.enrollmentSubmitting) return;
+  if (state.enrollmentComplete) { showToast('You are already enrolled for this semester.', true); return; }
+  if (state.enrollmentReadFailed) { showToast('Refresh enrollment successfully before submitting.', true); return; }
   if (state.enrollmentLocked) { showToast('Enrollment is finalized and locked.', true); return; }
   const profile = state.studentProfile;
   if (!profile || state.selectedOfferingIds.size === 0) return;
+  state.enrollmentSubmitting = true;
   const btn = getEl('confirmEnrollBtn');
   if (btn) {
     btn.disabled = true;
@@ -824,6 +830,8 @@ async function confirmEnrollment() {
       btn.disabled = false;
       btn.textContent = 'Submit Enrollment Request →';
     }
+  } finally {
+    state.enrollmentSubmitting = false;
   }
 }
 
@@ -1854,12 +1862,15 @@ document.addEventListener('click', event => {
 });
 
 // One assistant owns retrieval, citations and consultation handoff.
-function toggleChat() {
-  goto('help');
-  requestAnimationFrame(() => getEl('helpInput')?.focus());
+function toggleChat(force) {
+  getEl('chatPanel')?.togglePopover(force);
 }
 window.toggleChat = toggleChat;
-getEl('chatFab')?.addEventListener('click', toggleChat);
+getEl('chatPanel')?.addEventListener('toggle', event => {
+  const open = event.newState === 'open';
+  getEl('chatFab')?.setAttribute('aria-expanded', String(open));
+  if (open) getEl('helpInput')?.focus();
+});
 
 // ── MFA Configuration Module (Built-in Supabase Auth TOTP) ─────────
 let currentMfaFactorId = null;
@@ -2744,6 +2755,8 @@ async function askHelpAssistant(question) {
 
 // ── Booking ───────────────────────────────────────────────────────────
 function revealBooking(question) {
+  toggleChat(false);
+  goto('help');
   const card = getEl('bookCard');
   if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
 

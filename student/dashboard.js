@@ -22,7 +22,6 @@ const state = {
   billing: { totalPaid: 0, installments: [], transactions: [] },
         grades: [],
         departments: [],
-        schedule: { subjects: [], slots: [], unscheduled: [], units: 0, teachers: {}, offerings: {} },
   activity: [],
   currentUser: null,
   studentProfile: null,
@@ -66,15 +65,6 @@ function escapeHtml(str) {
 }
 
 // ── Auth Guard & Session Management ──────────────────────────────────
-// Maps non-student roles to their dashboards
-const ROLE_REDIRECTS = {
-  admin:   '../admin/admin-dashboard.html',
-  teacher: '../faculty/teacher-dashboard.html',
-  faculty: '../faculty/teacher-dashboard.html',
-  dean:    '../faculty/dean-dashboard.html',
-  staff:   '../staff/staff-dashboard.html',
-};
-
 async function getCurrentStudent() {
   const { data: { user }, error } = await supabaseClient.auth.getUser();
   if (error || !user) {
@@ -94,11 +84,16 @@ async function getCurrentStudent() {
     window.location.href = '../auth/login.html';
     return null;
   }
+  if (profile.status !== 'approved' || profile.is_active !== true) {
+    const route = IMCC.resolveRoute(profile);
+    window.location.href = profile.status !== 'approved' && route.url ? route.url : '../auth/login.html';
+    return null;
+  }
 
   // Role guard — redirect non-students to their correct dashboard
   const role = (profile.role || '').toLowerCase();
   if (role !== 'student' && !(window.IMCC_DEVELOPER_VIEW && role === 'admin')) {
-    const target = ROLE_REDIRECTS[role] || '../auth/login.html';
+    const target = IMCC.dashboardForRole(role) || '../auth/login.html';
     console.warn(`Role "${role}" is not a student — redirecting to ${target}`);
     window.location.href = target;
     return null;
@@ -193,7 +188,6 @@ function goto(page) {
     grades: 'Grades & Evaluation',
     clearance: 'Online Clearance',
     cor: 'Certificate of Registration',
-    schedule: 'Class Schedule',
     help: 'Help',
     messages: 'Messages',
     attendance: 'Attendance History',
@@ -202,21 +196,6 @@ function goto(page) {
   };
   const titleEl = getEl('pageTitle');
   if (titleEl) titleEl.textContent = titles[page] || 'Dashboard';
-
-  // Lazy load: the schedule is not in the eager boot batch, so its four
-  // round-trips only happen if the student actually opens the page.
-  if (page === 'schedule' && !scheduleLoaded) {
-    loadSchedule().catch(err => {
-      console.warn('[schedule] load error:', err);
-      const body = getEl('schedBody');
-      if (body) {
-        body.innerHTML =
-          '<tr><td colspan="6" class="table-empty">Could not load your schedule. ' +
-          'Please refresh, or contact the Registrar if this continues.</td></tr>';
-      }
-      showToast('Could not load your schedule', true);
-    });
-  }
 
   // Same for messages: nothing is fetched until the inbox is opened.
   if (page === 'messages' && !messagesLoaded) {
@@ -559,54 +538,70 @@ function markBellSeen() {
 }
 
 // ── Enrollment Module ────────────────────────────────────────────────
-async function loadEnrollment(background = false) {
+let enrollmentLoadVersion = 0;
+async function loadEnrollment(background = false, requestedTerm = state.enrollmentTerm) {
   const profile = state.studentProfile;
   if (!profile) return;
+  const version = ++enrollmentLoadVersion;
+  const fail = message => {
+    if (version !== enrollmentLoadVersion) return;
+    showToast(message, true);
+    setText('enrollmentLockStatus', message + ' Displayed subjects and fees have been kept. Refresh enrollment to retry.');
+  };
+  state.enrollmentReadFailed = true;
+  renderBillingSummary();
 
-  const { data: currentSem } = await supabaseClient
+  const { data: currentSem, error: semesterError } = await supabaseClient
     .from('student_semesters')
     .select('school_year, semester')
     .eq('student_id', profile.id)
     .eq('is_current', true)
     .maybeSingle();
+  if (semesterError) { fail('Could not load your current semester.'); return; }
 
-  const activeSchoolYear = currentSem?.school_year ? currentSem.school_year.replace(/[\u2013\u2014]/g, '-') : '2026-2027';
-  const activeSemester = currentSem?.semester || '1st Semester';
-
-  const sectionTitle = getEl('enrollmentSectionTitle');
-  if (sectionTitle) {
-    sectionTitle.textContent = `Available Courses — ${activeSemester} ${activeSchoolYear}`;
-  }
-
-  const { data: offerings } = await supabaseClient
-    .from('course_offerings')
-    .select('*')
-    .eq('semester', activeSemester)
-    .eq('school_year', activeSchoolYear);
-
-  const { data: enrolled } = await supabaseClient
-    .from('enrollments')
-    .select('offering_id')
-    .eq('student_id', profile.id)
-    .in('status', ['enrolled', 'completed']);
-
-  const { data: requests, error: requestError } = await supabaseClient
+  const { data: available, error: offeringError } = await IMCC.fetchAll(() => supabaseClient.from('course_offerings').select('*'));
+  if (offeringError) { fail('Could not load enrollment subjects.'); return; }
+  const { data: enrolled, error: enrollmentError } = await IMCC.fetchAll(() => supabaseClient
+    .from('enrollments').select('offering_id').eq('student_id', profile.id).in('status', ['enrolled', 'completed']));
+  if (enrollmentError) { fail('Could not load enrolled subjects.'); return; }
+  const { data: requests, error: requestError } = await IMCC.fetchAll(() => supabaseClient
     .from('enrollment_requests').select('offering_id,status,created_at,review_note')
-    .eq('student_id', profile.id).order('created_at', { ascending: false });
-  if (requestError) { showToast('Could not load enrollment requests: ' + requestError.message, true); return; }
+    .eq('student_id', profile.id).order('created_at', { ascending: false }));
+  if (requestError) { fail('Could not load enrollment requests: ' + requestError.message); return; }
   const enrolledIds = new Set((enrolled || []).map(e => String(e.offering_id)));
-
-  const { data: misc } = await supabaseClient
+  const requestedIds = new Set((requests || []).map(r => String(r.offering_id)));
+  const yearText = String(profile.year_level || '').trim().toLowerCase();
+  const studentYear = Number(yearText.match(/^[1-4]/)?.[0]) || ({ first: 1, second: 2, third: 3, fourth: 4 }[yearText.split(/\s+/)[0]]);
+  const visibleOfferings = (available || []).filter(o => enrolledIds.has(String(o.id)) || requestedIds.has(String(o.id)) ||
+    (o.enrollment_open && (!o.program || o.program === profile.program) && (!o.year || o.year === studentYear)));
+  const terms = IMCC.termKeys(visibleOfferings);
+  const termSelect = getEl('enrollmentTerm');
+  const currentKey = IMCC.termKey(currentSem || {});
+  const selected = terms.includes(requestedTerm) ? requestedTerm : terms.includes(currentKey) ? currentKey : terms[0] || '';
+  const [activeSchoolYear, activeSemester] = (selected || currentKey).split('|');
+  const { data: locks, error: lockError } = await supabaseClient.from('enrollment_locks').select('locked_at').eq('student_id', profile.id).eq('school_year', activeSchoolYear).eq('semester', activeSemester);
+  if (lockError) { fail('Could not check enrollment lock.'); return; }
+  const offerings = visibleOfferings.filter(o => IMCC.termKey(o) === selected);
+  const { data: misc, error: feeError } = await supabaseClient
     .from('misc_fees')
     .select('*')
     .eq('semester', activeSemester)
     .eq('school_year', activeSchoolYear);
-
-  const yearText = String(profile.year_level || '').trim().toLowerCase();
-  const studentYear = Number(yearText.match(/^[1-4]/)?.[0]) || ({ first: 1, second: 2, third: 3, fourth: 4 }[yearText.split(/\s+/)[0]]);
-  state.courses = (offerings || []).filter(o =>
-    (!o.program || o.program === profile.program) && (!o.year || o.year === studentYear)
-  ).map(o => ({
+  if (feeError) { fail('Could not load enrollment fees.'); return; }
+  if (version !== enrollmentLoadVersion) return;
+  state.enrollmentReadFailed = false;
+  state.enrollmentTerm = selected;
+  state.enrollmentLocked = !!locks?.length;
+  termSelect.innerHTML = terms.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t.split('|').reverse().join(' · ')) + '</option>').join('') || '<option value="">No enrollment terms</option>';
+  termSelect.value = selected;
+  termSelect.onchange = async () => {
+    if (state.selectedOfferingIds.size && !confirm('Discard selected subjects and switch enrollment term?')) { termSelect.value = state.enrollmentTerm; return; }
+    await loadEnrollment(false, termSelect.value);
+    termSelect.value = state.enrollmentTerm;
+  };
+  const isOpen = offerings.some(o => o.enrollment_open);
+  const sectionTitle = getEl('enrollmentSectionTitle');
+  state.courses = offerings.map(o => ({
     offering_id: String(o.id),
     code: o.code,
     title: o.title,
@@ -614,21 +609,23 @@ async function loadEnrollment(background = false) {
     fee: o.fee,
     instructor_name: o.instructor_name,
     schedule: o.schedule,
+    enrollment_open: o.enrollment_open,
     enrollmentStatus: enrolledIds.has(String(o.id)) ? 'enrolled' :
       (requests || []).find(r => String(r.offering_id) === String(o.id))?.status,
     reviewNote: (requests || []).find(r => String(r.offering_id) === String(o.id))?.review_note,
   }));
 
   state.miscFees = misc || [];
-  state.selectedOfferingIds = background ? new Set([...state.selectedOfferingIds].filter(id => state.courses.some(c => String(c.offering_id) === String(id) && !['pending','approved','enrolled','completed'].includes(c.enrollmentStatus)))) : new Set();
-  state.enrollmentComplete = state.courses.length > 0 && state.courses.every(c => c.enrollmentStatus === 'enrolled');
+  state.selectedOfferingIds = background ? new Set([...state.selectedOfferingIds].filter(id => state.courses.some(c => c.enrollment_open && String(c.offering_id) === String(id) && !['pending','approved','enrolled','completed'].includes(c.enrollmentStatus)))) : new Set();
+  state.enrollmentComplete = state.courses.some(c => c.enrollmentStatus === 'enrolled' || c.enrollmentStatus === 'approved');
+  setText('enrollmentLockStatus', state.enrollmentComplete ? 'You are already enrolled for this semester. Another enrollment request is disabled.' : state.enrollmentLocked ? 'Enrollment finalized and locked. Subject changes are disabled.' : isOpen ? 'Enrollment is open for subject requests.' : 'Enrollment is closed. Your existing subjects remain visible.');
   const steps = getEl('enrollSteps');
   const summary = getEl('enrollmentBillingSummary');
   const completeNote = getEl('enrollmentCompleteNote');
   const enrollmentGrid = summary?.parentElement;
   if (steps) steps.style.display = state.enrollmentComplete ? 'none' : '';
   if (summary) summary.style.display = state.enrollmentComplete ? 'none' : '';
-  if (completeNote) completeNote.style.display = state.enrollmentComplete ? 'block' : 'none';
+  if (completeNote) completeNote.hidden = !state.enrollmentComplete;
   if (enrollmentGrid) enrollmentGrid.style.gridTemplateColumns = state.enrollmentComplete ? '1fr' : '';
   if (state.enrollmentComplete) {
     if (sectionTitle) sectionTitle.textContent = `Your Enrolled Subjects — ${activeSemester} ${activeSchoolYear}`;
@@ -642,7 +639,12 @@ async function loadEnrollment(background = false) {
   renderCourseList();
   renderMiscFees();
   renderBillingSummary();
+  if (state.enrollmentLocked || state.enrollmentComplete) {
+    getEl('page-enrollment').querySelectorAll('input[type="checkbox"], #proceedBtn, #confirmEnrollBtn').forEach(el => { el.disabled = true; });
+  }
 }
+
+getEl('refreshEnrollment')?.addEventListener('click', () => loadEnrollment(true));
 
 // Schedule parser & conflict detection — delegated to shared/datetime.js (SCHOOLTIME)
 const parseSchedule = SCHOOLTIME.parseSchedule;
@@ -668,7 +670,8 @@ function renderCourseList() {
   const container = getEl('courseList');
   if (!container) return;
 
-  container.innerHTML = state.courses.map(c => {
+  const courses = state.enrollmentComplete ? state.courses.filter(c => ['enrolled', 'approved', 'pending'].includes(c.enrollmentStatus)) : state.courses;
+  container.innerHTML = courses.map(c => {
     const checked = state.selectedOfferingIds.has(c.offering_id);
     return `
     <div class="course-row ${checked ? 'checked' : ''}" data-id="${c.offering_id}">
@@ -693,9 +696,10 @@ function renderCourseList() {
 
   container.querySelectorAll('.course-row').forEach(row => {
     row.addEventListener('click', () => {
+      if (state.enrollmentLocked || state.enrollmentComplete || state.enrollmentReadFailed) return;
       const id = String(row.dataset.id);
       const course = state.courses.find(c => c.offering_id === id);
-      if (['pending', 'enrolled'].includes(course?.enrollmentStatus)) return;
+      if (!course?.enrollment_open || ['pending', 'approved', 'enrolled', 'completed'].includes(course?.enrollmentStatus)) return;
       if (state.selectedOfferingIds.has(id)) {
         state.selectedOfferingIds.delete(id);
         renderCourseList();
@@ -744,7 +748,7 @@ function renderBillingSummary() {
   setText('feeSub', `${units} units · ${selected.length} subject${selected.length === 1 ? '' : 's'}`);
 
   const proceedBtn = getEl('proceedBtn');
-  if (proceedBtn) proceedBtn.disabled = selected.length === 0;
+  if (proceedBtn) proceedBtn.disabled = selected.length === 0 || state.enrollmentReadFailed || state.enrollmentLocked || state.enrollmentComplete;
 }
 
 function renderReviewList() {
@@ -803,8 +807,13 @@ getEl('proceedBtn')?.addEventListener('click', () => setEnrollStep(2));
 getEl('backToStep1')?.addEventListener('click', () => setEnrollStep(1));
 
 async function confirmEnrollment() {
+  if (state.enrollmentSubmitting) return;
+  if (state.enrollmentComplete) { showToast('You are already enrolled for this semester.', true); return; }
+  if (state.enrollmentReadFailed) { showToast('Refresh enrollment successfully before submitting.', true); return; }
+  if (state.enrollmentLocked) { showToast('Enrollment is finalized and locked.', true); return; }
   const profile = state.studentProfile;
   if (!profile || state.selectedOfferingIds.size === 0) return;
+  state.enrollmentSubmitting = true;
   const btn = getEl('confirmEnrollBtn');
   if (btn) {
     btn.disabled = true;
@@ -828,6 +837,8 @@ async function confirmEnrollment() {
       btn.disabled = false;
       btn.textContent = 'Submit Enrollment Request →';
     }
+  } finally {
+    state.enrollmentSubmitting = false;
   }
 }
 
@@ -837,12 +848,14 @@ async function loadBilling() {
   if (!profile) return;
 
   // Get current semester
-  const { data: sem } = await supabaseClient
+  const { data: sem, error: semesterError } = await supabaseClient
     .from('student_semesters')
     .select('school_year, semester')
     .eq('student_id', profile.id)
     .eq('is_current', true)
     .maybeSingle();
+
+  if (semesterError) return showReadFailure('billing', loadBilling);
 
   const activeSchoolYear = sem?.school_year || '2026-2027';
   const activeSemester = sem?.semester || '1st Semester';
@@ -854,6 +867,11 @@ async function loadBilling() {
     supabaseClient.from('enrollments').select('offering_id, course_offerings(code, title, units, fee, semester, school_year)').eq('student_id', profile.id).eq('status', 'enrolled'),
     supabaseClient.from('misc_fees').select('*').eq('semester', activeSemester).eq('school_year', activeSchoolYear),
   ]);
+
+  if ([summaryRes, txnsRes, instRes, enrollmentsRes, miscRes].some(result => result.error)) {
+    return showReadFailure('billing', loadBilling);
+  }
+  getEl('billing-read-error')?.remove();
 
   // Compute tuition from currently enrolled courses this semester
   const enrolledCourses = (enrollmentsRes.data || [])
@@ -1074,14 +1092,17 @@ getEl('exportBtn')?.addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
+getEl('gradeYearFilter')?.addEventListener('change', () => { renderGrades(); renderGradeStats(); renderGradesHeader(); });
+getEl('evalYearFilter')?.addEventListener('change', loadFacultyEval);
+
 // ── Grades Module ────────────────────────────────────────────────────
 // Term filter state for grades dropdown
 let _gradesSelectedTerm = null;
 
 function gradesForSelectedTerm() {
-  if (!_gradesSelectedTerm || !state.grades || !state.grades.length) return state.grades || [];
-  const [sy, sem] = _gradesSelectedTerm.split('|');
-  return state.grades.filter(g => g.school_year === sy && g.semester === sem);
+  const year = getEl('gradeYearFilter')?.value || '';
+  const [sy, sem] = (_gradesSelectedTerm || '').split('|');
+  return (state.grades || []).filter(g => (!sy || (g.school_year === sy && g.semester === sem)) && (!year || String(g.year) === year));
 }
 
 function buildGradesTermDropdown() {
@@ -1092,12 +1113,10 @@ function buildGradesTermDropdown() {
     termMap.set(key, { key, school_year: g.school_year, semester: g.semester });
   });
   const terms = [...termMap.values()].sort((a, b) => {
-    const ya = parseInt(a.school_year), yb = parseInt(b.school_year);
-    if (ya !== yb) return yb - ya;
-    return a.semester.includes('2nd') ? 1 : -1;
+    return Grading.termOrder(b.school_year, b.semester) - Grading.termOrder(a.school_year, a.semester);
   });
 
-  if (!_gradesSelectedTerm && terms.length) _gradesSelectedTerm = terms[0].key;
+  if (!terms.some(t => t.key === _gradesSelectedTerm)) _gradesSelectedTerm = terms[0]?.key || null;
 
   let dd = getEl('gradeTermSelect');
   if (!dd) {
@@ -1108,6 +1127,7 @@ function buildGradesTermDropdown() {
       const lbl = document.createElement('label');
       lbl.style.cssText = 'font-size:12px;font-weight:700;color:var(--ink-500);white-space:nowrap;';
       lbl.textContent = 'Semester:';
+      lbl.htmlFor = 'gradeTermSelect';
       dd = document.createElement('select');
       dd.id = 'gradeTermSelect';
       dd.style.cssText = 'background:var(--card,#fff);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;color:var(--ink-900);outline:none;cursor:pointer;';
@@ -1125,7 +1145,7 @@ function buildGradesTermDropdown() {
 
   if (dd) {
     dd.innerHTML = terms.map(t =>
-      `<option value="${t.key}" ${t.key === _gradesSelectedTerm ? 'selected' : ''}>${t.semester} — ${t.school_year}</option>`
+      `<option value="${escapeHtml(t.key)}" ${t.key === _gradesSelectedTerm ? 'selected' : ''}>${escapeHtml(t.semester)} — ${escapeHtml(t.school_year)}</option>`
     ).join('');
   }
 }
@@ -1136,7 +1156,7 @@ async function loadGrades() {
 
   const { data: rows, error } = await supabaseClient
     .from('grades')
-    .select('*, course_offerings(code, title, units, instructor_name, semester, school_year)')
+    .select('*, course_offerings(code, title, units, year, instructor_name, semester, school_year)')
     .eq('student_id', profile.id);
 
   if (error) { showToast('Could not load grades. Please try again.', true); return; }
@@ -1148,6 +1168,7 @@ async function loadGrades() {
     units: g.course_offerings?.units,
     semester: g.course_offerings?.semester || '',
     school_year: g.course_offerings?.school_year || '',
+    year: g.course_offerings?.year,
     prelim: g.prelim,
     midterm: g.midterm,
     semifinal: g.semifinal,
@@ -1329,7 +1350,7 @@ async function viewProspectus(background = false) {
         code: o.code,
         title: o.title,
         year_level: o.year || 1,
-        semester: o.semester === '2nd Semester' ? 2 : 1,
+        semester: /summer/i.test(o.semester) ? 3 : o.semester === '2nd Semester' ? 2 : 1,
         lec_units: Number(o.units || 3),
         lab_units: 0,
         prerequisites: o.prerequisites || 'None',
@@ -1393,7 +1414,7 @@ async function viewProspectus(background = false) {
         bySem[key] = {
           year: yr,
           semester: sem,
-          semesterLabel: `${getOrdinalSuffix(yr)} Year — ${getOrdinalSuffix(sem)} Semester`,
+          semesterLabel: `${getOrdinalSuffix(yr)} Year — ${sem === 3 ? 'Summer' : getOrdinalSuffix(sem) + ' Semester'}`,
           courses: []
         };
       }
@@ -1768,19 +1789,21 @@ async function loadClearance() {
     .eq('student_id', profile.id)
     .order('department_name', { ascending: true });
 
-  // Self-healing: If no clearances exist for this student yet, initialize them
-  if (!rows || rows.length === 0) {
-    try {
-      await supabaseClient.rpc('initialize_student_clearances', { target_student_id: profile.id });
-      const { data: refreshed } = await supabaseClient
-        .from('clearances')
-        .select('*')
-        .eq('student_id', profile.id)
-        .order('department_name', { ascending: true });
-      rows = refreshed || [];
-    } catch (e) {
-      console.warn('Could not run initialize_student_clearances RPC:', e);
+  if (error) {
+    const grid = getEl('deptGrid');
+    if (grid) {
+      grid.textContent = 'Clearance records are unavailable. ';
+      const retry = document.createElement('button');
+      retry.type = 'button'; retry.textContent = 'Retry';
+      retry.addEventListener('click', loadClearance);
+      grid.append(retry);
     }
+    setText('clearFrac', 'Unavailable');
+    setText('clearRemaining', 'Could not verify clearance requirements.');
+    const fill = getEl('clearFill');
+    if (fill) fill.style.width = '0%';
+    showToast('Could not load clearance records. Please retry.', true);
+    return;
   }
 
   state.departments = rows || [];
@@ -1796,7 +1819,7 @@ function renderClearance() {
     setText('clearFrac', '0/0 Cleared');
     const fill = getEl('clearFill');
     if (fill) fill.style.width = '0%';
-    setText('clearRemaining', 'No clearance departments required.');
+    setText('clearRemaining', 'Clearance requirements have not been confirmed. Contact the registrar.');
     return;
   }
 
@@ -1855,111 +1878,16 @@ document.addEventListener('click', event => {
   if (target && document.body.contains(target)) goto(target.dataset.goto);
 });
 
-// ── FAQ Chatbot Module ───────────────────────────────────────────────
-const chatState = { open: false, history: [], sending: false };
-
-const chatFab = getEl('chatFab');
-const chatPanel = getEl('chatPanel');
-const chatClose = getEl('chatClose');
-const chatMessages = getEl('chatMessages');
-const chatInput = getEl('chatInput');
-const chatSend = getEl('chatSend');
-
-function toggleChat(open) {
-  chatState.open = open ?? !chatState.open;
-  if (chatPanel) chatPanel.classList.toggle('open', chatState.open);
-  if (chatState.open && chatInput) chatInput.focus();
+// One assistant owns retrieval, citations and consultation handoff.
+function toggleChat(force) {
+  getEl('chatPanel')?.togglePopover(force);
 }
 window.toggleChat = toggleChat;
-
-chatFab?.addEventListener('click', () => toggleChat());
-chatClose?.addEventListener('click', () => toggleChat(false));
-
-function formatMessageText(str) {
-  if (!str) return '';
-  let escaped = escapeHtml(str);
-  escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  escaped = escaped.replace(/\n/g, '<br>');
-  return escaped;
-}
-
-function appendChatMessage(role, text, sources) {
-  if (!chatMessages) return;
-  const row = document.createElement('div');
-  row.className = `chat-msg ${role}`;
-  const sourcesHtml = sources && sources.length
-    ? `<div class="chat-sources" style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">${sources.map(s => `<span class="chat-source-pill" style="font-size:10px;background:rgba(231,51,138,0.1);color:var(--pink-600);padding:2px 6px;border-radius:10px;font-weight:700;">${s.category}</span>`).join('')}</div>`
-    : '';
-  const content = role === 'bot' ? formatMessageText(text) : escapeHtml(text);
-  row.innerHTML = `<div class="chat-bubble">${content}${sourcesHtml}</div>`;
-  chatMessages.appendChild(row);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-  return row;
-}
-
-function showTypingIndicator() {
-  if (!chatMessages) return;
-  const row = document.createElement('div');
-  row.className = 'chat-msg bot';
-  row.id = 'chatTyping';
-  row.innerHTML = `<div class="chat-bubble"><div class="chat-typing"><span></span><span></span><span></span></div></div>`;
-  chatMessages.appendChild(row);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-function removeTypingIndicator() {
-  const el = getEl('chatTyping');
-  if (el) el.remove();
-}
-
-async function sendChatMessage() {
-  if (!chatInput) return;
-  const text = chatInput.value.trim();
-  if (!text || chatState.sending) return;
-
-  appendChatMessage('user', text);
-  chatInput.value = '';
-  chatState.sending = true;
-  if (chatSend) chatSend.disabled = true;
-  showTypingIndicator();
-
-  try {
-    const { data, error } = await supabaseClient.functions.invoke('faq-assistant', {
-      body: { message: text, history: chatState.history },
-    });
-
-    if (error) throw error;
-
-    removeTypingIndicator();
-    appendChatMessage('bot', data.answer, data.sources);
-    chatState.history.push({ role: 'user', content: text }, { role: 'assistant', content: data.answer });
-    chatState.history = chatState.history.slice(-6);
-  } catch (err) {
-    removeTypingIndicator();
-    const fallback = getLocalFaqAnswer(text);
-    appendChatMessage('bot', fallback.text, fallback.sources);
-  } finally {
-    chatState.sending = false;
-    if (chatSend) chatSend.disabled = false;
-  }
-}
-
-// Offline fallback used only when the FAQ edge function cannot be reached.
-// These are navigation hints, not policy, and they report no "source":
-// a category label on an unverified answer is exactly the fabricated
-// citation this is meant to avoid. Billing intentionally does not mention
-// a Pay Now button; payment is recorded by cashier staff.
-function getLocalFaqAnswer(q) {
-  const lower = q.toLowerCase();
-  if (lower.includes('enroll')) return { text: 'Enrollment is open until the deadline shown in your dashboard. Settle balances first, then select courses under the Enrollment tab.', sources: [] };
-  if (lower.includes('balance') || lower.includes('pay')) return { text: 'You can view your assessed balance and any published installment schedule under Billing & History. Payments are recorded by Cashier staff; there is no online payment button on this page.', sources: [] };
-  if (lower.includes('grade')) return { text: 'Grades are posted under Grades & Evaluation. Grade estimates use an equal-weight average of available school grades and are not official results.', sources: [] };
-  if (lower.includes('clearance')) return { text: 'Clearance requires all departments to mark you as cleared. Pay any balances with the Cashier and complete any outstanding requirements.', sources: [] };
-  return { text: 'I can help with enrollment, billing, grades, and clearance. For official answers, email registrar@imcc.edu.ph.', sources: [] };
-}
-
-chatSend?.addEventListener('click', sendChatMessage);
-chatInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChatMessage(); });
+getEl('chatPanel')?.addEventListener('toggle', event => {
+  const open = event.newState === 'open';
+  getEl('chatFab')?.setAttribute('aria-expanded', String(open));
+  if (open) getEl('helpInput')?.focus();
+});
 
 // ── MFA Configuration Module (Built-in Supabase Auth TOTP) ─────────
 let currentMfaFactorId = null;
@@ -2078,15 +2006,38 @@ async function loadSSOLinks() {
 }
 
 // ── Attendance Module ────────────────────────────────────────────────
+function showReadFailure(section, retry) {
+  if (getEl(`${section}-read-error`)) return;
+  const host = getEl(`page-${section}`);
+  if (!host) return;
+  const notice = document.createElement('div');
+  notice.id = `${section}-read-error`;
+  notice.setAttribute('role', 'alert');
+  notice.textContent = 'Records are unavailable. Previously loaded figures may be outdated. ';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'btn btn-primary';
+  button.textContent = 'Retry';
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    try { await retry(); } finally { button.disabled = false; }
+  });
+  notice.append(button);
+  host.prepend(notice);
+}
+
 async function loadAttendance() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  const { data: records } = await supabaseClient
+  const { data: records, error } = await supabaseClient
     .from('attendance')
     .select('*, course_offerings(code, title)')
     .eq('student_id', profile.id)
     .order('date', { ascending: false });
+
+  if (error) return showReadFailure('attendance', loadAttendance);
+  getEl('attendance-read-error')?.remove();
 
   const stats = { present: 0, absent: 0, late: 0, excused: 0 };
   (records || []).forEach(r => { if (stats[r.status] !== undefined) stats[r.status]++; });
@@ -2129,7 +2080,7 @@ async function loadFacultyEval() {
 
   const { data: enrollments } = await supabaseClient
     .from('enrollments')
-    .select('offering_id, course_offerings(id, code, title, instructor_id, instructor_name)')
+    .select('offering_id, course_offerings(id, code, title, year, semester, school_year, instructor_id, instructor_name)')
     .eq('student_id', profile.id)
     .eq('status', 'enrolled');
 
@@ -2144,8 +2095,10 @@ async function loadFacultyEval() {
     return;
   }
 
+  if (evalList) evalList.innerHTML = '';
+  const year = getEl('evalYearFilter')?.value || '';
   const instructorMap = {};
-  enrollments.forEach(e => {
+  enrollments.filter(e => e.course_offerings?.semester === sem && e.course_offerings?.school_year === sy && (!year || String(e.course_offerings?.year) === year)).forEach(e => {
     const off = e.course_offerings;
     if (!off || !off.instructor_id) return;
     if (!instructorMap[off.instructor_id]) {
@@ -2370,7 +2323,6 @@ const MSG_TOPICS = {
   grades:      'Grades & Evaluation',
   billing:     'Billing & Payment',
   clearance:   'Online Clearance',
-  schedule:    'Class Schedule',
   registration:'Registration',
   other:       'Other'
 };
@@ -2734,7 +2686,6 @@ const BOOK_TOPICS = {
   grades: 'Grades & Evaluation',
   billing: 'Billing & Payment',
   clearance: 'Online Clearance',
-  schedule: 'Class Schedule',
   registration: 'Registration',
   other: 'Other'
 };
@@ -2816,7 +2767,7 @@ async function askHelpAssistant(question) {
 
     const answer = response.data?.answer;
     const sources = response.data?.sources;
-    const resolved = response.data?.resolved !== false;
+    const resolved = response.data?.resolved === true;
 
     if (!answer) throw new Error('The assistant returned nothing.');
 
@@ -2844,6 +2795,8 @@ async function askHelpAssistant(question) {
 
 // ── Booking ───────────────────────────────────────────────────────────
 function revealBooking(question) {
+  toggleChat(false);
+  goto('help');
   const card = getEl('bookCard');
   if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -3169,247 +3122,6 @@ function loadHelp() {
   });
 }
 
-// ── Class Schedule ────────────────────────────────────────────────────
-// Reads the real timetable. The tables were defined in
-// database/supabase-schema-v2.sql (timetable / rooms) but nothing in the
-// portal ever queried them, so this is the first reader.
-//
-// Chain: enrollments -> timetable -> course_offerings, plus rooms and the
-// teacher profile. Kept to three round-trips, and rooms/offerings are
-// embedded because timetable has exactly one FK to each.
-const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-let scheduleLoaded = false;
-
-function fmtTime(value) {
-  if (!value) return '—';
-  // TIME arrives as "HH:MM:SS"; show 12-hour without touching Date, which
-  // would re-interpret it in the viewer's timezone.
-  const match = String(value).match(/^(\d{2}):(\d{2})/);
-  if (!match) return String(value);
-  let h = Number(match[1]);
-  const m = match[2];
-  const suffix = h >= 12 ? 'PM' : 'AM';
-  h = h % 12;
-  if (h === 0) h = 12;
-  return `${h}:${m} ${suffix}`;
-}
-
-async function loadSchedule() {
-  const profile = state.studentProfile;
-  const body = getEl('schedBody');
-  if (!profile || !body) return;
-
-  body.innerHTML = '<tr><td colspan="6" class="table-empty">Loading your schedule…</td></tr>';
-  const note = getEl('schedNote');
-  if (note) note.hidden = true;
-
-  // 1. Which offerings is this student actually enrolled in?
-  const { data: enrollments, error: enrErr } = await supabaseClient
-    .from('enrollments')
-    .select('offering_id')
-    .eq('student_id', profile.id)
-    .eq('status', 'enrolled');
-
-  if (enrErr) throw enrErr;
-
-  const offeringIds = [...new Set((enrollments || []).map(e => e.offering_id).filter(id => id !== null))];
-
-  state.schedule = { subjects: [], slots: [], unscheduled: [], units: 0 };
-
-  if (!offeringIds.length) {
-    // Latch the loaded flag here too. Without it the lazy-load guard above
-    // re-runs this whole function on every visit to the tab, so a student with
-    // no enrolments saw a "Loading your schedule…" flash and paid for the same
-    // query again on every click. Latching is only wrong on the error paths
-    // above, where retrying is the right behaviour, so keep those unlatched.
-    scheduleLoaded = true;
-    renderSchedule();
-    return;
-  }
-
-  // 2. Meeting times for those offerings.
-  const { data: slots, error: slotErr } = await supabaseClient
-    .from('timetable')
-    .select('id, offering_id, day_of_week, start_time, end_time, teacher_id, room:rooms(name, building, type), offering:course_offerings(code, title, units, instructor_name)')
-    .in('offering_id', offeringIds);
-
-  if (slotErr) throw slotErr;
-
-  // 3. Teacher names, keyed by id. Fetched separately rather than embedded:
-  // timetable has one FK to profiles, but the generated constraint name is
-  // an implementation detail and a wrong guess fails the whole query.
-  const teacherIds = [...new Set((slots || []).map(s => s.teacher_id).filter(Boolean))];
-  let teachers = {};
-  if (teacherIds.length) {
-    const { data: teacherRows } = await supabaseClient
-      .from('profiles')
-      .select('id, full_name')
-      .in('id', teacherIds);
-    teachers = Object.fromEntries((teacherRows || []).map(t => [t.id, t.full_name]));
-  }
-
-  // Subjects enrolled but with no timetable row are reported, not hidden
-  // and not given an invented time.
-  const scheduledOfferingIds = new Set((slots || []).map(s => s.offering_id));
-  const unscheduled = offeringIds.filter(id => !scheduledOfferingIds.has(id));
-
-  // Units come from the offerings the student is enrolled in.
-  const { data: offeringRows } = await supabaseClient
-    .from('course_offerings')
-    .select('id, code, title, units, instructor_name')
-    .in('id', offeringIds);
-  const offerings = Object.fromEntries((offeringRows || []).map(o => [o.id, o]));
-
-  state.schedule = {
-    subjects: offeringRows || [],
-    slots: slots || [],
-    unscheduled,
-    units: (offeringRows || []).reduce((sum, o) => sum + Number(o.units || 0), 0),
-    teachers,
-    offerings,
-  };
-
-  scheduleLoaded = true;
-  renderSchedule();
-}
-
-function renderSchedule() {
-  const s = state.schedule || { subjects: [], slots: [], unscheduled: [], units: 0 };
-  const body = getEl('schedBody');
-  if (!body) return;
-
-  const setText = (id, value) => {
-    const el = getEl(id);
-    if (el) el.textContent = value;
-  };
-
-  setText('sched-subjects', String(s.subjects.length));
-  setText('sched-sessions', String(s.slots.length));
-  setText('sched-units', s.units ? String(s.units) : '0');
-  setText('sched-unscheduled', String(s.unscheduled.length));
-
-  const note = getEl('schedNote');
-  if (note) {
-    const notes = [];
-    if (s.unscheduled.length) {
-      notes.push(
-        `${s.unscheduled.length} enrolled subject${s.unscheduled.length === 1 ? ' has' : 's have'} ` +
-        `no meeting time published yet. Confirm with the Registrar.`
-      );
-    }
-    if (!s.slots.length && s.subjects.length) {
-      notes.push('The Registrar has not published meeting times for this term.');
-    }
-    if (notes.length) {
-      note.textContent = notes.join(' ');
-      note.hidden = false;
-    } else {
-      note.hidden = true;
-    }
-  }
-
-  if (!s.subjects.length) {
-    body.innerHTML = `
-      <tr>
-        <td colspan="6" class="table-empty">
-          You are not enrolled in any subjects this term.
-          <br><span class="table-empty-hint">Enrolled subjects and their meeting times appear here once enrollment is confirmed.</span>
-        </td>
-      </tr>`;
-    return;
-  }
-
-  if (!s.slots.length) {
-    // Enrolled, but nothing scheduled. Say exactly that.
-    const rows = s.subjects
-      .map(o => `
-        <tr>
-          <td><span class="chip chip-muted">Not set</span></td>
-          <td>—</td>
-          <td>
-            <div class="sched-subject">${escapeHtml(o.code)}</div>
-            <div class="sched-title">${escapeHtml(o.title)}</div>
-          </td>
-          <td>${escapeHtml(String(o.units ?? ''))}</td>
-          <td>—</td>
-          <td>${escapeHtml(o.instructor_name || '—')}</td>
-        </tr>`)
-      .join('');
-    body.innerHTML = rows;
-    return;
-  }
-
-  // Sort the data, not the rendered strings. Ordering by day then start
-  // time is the only useful order for a timetable; the order rows come
-  // back from Postgres is not meaningful.
-  const ordered = [...s.slots].sort((a, b) => {
-    const dayDiff = DAY_ORDER.indexOf(a.day_of_week) - DAY_ORDER.indexOf(b.day_of_week);
-    if (dayDiff !== 0) return dayDiff;
-    return String(a.start_time || '').localeCompare(String(b.start_time || ''));
-  });
-
-  // Which class is running right now, in Manila. Read once per render so every
-  // row is judged against the same instant instead of each row asking the clock
-  // separately and straddling a minute boundary.
-  const nowClock = SCHOOLTIME.schoolNowClock();
-
-  const rows = ordered
-    .map(slot => {
-      const offering = s.offerings?.[slot.offering_id] || slot.offering || {};
-      const room = slot.room;
-      const roomLabel = room
-        ? [room.name, room.building].filter(Boolean).join(' · ')
-        : '—';
-      const teacher = s.teachers?.[slot.teacher_id]
-        || offering.instructor_name
-        || '—';
-
-      // Half-open [start, end), judged in Manila. The predicate lives in
-      // shared/datetime.js so it can be unit-tested against a pinned clock
-      // instead of only ever running when a class happens to be live.
-      const isNow = SCHOOLTIME.isSlotNow(slot, nowClock);
-
-      return `
-        <tr${isNow ? ' class="sched-now"' : ''}>
-          <td><span class="chip">${escapeHtml(slot.day_of_week)}${isNow ? ' &middot; Now' : ''}</span></td>
-          <td class="sched-time">${escapeHtml(fmtTime(slot.start_time))} – ${escapeHtml(fmtTime(slot.end_time))}</td>
-          <td>
-            <div class="sched-subject">${escapeHtml(offering.code || '—')}</div>
-            <div class="sched-title">${escapeHtml(offering.title || '')}</div>
-          </td>
-          <td>${escapeHtml(String(offering.units ?? ''))}</td>
-          <td>${escapeHtml(roomLabel)}</td>
-          <td>${escapeHtml(teacher)}</td>
-        </tr>`;
-    })
-    .join('');
-
-  body.innerHTML = rows;
-}
-
-getEl('schedRefresh')?.addEventListener('click', async () => {
-  try {
-    await loadSchedule();
-    showToast('Schedule refreshed');
-  } catch (err) {
-    showToast('Could not load your schedule: ' + err.message, true);
-  }
-});
-
-// The "now" highlight is only true at the instant it was rendered, so a tab left
-// open across a class boundary would go stale and point at the wrong row.
-// Re-render on a timer, gated on the schedule page actually being on screen and
-// the document being visible: a background tab has nobody reading the highlight,
-// and re-rendering it there would be work for nothing.
-setInterval(() => {
-  if (state.page !== 'schedule') return;
-  if (document.hidden) return;
-  if (!scheduleLoaded) return;
-  if (!getEl('schedBody')) return;
-  renderSchedule();
-}, 60000);
-
 // ── Load failure reporting ───────────────────────────────────────────
 // A failed fetch used to be logged to the console and nothing else, so a
 // student whose billing query errored saw a permanent "—" and had no way
@@ -3468,8 +3180,10 @@ function showLoadFailures(failures) {
 
 // ── Application Initialization ───────────────────────────────────────
 async function init() {
-  const profile = await getCurrentStudent();
-  if (!profile) return;
+  const session = await initAuthGuard(window.IMCC_DEVELOPER_VIEW ? ['student', 'admin'] : ['student']);
+  if (!session) return;
+  state.currentUser = session.user;
+  state.studentProfile = session.profile;
 
   setupAuthListener();
   wireMessaging();

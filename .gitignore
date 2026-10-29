@@ -31,3 +31,10 @@ skills-lock.json
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Private keys and local credentials
+*.pem
+*.key
+*.p12
+*.pfx
+.credentials/

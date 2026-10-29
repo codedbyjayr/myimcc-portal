@@ -85,13 +85,6 @@
         </svg>
         Announcements
       </button>
-      <button class="nav-item" data-page="schedule">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M12 7v5l3 3" />
-        </svg>
-        Teaching Schedule
-      </button>
       <button class="nav-item" data-page="evaluations">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -177,6 +170,7 @@
 
         <!-- ================= DASHBOARD ================= -->
         <section class="page active" id="page-dashboard">
+          <div class="card card-pad" style="margin-bottom:16px"><div class="card-head"><h3>Enrollment Notifications</h3><button type="button" class="btn btn-ghost" id="refreshEnrollmentNotifications">Refresh</button></div><div id="enrollmentNotifications" aria-live="polite">Loading notifications…</div></div>
           <div class="hero">
             <div>
               <h2>Welcome!</h2>
@@ -245,16 +239,7 @@
               <div class="t">Post Announcement</div>
               <div class="d">Notify your class</div>
             </button>
-            <button class="quick-card" data-goto="schedule">
-              <div class="quick-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 7v5l3 3" />
-                </svg>
-              </div>
-              <div class="t">View Schedule</div>
-              <div class="d">Your teaching load</div>
-            </button>
+
             <button class="quick-card" disabled style="opacity:.5;cursor:not-allowed;">
               <div class="quick-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -275,6 +260,8 @@
                 <h3>My Classes</h3>
                 <span class="sub">Subjects are assigned by the dean.</span>
               </div>
+              <label>Semester<select class="field-input grading-term-select" aria-label="Class semester"></select></label>
+              <label>Year level<select class="field-input grading-year-select" aria-label="Class year level"><option value="">All year levels</option><option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option></select></label>
               <label class="mobile-class-picker">Class<select class="field-input grading-class-select" aria-label="Select class"></select></label>
               <div id="courseList" class="grading-course-list"></div>
               <div id="noCoursesMsg" class="empty-state" style="display:none;">No course offerings are assigned to you
@@ -294,8 +281,8 @@
 
                 </details>
               </div>
-              <details class="grading-help"><summary>Grading help</summary><p>Enter school grades directly, such as 1.00, 1.10, or 2.75. The final grade is official; 4.00 is conditional and 5.00 is failed. Legacy percentage records are read-only pending school review. Use History beside a student to view saved revisions or revert a mistake. Save your changes before switching classes.</p></details>
-              <label class="grading-period-control">Grading period<select class="field-input grading-period" aria-label="Grading period"><option value="2">Prelim</option><option value="3">Midterm</option><option value="4">Semifinal</option><option value="5">Final</option></select></label>
+              <details class="grading-help"><summary>Grading help</summary><p>Enter school grades directly, such as 1.00, 1.10, or 2.75. Enter the official Equivalent manually after Final; 4.00 is conditional and 5.00 is failed. Legacy percentage records are read-only pending school review. Use History beside a student to view saved revisions or revert a mistake. Save your changes before switching classes.</p></details>
+              <label class="grading-period-control">Grading period<select class="field-input grading-period" aria-label="Grading period"><option value="2">Prelim</option><option value="3">Midterm</option><option value="4">Semifinal</option><option value="5">Final</option><option value="6">Equivalent</option></select></label>
               <div class="table-responsive grading-table-wrap" tabindex="0" role="region" aria-label="Class grade table">
                 <table id="rosterTable" style="display:none;">
                   <thead>
@@ -314,7 +301,7 @@
                 </table>
               </div>
               <div id="noRosterMsg" class="empty-state">Pick a class from the left to view its roster.</div>
-              <div class="grading-actions"><span class="grading-save-status" role="status">No unsaved changes</span><button class="btn btn-primary" id="saveGradesBtn" disabled>Save Grades</button></div>
+              <div class="grading-actions"><button type="button" class="btn btn-ghost lock-grades-btn" disabled>Lock Grades</button><span class="grading-save-status" role="status">No unsaved changes</span><button class="btn btn-primary" id="saveGradesBtn" disabled>Save Grades</button></div>
             </div>
           </div>
         </section>
@@ -397,29 +384,7 @@
         </section>
 
         <!-- ================= TEACHING SCHEDULE ================= -->
-        <section class="page" id="page-schedule">
-          <div class="card card-pad">
-            <div class="card-head">
-              <h3>Teaching Schedule</h3>
-              <div class="sub">All course offerings assigned to you</div>
-            </div>
-            <div class="table-responsive">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Course Title</th>
-                    <th>Schedule</th>
-                    <th>Units</th>
-                    <th>Term</th>
-                  </tr>
-                </thead>
-                <tbody id="scheduleBody"></tbody>
-              </table>
-            </div>
-            <div id="noScheduleMsg" class="empty-state" style="display:none;">No classes assigned yet.</div>
-          </div>
-        </section>
+
 
         <!-- ================= STUDENT FEEDBACK / EVALUATIONS ================= -->
         <section class="page" id="page-evaluations">
@@ -522,8 +487,10 @@
   <script src="../env-config.js"></script>
   <script src="../shared/supabase-config.js"></script>
 <script src="../shared/identity.js"></script>
+  <script src="../shared/authGuard.js"></script>
   <script src="../shared/loading.js"></script>
   <script src="../shared/grading.js"></script>
+  <script src="../shared/datetime.js"></script>
   <script src="../shared/faculty-chrome.js"></script>
   <script src="teacher-dashboard.js"></script>
 </body>

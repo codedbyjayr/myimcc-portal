@@ -13,7 +13,7 @@
   function escapeHtml(str) {
     return String(str == null ? '' : str)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   function initials(name) {
@@ -22,7 +22,7 @@
 
   function fmtDate(iso) {
     if (!iso) return '—';
-    return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    return (global.IMCC && global.IMCC.formatDate) ? (global.IMCC.formatDate(iso) || '—') : new Date(iso).toLocaleDateString();
   }
 
   var toastTimer;
@@ -169,6 +169,22 @@
     }).join('') || '<div class="nav-item soon" style="opacity:.4;">No links configured</div>';
   }
 
+  async function loadEnrollmentNotifications(client) {
+    const list = getEl('enrollmentNotifications');
+    if (!list) return;
+    const { data, error } = await client.from('instructor_notifications').select('id,subject,body,created_at,read_at').order('created_at', { ascending: false }).limit(30);
+    if (error) { list.textContent = 'Enrollment notifications could not be loaded. Use Refresh to retry.'; return; }
+    list.innerHTML = (data || []).map(n => '<div class="activity-row"><div><b>' + escapeHtml(n.subject) + '</b><p>' + escapeHtml(n.body) + '</p><small>' + escapeHtml(fmtDate(n.created_at)) + '</small>' + (!n.read_at ? '<button type="button" class="btn btn-ghost" data-read="' + escapeHtml(n.id) + '">Mark read</button>' : '<span class="sub"> · Read</span>') + '</div></div>').join('') || '<p>No enrollment notifications.</p>';
+    list.onclick = async event => {
+      const button = event.target.closest('[data-read]');
+      if (!button) return;
+      button.disabled = true;
+      const { data, error } = await client.from('instructor_notifications').update({ read_at: new Date().toISOString() }).eq('id', button.dataset.read).select('id');
+      if (error || !data?.length) { button.disabled = false; showToast('Could not mark notification as read.', true); return; }
+      await loadEnrollmentNotifications(client);
+    };
+  }
+
   // ── Export ──────────────────────────────────────────────────────────
   var api = {
     getEl: getEl,
@@ -184,6 +200,7 @@
     initNavigation: initNavigation,
     setSidebarProfile: setSidebarProfile,
     loadSSOLinks: loadSSOLinks,
+    loadEnrollmentNotifications: loadEnrollmentNotifications,
     isDarkMode: function () { return darkMode; }
   };
 
