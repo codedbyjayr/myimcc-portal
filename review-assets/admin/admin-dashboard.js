@@ -50,6 +50,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         dean: 'Dean',
     };
 
+    const roleChoices = [
+        ['student', 'Student'], ['teacher', 'Faculty'], ['registrar', 'Registrar'], ['admin', 'Admin'],
+        ['staff', 'Staff'], ['dean', 'Dean'],
+        ...['Guidance', 'Cashier', 'DSA', 'Laboratory/Nursing Arts/Cybershack', 'Library',
+            'Medical Clinic/Dental', 'Property Custodian', 'ROTC/CWTS'].map(office => ['staff:' + office, 'Staff – ' + office]),
+        ...['CCS', 'CBA', 'CAS', 'CNM', 'CED', 'CCSJE', 'CHTM', 'CMT', 'CRT'].map(department => ['dean:' + department, 'Dean – ' + department]),
+    ];
+    function roleOptions(role, department) {
+        const selected = (role === 'faculty' ? 'teacher' : role || 'student') + (department ? ':' + department : '');
+        return roleChoices.map(([value, label]) => `<option value="${escapeHtml(value)}" ${value === selected ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
+    }
+    previewRole.innerHTML = roleOptions('admin').replace('value="teacher"', 'value="faculty"');
+
     // 1. Verify User is an Approved Admin
     async function checkAdminAuth() {
         const { data: { user }, error } = await supabaseClient.auth.getUser();
@@ -130,7 +143,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         temporaryRoleTest.disabled = true;
         previewRole.disabled = true;
         try {
-            const session = await demoRequest({action:'start',role:previewRole.value});
+            const session = await demoRequest({action:'start',role:previewRole.value.split(':')[0]});
             if (generation !== demoGeneration) return;
             demoSession = session;
             temporaryRoleTest.textContent = 'Return to read-only';
@@ -204,8 +217,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const metadata = demoSession || await previewRequest();
             const user = metadata.user;
-            previewHome = demoSession ? demoSession.path : metadata.dashboards[previewRole.value];
-            let path = typeof navigate==='string' ? navigate : demoSession ? demoSession.path : metadata.dashboards[previewRole.value];
+            previewHome = demoSession ? demoSession.path : metadata.dashboards[previewRole.value.split(':')[0]];
+            let path = typeof navigate==='string' ? navigate : demoSession ? demoSession.path : metadata.dashboards[previewRole.value.split(':')[0]];
             if (demoSession) path = '/review-assets' + path;
             if (!path) throw new Error('Unknown dashboard role.');
             const response = await fetch(path, { cache: 'no-store' });
@@ -257,7 +270,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (demoSession && request.exitDemo) { closePreview(); return; }
             if (typeof request.navigate==='string') {
                 request.navigate=request.navigate.replace(/^\/review-assets(?=\/)/,'');
-                const role = demoSession?.role || previewRole.value;
+                const role = demoSession?.role || previewRole.value.split(':')[0];
                 const allowed = [previewHome];
                 if (!demoSession && request.navigate==='/admin/admin-dashboard.html') request.navigate=previewHome;
                 if (['dean','admin','registrar','staff'].includes(role)) allowed.push('/staff/enrollment-requests.html');
@@ -297,11 +310,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2. Fetch Pending Requests
     async function loadPendingUsers() {
-        const { data: users, error } = await supabaseClient
+        const { data: users, error } = await IMCC.fetchAll(() => supabaseClient
             .from('profiles')
             .select('*')
             .eq('status', 'pending')
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: true }));
 
         if (error) return;
 
@@ -314,11 +327,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 3. Fetch Approved Users & Render Interactive Select Dropdowns
     async function loadApprovedUsers() {
-        const { data: users, error } = await supabaseClient
+        const { data: users, error } = await IMCC.fetchAll(() => supabaseClient
             .from('profiles')
             .select('*')
             .eq('status', 'approved')
-            .order('full_name', { ascending: true });
+            .order('full_name', { ascending: true }));
 
         if (error) return;
 
@@ -353,12 +366,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td>${highlight(user.program || '—', term)}</td>
         <td>
           <select class="role-select pending-role-select" data-id="${user.id}">
-            <option value="student" ${(user.requested_role || 'student') === 'student' ? 'selected' : ''}>Student</option>
-            <option value="teacher" ${user.requested_role === 'teacher' || user.requested_role === 'faculty' ? 'selected' : ''}>Faculty</option>
-              <option value="staff" ${user.requested_role === 'staff' ? 'selected' : ''}>Staff</option>
-              <option value="registrar" ${user.requested_role === 'registrar' ? 'selected' : ''}>Registrar</option>
-              <option value="admin" ${user.requested_role === 'admin' ? 'selected' : ''}>Admin</option>
-            <option value="dean" ${user.requested_role === 'dean' ? 'selected' : ''}>Dean</option>
+            ${roleOptions(user.requested_role)}
           </select>
         </td>
         <td>
@@ -397,12 +405,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <td>${highlight(user.program || '—', term)}</td>
         <td>
           <select class="role-select" data-id="${user.id}" ${isSelf ? 'disabled' : ''}>
-            <option value="student" ${currentRole === 'student' ? 'selected' : ''}>Student</option>
-            <option value="teacher" ${currentRole === 'teacher' || currentRole === 'faculty' ? 'selected' : ''}>Faculty</option>
-              <option value="staff" ${currentRole === 'staff' ? 'selected' : ''}>Staff</option>
-              <option value="registrar" ${currentRole === 'registrar' ? 'selected' : ''}>Registrar</option>
-              <option value="admin" ${currentRole === 'admin' ? 'selected' : ''}>Admin</option>
-            <option value="dean" ${currentRole === 'dean' ? 'selected' : ''}>Dean</option>
+            ${roleOptions(currentRole, user.role_department)}
           </select>
         </td>
         <td><span class="badge badge-approved">Approved</span></td>
@@ -438,6 +441,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 user.program,
                 roleRaw,
                 roleLabel,
+                user.role_department,
             ].filter(Boolean).join(' ').toLowerCase();
 
             return haystack.includes(term);
@@ -560,7 +564,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     setTimeout(() => { e.target.style.borderColor = 'var(--surface-border)'; }, 1500);
                     // Update local cache so re-renders keep the new value
                     const cached = allApprovedUsers.find(u => u.id === userId);
-                    if (cached) cached.role = newRole;
+                    if (cached) {
+                        const [role, department] = newRole.split(':');
+                        cached.role = role;
+                        cached.role_department = department || null;
+                    }
                 }
             });
         });

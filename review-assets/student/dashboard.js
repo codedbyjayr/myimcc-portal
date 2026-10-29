@@ -537,62 +537,66 @@ function markBellSeen() {
 }
 
 // ── Enrollment Module ────────────────────────────────────────────────
-async function loadEnrollment(background = false) {
+let enrollmentLoadVersion = 0;
+async function loadEnrollment(background = false, requestedTerm = state.enrollmentTerm) {
   const profile = state.studentProfile;
   if (!profile) return;
+  const version = ++enrollmentLoadVersion;
+  const fail = message => {
+    if (version !== enrollmentLoadVersion) return;
+    showToast(message, true);
+    setText('enrollmentLockStatus', message + ' Displayed subjects have been kept. Refresh enrollment to retry.');
+  };
+  state.enrollmentReadFailed = true;
+  renderEnrollmentSummary();
 
-  const { data: currentSem } = await supabaseClient
+  const { data: currentSem, error: semesterError } = await supabaseClient
     .from('student_semesters')
     .select('school_year, semester')
     .eq('student_id', profile.id)
     .eq('is_current', true)
     .maybeSingle();
+  if (semesterError) { fail('Could not load your current semester.'); return; }
 
-  const { data: available, error: offeringError } = await supabaseClient.from('course_offerings').select('*').eq('enrollment_open', true);
-  if (offeringError) { showToast('Could not load open enrollment terms.', true); return; }
-  const { data: openTerms, error: termError } = await supabaseClient.from('enrollment_terms').select('school_year,semester').eq('is_open', true);
-  if (termError) { showToast('Could not load enrollment terms. Refresh enrollment to retry.', true); return; }
-  const terms = [...new Set([...(available || []), ...(openTerms || [])].map(o => o.school_year + '|' + o.semester))].sort((a,b) => { const [ay,as] = a.split('|'), [by,bs] = b.split('|'); return Grading.termOrder(by,bs) - Grading.termOrder(ay,as); });
-  const termSelect = getEl('enrollmentTerm');
-  const currentKey = (currentSem?.school_year || '').replace(/[\u2013\u2014]/g, '-') + '|' + (currentSem?.semester || '1st Semester');
-  const selected = terms.includes(state.enrollmentTerm) ? state.enrollmentTerm : terms.includes(currentKey) ? currentKey : terms[0];
-  state.enrollmentTerm = selected || '';
-  termSelect.innerHTML = terms.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t.split('|').reverse().join(' · ')) + '</option>').join('') || '<option value="">No open enrollment terms</option>';
-  termSelect.value = state.enrollmentTerm;
-  termSelect.onchange = async () => {
-    if (state.selectedOfferingIds.size && !confirm('Discard selected subjects and switch enrollment term?')) { termSelect.value = state.enrollmentTerm; return; }
-    state.enrollmentTerm = termSelect.value; await loadEnrollment();
-  };
-  const [activeSchoolYear, activeSemester] = (state.enrollmentTerm || currentKey).split('|');
-  const { data: locks, error: lockError } = await supabaseClient.from('enrollment_locks').select('locked_at').eq('student_id', profile.id).eq('school_year', activeSchoolYear).eq('semester', activeSemester);
-  if (lockError) { showToast('Could not check enrollment lock. Please retry.', true); return; }
-  state.enrollmentLocked = !!locks?.length;
-  setText('enrollmentLockStatus', state.enrollmentLocked ? 'Enrollment finalized and locked. Subject changes are disabled.' : 'Enrollment is open for subject requests.');
-
-  const sectionTitle = getEl('enrollmentSectionTitle');
-  if (sectionTitle) {
-    sectionTitle.textContent = `Available Courses — ${activeSemester} ${activeSchoolYear}`;
-  }
-
-  const offerings = (available || []).filter(o => o.semester === activeSemester && o.school_year === activeSchoolYear);
-
-  const { data: enrolled } = await supabaseClient
-    .from('enrollments')
-    .select('offering_id')
-    .eq('student_id', profile.id)
-    .in('status', ['enrolled', 'completed']);
-
-  const { data: requests, error: requestError } = await supabaseClient
+  const { data: available, error: offeringError } = await IMCC.fetchAll(() => supabaseClient.from('course_offerings').select('*'));
+  if (offeringError) { fail('Could not load enrollment subjects.'); return; }
+  const { data: enrolled, error: enrollmentError } = await IMCC.fetchAll(() => supabaseClient
+    .from('enrollments').select('offering_id').eq('student_id', profile.id).in('status', ['enrolled', 'completed']));
+  if (enrollmentError) { fail('Could not load enrolled subjects.'); return; }
+  const { data: requests, error: requestError } = await IMCC.fetchAll(() => supabaseClient
     .from('enrollment_requests').select('offering_id,status,created_at,review_note')
-    .eq('student_id', profile.id).order('created_at', { ascending: false });
-  if (requestError) { showToast('Could not load enrollment requests: ' + requestError.message, true); return; }
+    .eq('student_id', profile.id).order('created_at', { ascending: false }));
+  if (requestError) { fail('Could not load enrollment requests: ' + requestError.message); return; }
   const enrolledIds = new Set((enrolled || []).map(e => String(e.offering_id)));
-
+  const requestedIds = new Set((requests || []).map(r => String(r.offering_id)));
   const yearText = String(profile.year_level || '').trim().toLowerCase();
   const studentYear = Number(yearText.match(/^[1-4]/)?.[0]) || ({ first: 1, second: 2, third: 3, fourth: 4 }[yearText.split(/\s+/)[0]]);
-  state.courses = (offerings || []).filter(o =>
-    (!o.program || o.program === profile.program) && (!o.year || o.year === studentYear)
-  ).map(o => ({
+  const visibleOfferings = (available || []).filter(o => enrolledIds.has(String(o.id)) || requestedIds.has(String(o.id)) ||
+    (o.enrollment_open && (!o.program || o.program === profile.program) && (!o.year || o.year === studentYear)));
+  const { data: openTerms, error: termError } = await supabaseClient.from('enrollment_terms').select('school_year,semester').eq('is_open', true);
+  if (termError) { fail('Could not load enrollment terms.'); return; }
+  const terms = IMCC.termKeys([...visibleOfferings, ...(openTerms || [])]);
+  const termSelect = getEl('enrollmentTerm');
+  const currentKey = IMCC.termKey(currentSem || {});
+  const selected = terms.includes(requestedTerm) ? requestedTerm : terms.includes(currentKey) ? currentKey : terms[0] || '';
+  const [activeSchoolYear, activeSemester] = (selected || currentKey).split('|');
+  const { data: locks, error: lockError } = await supabaseClient.from('enrollment_locks').select('locked_at').eq('student_id', profile.id).eq('school_year', activeSchoolYear).eq('semester', activeSemester);
+  if (lockError) { fail('Could not check enrollment lock.'); return; }
+  const offerings = visibleOfferings.filter(o => IMCC.termKey(o) === selected);
+  if (version !== enrollmentLoadVersion) return;
+  state.enrollmentReadFailed = false;
+  state.enrollmentTerm = selected;
+  state.enrollmentLocked = !!locks?.length;
+  termSelect.innerHTML = terms.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t.split('|').reverse().join(' · ')) + '</option>').join('') || '<option value="">No enrollment terms</option>';
+  termSelect.value = selected;
+  termSelect.onchange = async () => {
+    if (state.selectedOfferingIds.size && !confirm('Discard selected subjects and switch enrollment term?')) { termSelect.value = state.enrollmentTerm; return; }
+    await loadEnrollment(false, termSelect.value);
+    termSelect.value = state.enrollmentTerm;
+  };
+  const isOpen = offerings.some(o => o.enrollment_open) || (openTerms || []).some(t => IMCC.termKey(t) === selected);
+  const sectionTitle = getEl('enrollmentSectionTitle');
+  state.courses = offerings.map(o => ({
     offering_id: String(o.id),
     code: o.code,
     title: o.title,
@@ -600,14 +604,15 @@ async function loadEnrollment(background = false) {
     fee: o.fee,
     instructor_name: o.instructor_name,
     schedule: o.schedule,
+    enrollment_open: o.enrollment_open,
     enrollmentStatus: enrolledIds.has(String(o.id)) ? 'enrolled' :
       (requests || []).find(r => String(r.offering_id) === String(o.id))?.status,
     reviewNote: (requests || []).find(r => String(r.offering_id) === String(o.id))?.review_note,
   }));
 
-  state.selectedOfferingIds = background ? new Set([...state.selectedOfferingIds].filter(id => state.courses.some(c => String(c.offering_id) === String(id) && !['pending','approved','enrolled','completed'].includes(c.enrollmentStatus)))) : new Set();
+  state.selectedOfferingIds = background ? new Set([...state.selectedOfferingIds].filter(id => state.courses.some(c => c.enrollment_open && String(c.offering_id) === String(id) && !['pending','approved','enrolled','completed'].includes(c.enrollmentStatus)))) : new Set();
   state.enrollmentComplete = state.courses.some(c => c.enrollmentStatus === 'enrolled' || c.enrollmentStatus === 'approved');
-  if (state.enrollmentComplete) setText('enrollmentLockStatus', 'You are already enrolled for this semester. Another enrollment request is disabled.');
+  setText('enrollmentLockStatus', state.enrollmentComplete ? 'You are already enrolled for this semester. Another enrollment request is disabled.' : state.enrollmentLocked ? 'Enrollment finalized and locked. Subject changes are disabled.' : isOpen ? 'Enrollment is open for subject requests.' : 'Enrollment is closed. Your existing subjects remain visible.');
   const steps = getEl('enrollSteps');
   const summary = getEl('enrollmentSummary');
   const completeNote = getEl('enrollmentCompleteNote');
@@ -631,6 +636,8 @@ async function loadEnrollment(background = false) {
     getEl('page-enrollment').querySelectorAll('input[type="checkbox"], #proceedBtn').forEach(el => { el.disabled = true; });
   }
 }
+
+getEl('refreshEnrollment')?.addEventListener('click', () => loadEnrollment(true));
 
 // Schedule parser & conflict detection — delegated to shared/datetime.js (SCHOOLTIME)
 const parseSchedule = SCHOOLTIME.parseSchedule;
@@ -681,10 +688,10 @@ function renderCourseList() {
 
   container.querySelectorAll('.course-row').forEach(row => {
     row.addEventListener('click', () => {
-      if (state.enrollmentLocked || state.enrollmentComplete) return;
+      if (state.enrollmentLocked || state.enrollmentComplete || state.enrollmentReadFailed) return;
       const id = String(row.dataset.id);
       const course = state.courses.find(c => c.offering_id === id);
-      if (['pending', 'enrolled'].includes(course?.enrollmentStatus)) return;
+      if (!course?.enrollment_open || ['pending', 'approved', 'enrolled', 'completed'].includes(course?.enrollmentStatus)) return;
       if (state.selectedOfferingIds.has(id)) {
         state.selectedOfferingIds.delete(id);
         renderCourseList();
@@ -775,12 +782,14 @@ async function loadBilling() {
   if (!profile) return;
 
   // Get current semester
-  const { data: sem } = await supabaseClient
+  const { data: sem, error: semesterError } = await supabaseClient
     .from('student_semesters')
     .select('school_year, semester')
     .eq('student_id', profile.id)
     .eq('is_current', true)
     .maybeSingle();
+
+  if (semesterError) return showReadFailure('billing', loadBilling);
 
   const activeSchoolYear = sem?.school_year || '2026-2027';
   const activeSemester = sem?.semester || '1st Semester';
@@ -792,6 +801,11 @@ async function loadBilling() {
     supabaseClient.from('enrollments').select('offering_id, course_offerings(code, title, units, fee, semester, school_year)').eq('student_id', profile.id).eq('status', 'enrolled'),
     supabaseClient.from('misc_fees').select('*').eq('semester', activeSemester).eq('school_year', activeSchoolYear),
   ]);
+
+  if ([summaryRes, txnsRes, instRes, enrollmentsRes, miscRes].some(result => result.error)) {
+    return showReadFailure('billing', loadBilling);
+  }
+  getEl('billing-read-error')?.remove();
 
   // Compute tuition from currently enrolled courses this semester
   const enrolledCourses = (enrollmentsRes.data || [])
@@ -1036,35 +1050,19 @@ function buildGradesTermDropdown() {
     return Grading.termOrder(b.school_year, b.semester) - Grading.termOrder(a.school_year, a.semester);
   });
 
-  if (!_gradesSelectedTerm && terms.length) _gradesSelectedTerm = terms[0].key;
+  if (!terms.some(t => t.key === _gradesSelectedTerm)) _gradesSelectedTerm = terms[0]?.key || null;
 
-  let dd = getEl('gradeTermSelect');
-  if (!dd) {
-    const gradesTitle = getEl('gradesTitle');
-    if (gradesTitle && gradesTitle.parentNode) {
-      const wrap = document.createElement('div');
-      wrap.style.cssText = 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;';
-      const lbl = document.createElement('label');
-      lbl.style.cssText = 'font-size:12px;font-weight:700;color:var(--ink-500);white-space:nowrap;';
-      lbl.textContent = 'Semester:';
-      dd = document.createElement('select');
-      dd.id = 'gradeTermSelect';
-      dd.style.cssText = 'background:var(--card,#fff);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;color:var(--ink-900);outline:none;cursor:pointer;';
-      dd.addEventListener('change', () => {
-        _gradesSelectedTerm = dd.value;
-        renderGrades();
-        renderGradeStats();
-        renderGradesHeader();
-      });
-      wrap.appendChild(lbl);
-      wrap.appendChild(dd);
-      gradesTitle.parentNode.insertBefore(wrap, gradesTitle.nextSibling);
-    }
-  }
+  const dd = getEl('gradeTermSelect');
 
   if (dd) {
+    dd.onchange = () => {
+      _gradesSelectedTerm = dd.value;
+      renderGrades();
+      renderGradeStats();
+      renderGradesHeader();
+    };
     dd.innerHTML = terms.map(t =>
-      `<option value="${t.key}" ${t.key === _gradesSelectedTerm ? 'selected' : ''}>${t.semester} — ${t.school_year}</option>`
+      `<option value="${escapeHtml(t.key)}" ${t.key === _gradesSelectedTerm ? 'selected' : ''}>${escapeHtml(t.semester)} — ${escapeHtml(t.school_year)}</option>`
     ).join('');
   }
 }
@@ -1180,7 +1178,6 @@ function renderGradesHeader() {
   if (setTitle) {
     setTitle.innerHTML = `Grades — ${escapeHtml(semester)}, ${escapeHtml(schoolYear)}<br><span style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">${escapeHtml(program)} ${escapeHtml(yearLevel)}${section ? ' · Section ' + escapeHtml(section) : ''}</span>`;
   }
-  setText('gradesTermPill', `${semester} ${schoolYear}`);
 
   const termGrades = gradesForSelectedTerm();
   const aiEl = getEl('aiInsightText');
@@ -1247,34 +1244,15 @@ async function viewProspectus(background = false) {
   if (trigger) { trigger.disabled = true; trigger.textContent = 'Loading prospectus…'; }
   try {
     // 1. Fetch full degree curriculum courses from 'courses' table
-    let { data: courses, error: cErr } = await supabaseClient
+    const { data: courses, error: cErr } = await supabaseClient
       .from('courses')
       .select('*')
       .order('year_level', { ascending: true })
       .order('semester', { ascending: true })
       .order('code', { ascending: true });
 
-    if (cErr) console.warn('Courses fetch error, falling back to course_offerings:', cErr);
-
-    // Fallback if courses table returned no records
-    if (!courses || courses.length === 0) {
-      const { data: offerings, error: offeringsError } = await supabaseClient
-        .from('course_offerings')
-        .select('*')
-        .order('year', { ascending: true })
-        .order('semester', { ascending: true });
-
-      if (offeringsError) throw offeringsError;
-      courses = (offerings || []).map(o => ({
-        code: o.code,
-        title: o.title,
-        year_level: o.year || 1,
-        semester: /summer/i.test(o.semester) ? 3 : o.semester === '2nd Semester' ? 2 : 1,
-        lec_units: Number(o.units || 3),
-        lab_units: 0,
-        prerequisites: o.prerequisites || 'None',
-      }));
-    }
+    if (cErr) throw cErr;
+    if (!courses?.length) throw new Error('The degree curriculum is unavailable. Please try again later.');
 
     // 2. Fetch student's grades and enrollments
     const [{ data: gradesData, error: gradesError }, { data: enrollmentsData, error: enrollmentError }] = await Promise.all([
@@ -1708,19 +1686,21 @@ async function loadClearance() {
     .eq('student_id', profile.id)
     .order('department_name', { ascending: true });
 
-  // Self-healing: If no clearances exist for this student yet, initialize them
-  if (!rows || rows.length === 0) {
-    try {
-      await supabaseClient.rpc('initialize_student_clearances', { target_student_id: profile.id });
-      const { data: refreshed } = await supabaseClient
-        .from('clearances')
-        .select('*')
-        .eq('student_id', profile.id)
-        .order('department_name', { ascending: true });
-      rows = refreshed || [];
-    } catch (e) {
-      console.warn('Could not run initialize_student_clearances RPC:', e);
+  if (error) {
+    const grid = getEl('deptGrid');
+    if (grid) {
+      grid.textContent = 'Clearance records are unavailable. ';
+      const retry = document.createElement('button');
+      retry.type = 'button'; retry.textContent = 'Retry';
+      retry.addEventListener('click', loadClearance);
+      grid.append(retry);
     }
+    setText('clearFrac', 'Unavailable');
+    setText('clearRemaining', 'Could not verify clearance requirements.');
+    const fill = getEl('clearFill');
+    if (fill) fill.style.width = '0%';
+    showToast('Could not load clearance records. Please retry.', true);
+    return;
   }
 
   state.departments = rows || [];
@@ -1736,7 +1716,7 @@ function renderClearance() {
     setText('clearFrac', '0/0 Cleared');
     const fill = getEl('clearFill');
     if (fill) fill.style.width = '0%';
-    setText('clearRemaining', 'No clearance departments required.');
+    setText('clearRemaining', 'Clearance requirements have not been confirmed. Contact the registrar.');
     return;
   }
 
@@ -1923,15 +1903,38 @@ async function loadSSOLinks() {
 }
 
 // ── Attendance Module ────────────────────────────────────────────────
+function showReadFailure(section, retry) {
+  if (getEl(`${section}-read-error`)) return;
+  const host = getEl(`page-${section}`);
+  if (!host) return;
+  const notice = document.createElement('div');
+  notice.id = `${section}-read-error`;
+  notice.setAttribute('role', 'alert');
+  notice.textContent = 'Records are unavailable. Previously loaded figures may be outdated. ';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'btn btn-primary';
+  button.textContent = 'Retry';
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    try { await retry(); } finally { button.disabled = false; }
+  });
+  notice.append(button);
+  host.prepend(notice);
+}
+
 async function loadAttendance() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  const { data: records } = await supabaseClient
+  const { data: records, error } = await supabaseClient
     .from('attendance')
     .select('*, course_offerings(code, title)')
     .eq('student_id', profile.id)
     .order('date', { ascending: false });
+
+  if (error) return showReadFailure('attendance', loadAttendance);
+  getEl('attendance-read-error')?.remove();
 
   const stats = { present: 0, absent: 0, late: 0, excused: 0 };
   (records || []).forEach(r => { if (stats[r.status] !== undefined) stats[r.status]++; });

@@ -371,8 +371,8 @@
                 <h3>Course Offerings &amp; Faculty Assignment</h3>
                 <div class="sub">Manage subjects and assign instructors — saves instantly</div>
               </div>
-              <div style="display:flex;gap:10px;align-items:center;">
-                <select id="assignSemesterFilter" class="field-input" style="width:auto;"
+              <div class="offering-toolbar">
+                <select id="assignSemesterFilter" class="field-input"
                   aria-label="Filter by Semester" title="Filter by Semester"></select>
                 <select id="assignYearFilter" class="field-input" aria-label="Assignment year level">
                   <option value="">All year levels</option>
@@ -436,35 +436,7 @@
             </div>
             <div class="card card-pad record-detail">
               <h3 id="clearanceTitle">Select a student</h3>
-              <div id="clearanceDetails" role="status">Choose a student to view clearance.</div>
-              <details class="department-compliance">
-                <summary>Appeals &amp; Approvals</summary>
-                <div class="card card-pad">
-                  <div class="card-head">
-                    <div>
-                      <h3>Appeals &amp; Approvals</h3>
-                      <div class="sub">Grade change requests, prerequisite waivers, credit transfers</div>
-                    </div>
-                    <button class="btn btn-primary" data-modal="appeal">+ Log New Appeal</button>
-                  </div>
-                  <div class="table-responsive">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Student</th>
-                          <th>Type</th>
-                          <th>Course</th>
-                          <th>Reason</th>
-                          <th>Status</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody id="appealsBody"></tbody>
-                    </table>
-                  </div>
-                  <div id="noAppealsMsg" class="empty-state" style="display:none;">No appeals on file.</div>
-                </div>
-              </details>
+              <div id="clearanceDetails" role="status"></div>
             </div>
           </div>
         </section>

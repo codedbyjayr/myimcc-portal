@@ -127,7 +127,7 @@ const query = {
 vm.runInNewContext(reindexCode, {
   serve: fn => { reindex = fn; }, Response,
   Deno: { env: { get: () => 'service-test-key' } },
-  createClient: () => ({ from: () => query }), embedFaq: async () => Array(384).fill(0.1), console: { error() {} },
+  createClient: (_url, key) => ({ auth: { admin: { listUsers: async () => key === 'service-test-key' ? { data: { users: [] }, error: null } : { data: null, error: { message: 'Denied' } } } }, from: () => query }), embedFaq: async () => Array(384).fill(0.1), console: { error() {} },
 });
 const indexRequest = (key, method = 'POST') => reindex(new Request('https://example.invalid', { method, headers: { Authorization: `Bearer ${key}` } }));
 assert.equal((await indexRequest('anon')).status, 401);

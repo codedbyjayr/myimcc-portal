@@ -1052,32 +1052,15 @@ function buildGradesTermDropdown() {
 
   if (!terms.some(t => t.key === _gradesSelectedTerm)) _gradesSelectedTerm = terms[0]?.key || null;
 
-  let dd = getEl('gradeTermSelect');
-  if (!dd) {
-    const gradesTitle = getEl('gradesTitle');
-    if (gradesTitle && gradesTitle.parentNode) {
-      const wrap = document.createElement('div');
-      wrap.style.cssText = 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;';
-      const lbl = document.createElement('label');
-      lbl.style.cssText = 'font-size:12px;font-weight:700;color:var(--ink-500);white-space:nowrap;';
-      lbl.textContent = 'Semester:';
-      lbl.htmlFor = 'gradeTermSelect';
-      dd = document.createElement('select');
-      dd.id = 'gradeTermSelect';
-      dd.style.cssText = 'background:var(--card,#fff);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:600;color:var(--ink-900);outline:none;cursor:pointer;';
-      dd.addEventListener('change', () => {
-        _gradesSelectedTerm = dd.value;
-        renderGrades();
-        renderGradeStats();
-        renderGradesHeader();
-      });
-      wrap.appendChild(lbl);
-      wrap.appendChild(dd);
-      gradesTitle.parentNode.insertBefore(wrap, gradesTitle.nextSibling);
-    }
-  }
+  const dd = getEl('gradeTermSelect');
 
   if (dd) {
+    dd.onchange = () => {
+      _gradesSelectedTerm = dd.value;
+      renderGrades();
+      renderGradeStats();
+      renderGradesHeader();
+    };
     dd.innerHTML = terms.map(t =>
       `<option value="${escapeHtml(t.key)}" ${t.key === _gradesSelectedTerm ? 'selected' : ''}>${escapeHtml(t.semester)} — ${escapeHtml(t.school_year)}</option>`
     ).join('');
@@ -1195,7 +1178,6 @@ function renderGradesHeader() {
   if (setTitle) {
     setTitle.innerHTML = `Grades — ${escapeHtml(semester)}, ${escapeHtml(schoolYear)}<br><span style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">${escapeHtml(program)} ${escapeHtml(yearLevel)}${section ? ' · Section ' + escapeHtml(section) : ''}</span>`;
   }
-  setText('gradesTermPill', `${semester} ${schoolYear}`);
 
   const termGrades = gradesForSelectedTerm();
   const aiEl = getEl('aiInsightText');
@@ -1262,34 +1244,15 @@ async function viewProspectus(background = false) {
   if (trigger) { trigger.disabled = true; trigger.textContent = 'Loading prospectus…'; }
   try {
     // 1. Fetch full degree curriculum courses from 'courses' table
-    let { data: courses, error: cErr } = await supabaseClient
+    const { data: courses, error: cErr } = await supabaseClient
       .from('courses')
       .select('*')
       .order('year_level', { ascending: true })
       .order('semester', { ascending: true })
       .order('code', { ascending: true });
 
-    if (cErr) console.warn('Courses fetch error, falling back to course_offerings:', cErr);
-
-    // Fallback if courses table returned no records
-    if (!courses || courses.length === 0) {
-      const { data: offerings, error: offeringsError } = await supabaseClient
-        .from('course_offerings')
-        .select('*')
-        .order('year', { ascending: true })
-        .order('semester', { ascending: true });
-
-      if (offeringsError) throw offeringsError;
-      courses = (offerings || []).map(o => ({
-        code: o.code,
-        title: o.title,
-        year_level: o.year || 1,
-        semester: /summer/i.test(o.semester) ? 3 : o.semester === '2nd Semester' ? 2 : 1,
-        lec_units: Number(o.units || 3),
-        lab_units: 0,
-        prerequisites: o.prerequisites || 'None',
-      }));
-    }
+    if (cErr) throw cErr;
+    if (!courses?.length) throw new Error('The degree curriculum is unavailable. Please try again later.');
 
     // 2. Fetch student's grades and enrollments
     const [{ data: gradesData, error: gradesError }, { data: enrollmentsData, error: enrollmentError }] = await Promise.all([
