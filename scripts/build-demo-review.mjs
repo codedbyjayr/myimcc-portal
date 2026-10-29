@@ -8,7 +8,8 @@ export async function buildDemoReview() {
     'migrations/20261021040134_exact_school_grade_scale.sql',
     'migrations/20261027120911_grade_revert_mfa_guard.sql',
     'migrations/20261027131814_backend_semester_release.sql',
-    'migrations/20261029063928_prevent_repeat_term_enrollment.sql'];
+    'migrations/20261029063928_prevent_repeat_term_enrollment.sql',
+    'migrations/20261029114553_enrollment_open_notifications.sql'];
   const sources = await Promise.all(files.map(file => readFile(new URL('../supabase/' + file, import.meta.url), 'utf8')));
   const sql = sources.join('\n').replace(/^CREATE TRIGGER on_auth_user_created[^\n]*\n/gm, '')
     .replace(/^CREATE EXTENSION[^\n]*\n/gm, '').replace(/^(BEGIN|COMMIT);\s*$/gm, '')

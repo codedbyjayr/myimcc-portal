@@ -189,12 +189,25 @@ try {
   assert((await page.locator('#courseList').textContent()).includes('SUM101'),'Closing enrollment keeps enrolled subjects visible');
   failEnrollmentFees=true;
   await page.locator('#refreshEnrollment').click();
-  await page.waitForFunction(()=>document.querySelector('#enrollmentLockStatus').textContent.includes('Could not load enrollment fees'));
-  assert((await page.locator('#courseList').textContent()).includes('SUM101'),'Failed reads preserve subjects');
+  await page.waitForFunction(()=>document.querySelector('#enrollmentLockStatus').textContent.includes('closed'));
+  assert.equal(await page.locator('#page-enrollment').getByText('Billing Summary', {exact:true}).count(),0);
+  assert((await page.locator('#courseList').textContent()).includes('SUM101'),'Unavailable fees do not block enrollment subjects');
   assert(await page.locator('#proceedBtn').isDisabled());
   failEnrollmentFees=false;
   await page.locator('#refreshEnrollment').click();
   await page.waitForFunction(()=>document.querySelector('#enrollmentLockStatus').textContent.includes('closed'));
+
+  offerings[1].year=1;
+  failEnrollmentFees=true;
+  await page.locator('#refreshEnrollment').click();
+  await page.locator('#enrollmentTerm option[value="2026-2027|1st Semester"]').waitFor({state:'attached'});
+  await page.selectOption('#enrollmentTerm','2026-2027|1st Semester');
+  await page.locator('#courseList [data-id="2"]').click();
+  assert.equal(await page.locator('#page-enrollment .amt').count(),0,'Enrollment does not show fee amounts');
+  await page.locator('#proceedBtn').click();
+  await page.getByRole('heading',{name:'Enrollment Request Submitted!'}).waitFor();
+  assert(writes.some(w=>w.table==='enrollment_requests' && w.payload.some(r=>r.offering_id==='2' && r.status==='pending')),'Enroll Now submits directly without fee review');
+  failEnrollmentFees=false;
 
   role = 'dean'; failDashboard = true;
   await page.goto(origin + '/faculty/dean-dashboard.html');

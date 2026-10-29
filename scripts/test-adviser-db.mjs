@@ -37,6 +37,8 @@ try {
   await run('Ordered backend release', await readFile(new URL('../supabase/migrations/20261027131814_backend_semester_release.sql', import.meta.url), 'utf8'));
   await run('FAQ vector retrieval and content invalidation', await readFile(new URL('../supabase/tests/faq_search.sql', import.meta.url), 'utf8'));
   await run('Prevent repeat term enrollment', await readFile(new URL('../supabase/migrations/20261029063928_prevent_repeat_term_enrollment.sql', import.meta.url), 'utf8'));
+  await run('Enrollment opening notifications', await readFile(new URL('../supabase/migrations/20261029114553_enrollment_open_notifications.sql', import.meta.url), 'utf8'));
+  await run('Enrollment opening notification regression', await readFile(new URL('../supabase/tests/enrollment_open_notifications.sql', import.meta.url), 'utf8'));
   await run('Repeat term enrollment boundary', await readFile(new URL('../supabase/tests/repeat_term_enrollment.sql', import.meta.url), 'utf8'));
   await run('Adviser role and workflow regression', await readFile(new URL('../supabase/tests/adviser_requirements.sql', import.meta.url), 'utf8'));
   await run('Backend boundary regression', await readFile(new URL('../supabase/tests/backend_access_controls.sql', import.meta.url), 'utf8'));

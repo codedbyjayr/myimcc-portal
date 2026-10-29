@@ -1,5 +1,22 @@
 # Backend release
 
+## Enrollment opening notifications
+
+`20261029114553_enrollment_open_notifications.sql` is applied to Supabase.
+The existing Enrollment / Advising → Enrollment term settings controls open or
+close 1st Semester, 2nd Semester, and Summer for a school year with subject offerings.
+Opening a closed term inserts an activity for every active, approved student;
+the existing student notification bell receives these activities through Realtime
+and its refresh fallback. Opening an already-open term sends no duplicate notice.
+Closing sends no notice; reopening sends a new notice. The update and notices
+commit together, and concurrent changes to the same term serialize on its offerings.
+Existing Registrar/Dean/Admin and MFA checks remain in place. No email is sent.
+
+Verification: `npm run test:db` covers all three terms, duplicate opens, closing,
+reopening, recipient filtering, student visibility, access checks, and rollback
+when notification insertion fails. No real term was opened during deployment.
+
+
 The backend release is `supabase/migrations/20261027020245_backend_semester_release.sql`.
 It combines the five previously unapplied scripts in one transaction, in dependency
 order: school-year normalization, adviser workflows, access controls, semester
