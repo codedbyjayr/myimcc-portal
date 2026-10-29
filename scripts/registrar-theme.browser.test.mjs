@@ -29,7 +29,11 @@ try {
     const source = new URL(root + 'staff/registrar-dashboard.html', import.meta.url);
     const html = await readFile(source, 'utf8');
     await page.route('**/*', route => route.abort());
-    await page.setContent(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<link\b[^>]*>/gi, ''));
+    await page.setContent(await page.evaluate(source => {
+      const document = new DOMParser().parseFromString(source, 'text/html');
+      document.querySelectorAll('script, link').forEach(element => element.remove());
+      return '<!doctype html>' + document.documentElement.outerHTML;
+    }, html));
     for (const link of html.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*href="([^"]+)"/gi)) {
       await page.addStyleTag({ content: await readFile(new URL(link[1], source), 'utf8') });
     }

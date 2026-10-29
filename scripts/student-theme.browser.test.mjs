@@ -29,7 +29,11 @@ try {
     await page.route('**/*', route => route.abort());
     const source = new URL(root + 'student/dashboard.html', import.meta.url);
     const html = await readFile(source, 'utf8');
-    await page.setContent(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<link\b[^>]*>/gi, ''));
+    await page.setContent(await page.evaluate(source => {
+      const document = new DOMParser().parseFromString(source, 'text/html');
+      document.querySelectorAll('script, link').forEach(element => element.remove());
+      return '<!doctype html>' + document.documentElement.outerHTML;
+    }, html));
     for (const path of ['dashboard.css', '../shared/loading.css', '../shared/rwd.css']) {
       await page.addStyleTag({ content: await readFile(new URL(path, source), 'utf8') });
     }

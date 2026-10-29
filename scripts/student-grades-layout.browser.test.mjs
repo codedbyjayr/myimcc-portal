@@ -16,7 +16,11 @@ try {
     const js = await readFile(new URL('dashboard.js', source), 'utf8');
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
     await page.route('**/*', route => route.abort());
-    await page.setContent(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<link\b[^>]*>/gi, ''));
+    await page.setContent(await page.evaluate(source => {
+      const document = new DOMParser().parseFromString(source, 'text/html');
+      document.querySelectorAll('script, link').forEach(element => element.remove());
+      return '<!doctype html>' + document.documentElement.outerHTML;
+    }, html));
     for (const path of ['dashboard.css', '../shared/loading.css', '../shared/rwd.css']) await page.addStyleTag({ content: await readFile(new URL(path, source), 'utf8') });
     await page.addScriptTag({ content: await readFile(new URL('../shared/grading.js', source), 'utf8') });
     await page.addScriptTag({ content: `

@@ -18,7 +18,11 @@ try {
     assert(!js.includes('loadAppeals') && !js.includes("from('appeals')"));
     const page = await browser.newPage({ reducedMotion: 'reduce' });
     await page.route('**/*', route => route.abort());
-    await page.setContent(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<link\b[^>]*>/gi, ''));
+    await page.setContent(await page.evaluate(source => {
+      const document = new DOMParser().parseFromString(source, 'text/html');
+      document.querySelectorAll('script, link').forEach(element => element.remove());
+      return '<!doctype html>' + document.documentElement.outerHTML;
+    }, html));
     for (const path of ['sharedstyle.css', 'subject-picker.css', '../shared/loading.css', '../shared/rwd.css']) await page.addStyleTag({ content: await readFile(new URL(path, source), 'utf8') });
     await page.evaluate(() => {
       document.querySelectorAll('.page').forEach(element => element.classList.remove('active'));
