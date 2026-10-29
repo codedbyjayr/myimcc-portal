@@ -8,7 +8,7 @@
     --ink-600: #5b6172;
     --ink-400: #8b90a0;
     --line: #ece9ee;
-    --bg: #f6f5f8;
+    --bg: #ffffff;
     --white: #ffffff;
     --danger: #c0392b;
     --ok: #1e8e5a;
@@ -288,6 +288,23 @@ body {
     background: var(--pink-50);
     color: var(--pink-600);
     font-weight: 700;
+}
+
+.nav-item.soon {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+.soon-badge {
+    margin-left: auto;
+    white-space: nowrap;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .05em;
+    background: var(--line);
+    color: var(--ink-500);
+    padding: 2px 6px;
+    border-radius: 5px;
 }
 
 .nav-item .ic {
