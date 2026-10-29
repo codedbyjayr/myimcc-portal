@@ -1,4 +1,5 @@
 :root{color-scheme:light}[data-theme="dark"]{color-scheme:dark}
+:root:not([data-theme="dark"]){--bg:#fff}
 .enrollment-workspace{max-width:1180px;margin:0 auto;padding:32px 28px 64px}
 .enrollment-workspace svg{width:20px;height:20px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .back-link{display:inline-flex;align-items:center;gap:8px;color:var(--ink-500);font-size:13px;font-weight:600;text-decoration:none;margin-bottom:28px;min-height:36px}
