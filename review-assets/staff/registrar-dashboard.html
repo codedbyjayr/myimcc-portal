@@ -64,7 +64,7 @@
 
             <nav aria-label="Registrar sections">
                 <div class="nav-label">Main Menu</div>
-                <a class="nav-item" href="enrollment-requests.html">Enrollment / Advising</a>
+                <a class="nav-item" href="enrollment-requests.html"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l8-4 8 4-8 4-8-4zM4 12l8 4 8-4M4 18l8 4 8-4"/></svg></span>Enrollment</a>
                 <button class="nav-item active" data-view="dashboard" type="button" aria-current="page">
                     <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10l9-7 9 7v10a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg></span>
                     Dashboard
@@ -77,19 +77,15 @@
                     <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 10v6"/></svg></span>
                     Student Offers
                 </button>
-                <button class="nav-item" id="registrarClearanceNav" data-view="clearance" type="button" hidden>
-                    <span class="ic" aria-hidden="true">✓</span>
-                    Clearance
-                </button>
-                <button class="nav-item" data-view="appointments" type="button">
+                <button class="nav-item soon" type="button" disabled title="Coming soon">
                     <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M9 15l2 2 4-4"/></svg></span>
                     Appointments
-                    <span class="nav-badge" id="apptPendingBadge" hidden>0</span>
+                    <span class="soon-badge">Coming soon</span>
                 </button>
-                <button class="nav-item" data-view="messages" type="button">
+                <button class="nav-item soon" type="button" disabled title="Coming soon">
                     <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v12H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg></span>
                     Messages
-                    <span class="nav-badge" id="msgUnreadBadge" hidden>0</span>
+                    <span class="soon-badge">Coming soon</span>
                 </button>
             </nav>
 
@@ -177,23 +173,8 @@
                 </div>
             </section>
 
-            <label for="registrarTerm">Academic semester</label>
-            <select id="registrarTerm" aria-label="Academic semester"></select>
-            <label for="registrarYear">Year level</label>
-            <select id="registrarYear"><option value="">All year levels</option><option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option></select>
             <!-- -------- PROSPECTUS VIEW -------- -->
             <section id="view-prospectus" class="hidden" aria-labelledby="pageTitle">
-                <details class="panel" id="summerPublisher">
-                    <summary>Publish a Summer subject</summary>
-                    <p>Offer an existing subject for a failed-prerequisite retake or GE enrollment. Prerequisite rules still apply. Assign an instructor before enrollment opens.</p>
-                    <form id="summerOfferingForm">
-                        <div class="field"><label for="summerSubject">Existing subject</label><select id="summerSubject" required></select></div>
-                        <div class="field"><label for="summerSchoolYear">School year</label><input id="summerSchoolYear" required pattern="[0-9]{4}-[0-9]{4}" placeholder="2026-2027"></div>
-                        <div class="field"><label for="summerSchedule">Schedule</label><input id="summerSchedule" maxlength="200" placeholder="Schedule TBA"></div>
-                        <button class="btn btn-primary" type="submit">Publish Summer offering</button>
-                        <p id="summerPublishStatus" role="status"></p>
-                    </form>
-                </details>
                 <div class="panel">
                     <div class="panel-head">
                         <h3>Prospectus</h3>
@@ -202,12 +183,6 @@
                             <button type="button" class="chip" data-cat="MAJOR">Major</button>
                             <button type="button" class="chip" data-cat="GE">GE</button>
                         </div>
-                        <label class="sr-only" for="prospectusSearchField">Search by</label>
-                        <select id="prospectusSearchField" aria-label="Search by">
-                            <option value="all">Code or title</option>
-                            <option value="code">Code</option>
-                            <option value="title">Title</option>
-                        </select>
                         <label class="sr-only" for="prospectusSearch">Search subjects</label>
                         <input type="search" id="prospectusSearch" placeholder="Search code or title&hellip;">
                     </div>
@@ -235,13 +210,8 @@
                 <div class="panel panel-spaced">
                     <div class="panel-head">
                         <h3>Students</h3>
-                        <label class="sr-only" for="studentSearchField">Search students by</label>
-                        <select id="studentSearchField" aria-label="Search students by">
-                            <option value="name">Name</option>
-                            <option value="studentNo">Student No.</option>
-                        </select>
                         <label class="sr-only" for="studentSearch">Search students</label>
-                        <input type="search" id="studentSearch" placeholder="Search student name&hellip;">
+                        <input type="search" id="studentSearch" placeholder="Search student name or ID&hellip;">
                     </div>
                     <div class="table-responsive">
                         <table>
@@ -282,28 +252,6 @@
                         </table>
                     </div>
                     <div id="offersEmpty" class="empty hidden">No subjects offered yet.</div>
-                </div>
-            </section>
-
-            <!-- -------- REGISTRAR CLEARANCE VIEW -------- -->
-            <section id="view-clearance" class="hidden" aria-labelledby="pageTitle" hidden>
-                <div class="registrar-clearance-layout">
-                    <div class="panel registrar-clearance-panel">
-                        <div class="panel-head"><h3>Student Clearance</h3></div>
-                        <label class="sr-only" for="registrarClearanceSearch">Search students</label>
-                        <input id="registrarClearanceSearch" type="search" placeholder="Name, student number, or program…">
-                        <label for="registrarClearanceYear">Year level</label>
-                        <select id="registrarClearanceYear">
-                            <option value="">All year levels</option><option value="1">1st Year</option>
-                            <option value="2">2nd Year</option><option value="3">3rd Year</option><option value="4">4th Year</option>
-                        </select>
-                        <button class="btn btn-ghost" id="registrarClearanceRefresh" type="button">Refresh clearances</button>
-                        <div id="registrarClearanceStudents" class="registrar-clearance-list" role="group" aria-label="Students"></div>
-                    </div>
-                    <div class="panel registrar-clearance-panel registrar-clearance-details" id="registrarClearanceDetails" aria-live="polite">
-                        <div class="panel-head"><h3 id="registrarClearanceTitle">Select a student</h3></div>
-                        <p>Choose a student to review their Registrar clearance.</p>
-                    </div>
                 </div>
             </section>
 
