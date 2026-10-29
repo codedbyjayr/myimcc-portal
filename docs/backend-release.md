@@ -1,5 +1,26 @@
 # Backend release
 
+## Curriculum publication when enrollment opens
+
+`20261029221247_publish_curriculum_on_term_open.sql` is applied to Supabase.
+Opening an enrollment term publishes missing catalog subjects for that semester,
+using each subject's program, year, lecture plus lab units, and prerequisites.
+The supplied 51-subject curriculum is mapped to BSIT. New catalog rows must have
+`courses.program` set before automatic publication; unmapped rows are skipped.
+Summer publishes only catalog rows explicitly marked semester 3, or offerings
+staff publish separately. It does not copy regular-semester subjects automatically.
+
+Existing offerings, schedules, and instructors are preserved. New offerings have
+no assigned teacher or schedule. Students submit requests; the existing dean
+review and instructor-assignment actions complete enrollment and teaching loads.
+Opening, publication, and notices commit together; repeated opens add no duplicate
+subjects. Publication also repaired the already-open 2026–2027 first semester:
+27 BSIT subjects across four years, including four subjects / 12 units in year 4.
+
+`npm run test:db` covers publication by semester and program, requests, dean approval,
+teacher assignment, closing/reopening, existing-offering preservation, access checks,
+and rollback on notification failure. Signed-in production screens were not checked.
+
 ## Enrollment opening notifications
 
 `20261029114553_enrollment_open_notifications.sql` is applied to Supabase.
