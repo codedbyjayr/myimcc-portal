@@ -67,6 +67,8 @@ try {
   await run('Admin role department regression', await readFile(new URL('../supabase/tests/admin_role_departments.sql', import.meta.url), 'utf8'));
   await run('Publish term curriculum', await readFile(new URL('../supabase/migrations/20261029221247_publish_curriculum_on_term_open.sql', import.meta.url), 'utf8'));
   await run('Curriculum enrollment workflow', await readFile(new URL('../supabase/tests/term_curriculum.sql', import.meta.url), 'utf8'));
+  await run('Student academic profile validation', await readFile(new URL('../supabase/migrations/20261030024242_student_academic_profile.sql', import.meta.url), 'utf8'));
+  await run('Student academic setup and access regression', await readFile(new URL('../supabase/tests/student_academic_profile.sql', import.meta.url), 'utf8'));
 } catch (error) {
   if (!process.exitCode) { console.error(error.message); process.exitCode = 1; }
 } finally { await db.close(); }

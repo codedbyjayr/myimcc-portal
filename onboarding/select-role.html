@@ -190,7 +190,27 @@
                 </p>
             </div>
 
-            <div id="formError" class="form-error" hidden></div>
+            <div id="studentAcademicFields">
+                <div class="field">
+                    <label for="studentProgram">Program</label>
+                    <select id="studentProgram" required aria-describedby="academicHint">
+                        <option value="">Loading programs…</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="studentYear">Year Level</label>
+                    <select id="studentYear" required aria-describedby="academicHint">
+                        <option value="">Choose your year level</option>
+                        <option>1st Year</option>
+                        <option>2nd Year</option>
+                        <option>3rd Year</option>
+                        <option>4th Year</option>
+                    </select>
+                    <p id="academicHint" class="field-hint">Use the program and year on your school record. These determine which subjects you can request.</p>
+                </div>
+            </div>
+
+            <div id="formError" class="form-error" role="alert" hidden></div>
 
             <button type="submit" class="btn-submit" id="submitBtn">Submit for Approval</button>
         </form>
