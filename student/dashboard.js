@@ -2624,23 +2624,24 @@ function appendHelpTurn(role, html) {
     `<div class="msg-item-head"><span>${escapeHtml(who)}</span></div>` +
     `<div class="msg-item-body">${html}</div>`;
   log.appendChild(article);
-  log.scrollTop = log.scrollHeight;
+  if (role === 'user') {
+    const suggestions = getEl('helpSuggestions');
+    if (suggestions) suggestions.open = false;
+    log.scrollTop = log.scrollHeight;
+  } else {
+    log.scrollTop = article.offsetTop - log.offsetTop;
+  }
 }
 
 function renderHelpSources(sources) {
   if (!Array.isArray(sources) || !sources.length) return '';
   const items = sources.map(source => `
     <li>
-      <span class="help-src-cat">${escapeHtml(source.category || 'Article')}</span>
       <span class="help-src-q">${escapeHtml(source.question || '')}</span>
     </li>`).join('');
   return `<details class="help-sources">
-    <summary>Sources (${sources.length})</summary>
+    <summary>${sources.length === 1 ? 'Source guide' : `Source guides (${sources.length})`}</summary>
     <ul>${items}</ul>
-    <p class="help-src-note">
-      Answers are drawn only from these published articles. If something here
-      looks wrong, book a consultation.
-    </p>
   </details>`;
 }
 
@@ -2668,7 +2669,8 @@ async function askHelpAssistant(question) {
 
     if (!answer) throw new Error('The assistant returned nothing.');
 
-    appendHelpTurn('bot', renderHelpText(answer) + renderHelpSources(sources));
+    appendHelpTurn('bot', renderHelpText(answer) + renderHelpSources(sources)
+      + (!resolved ? '<p><button class="btn btn-ghost" type="button" data-help-book>Book a consultation</button></p>' : ''));
 
     // Bounded so a long session cannot grow the request without limit.
     helpHistory.push({ role: 'user', content: trimmed });
@@ -2677,14 +2679,13 @@ async function askHelpAssistant(question) {
 
     if (!resolved) {
       lastUnansweredQuestion = trimmed;
-      revealBooking(trimmed);
     }
   } catch (err) {
     console.error('[help] assistant failed:', err);
+    lastUnansweredQuestion = trimmed;
     appendHelpTurn('bot',
       'The assistant is not available right now. You can book a consultation and '
-      + 'staff will be notified instead.');
-    revealBooking(trimmed);
+      + 'staff will be notified instead.<p><button class="btn btn-ghost" type="button" data-help-book>Book a consultation</button></p>');
   } finally {
     setHelpBusy(false);
   }
@@ -2887,22 +2888,23 @@ async function cancelBooking(id) {
 function wireHelp() {
   getEl('helpForm')?.addEventListener('submit', event => {
     event.preventDefault();
+    if (helpBusy) return;
     const field = getEl('helpInput');
     const question = field.value;
     field.value = '';
     askHelpAssistant(question);
   });
 
-  // Suggested questions. data-ask is a fixed string from this file, but it is
-  // still escaped on the way into the textarea rather than trusted.
   document.addEventListener('click', event => {
+    if (event.target instanceof Element && event.target.closest('[data-help-book]')) {
+      revealBooking(lastUnansweredQuestion);
+      return;
+    }
     const chip = event.target instanceof Element
       ? event.target.closest('[data-ask]')
       : null;
-    if (!chip) return;
+    if (!chip || helpBusy) return;
     const question = chip.dataset.ask || '';
-    const field = getEl('helpInput');
-    if (field) field.value = question;
     askHelpAssistant(question);
   });
 
