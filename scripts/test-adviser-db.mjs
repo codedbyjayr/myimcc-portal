@@ -69,6 +69,8 @@ try {
   await run('Curriculum enrollment workflow', await readFile(new URL('../supabase/tests/term_curriculum.sql', import.meta.url), 'utf8'));
   await run('Student academic profile validation', await readFile(new URL('../supabase/migrations/20261030024242_student_academic_profile.sql', import.meta.url), 'utf8'));
   await run('Student academic setup and access regression', await readFile(new URL('../supabase/tests/student_academic_profile.sql', import.meta.url), 'utf8'));
+  await run('Staff clearance offices', await readFile(new URL('../supabase/migrations/20261030031305_staff_clearance_offices.sql', import.meta.url), 'utf8'));
+  await run('Staff clearance office regression', await readFile(new URL('../supabase/tests/staff_clearance_offices.sql', import.meta.url), 'utf8'));
 } catch (error) {
   if (!process.exitCode) { console.error(error.message); process.exitCode = 1; }
 } finally { await db.close(); }
