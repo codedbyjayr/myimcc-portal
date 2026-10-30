@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+const source=readFileSync(new URL('./dashboard.js',import.meta.url),'utf8');
+const nodes={},turns=[];
+const getEl=id=>nodes[id]??={textContent:'',offsetTop:0,open:true,scrollHeight:100,appendChild(node){turns.push(node);}};
+let response={data:{answer:'1. Open **Grades & Evaluation**.\n2. Choose the Semester. If needed, book a consultation.',sources:[{question:'How do I check my grades?'}],resolved:true}},bookings=0;
+const context=vm.createContext({getEl,console:{error(){}},document:{createElement:()=>({offsetTop:10})},
+  supabaseClient:{auth:{getSession:async()=>({data:{session:{access_token:'test'}}})},functions:{invoke:async()=>response}},
+  revealBooking(){bookings++;}});
+vm.runInContext(readFileSync(new URL('../shared/ui.js',import.meta.url),'utf8'),context);
+context.escapeHtml=context.UIM.escapeHtml;
+vm.runInContext(source.slice(source.indexOf("const FAQ_FUNCTION ="),source.indexOf('// ── Booking')),context);
+await context.askHelpAssistant('How do I check my grades?');
+assert.equal(bookings,0,'Optional consultation text must not navigate away');
+assert.equal(getEl('helpSuggestions').open,false,'Suggestions collapse after a question');
+assert.match(turns.at(-1).innerHTML,/Source guide/);
+assert(!turns.at(-1).innerHTML.includes('data-help-book'));
+response={data:{answer:'This question needs staff review.',sources:[],resolved:false}};
+await context.askHelpAssistant('Please help');
+assert.equal(bookings,0,'Unanswered questions offer booking without closing chat');
+assert.match(turns.at(-1).innerHTML,/data-help-book/);
+assert.equal(vm.runInContext('lastUnansweredQuestion',context),'Please help');
+response={error:{message:'Unavailable'}};
+await context.askHelpAssistant('Retry question');
+assert.equal(bookings,0);
+assert.match(turns.at(-1).innerHTML,/data-help-book/);
+assert.equal(getEl('helpSend').disabled,false);
+assert(!context.renderHelpSources([{question:'<img src=x onerror=alert(1)>'}]).includes('<img'));
+console.log('Assistant UI: useful answers, optional consultation, collapsed suggestions, safe sources and failure recovery passed.');

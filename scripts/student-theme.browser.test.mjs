@@ -68,7 +68,7 @@ try {
     for (const theme of ['light', 'dark']) {
       await page.evaluate(theme => document.documentElement.dataset.theme = document.body.dataset.theme = theme, theme);
       await page.evaluate(() => document.getElementById('chatPanel').showPopover());
-      for (const selector of ['.msg-item-bot .msg-item-body', '.msg-item-bot .msg-item-head', '.msg-item.mine .msg-item-body', '#helpInput', '.help-chip', '.help-sources summary', '.help-sources li', '.help-src-note', '.cor-doc th']) {
+      for (const selector of ['.msg-item-bot .msg-item-body', '.msg-item-bot .msg-item-head', '.msg-item.mine .msg-item-body', '#helpInput', '.help-chip', '.help-sources summary', '.help-sources li', '.help-footnote', '.cor-doc th']) {
         const { foreground, background } = await colors(selector);
         assert(contrast(foreground, background) >= 4.5, `${root}${theme} ${selector}: needs 4.5:1 contrast`);
       }

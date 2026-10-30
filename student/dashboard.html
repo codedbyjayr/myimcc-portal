@@ -933,15 +933,17 @@
       <h3 id="chatTitle">Portal Assistant</h3>
       <button class="btn btn-ghost" type="button" id="chatClose" popovertarget="chatPanel" popovertargetaction="hide" aria-label="Close assistant">&times;</button>
     </div>
-    <div class="help-suggest" aria-label="Common questions">
-      <span class="help-suggest-label">Common questions:</span>
+    <details class="help-suggest" id="helpSuggestions" open>
+      <summary>Common questions</summary>
+      <div class="help-suggest-buttons">
       <button class="help-chip" type="button" data-ask="How do I enroll in a subject?">How do I enroll?</button>
       <button class="help-chip" type="button" data-ask="How do I check my grades?">How do I check my grades?</button>
       <button class="help-chip" type="button" data-ask="How do I get my online clearance?">Online clearance</button>
       <button class="help-chip" type="button" data-ask="How do I view my class schedule?">Class schedule</button>
       <button class="help-chip" type="button" data-ask="How do I see my balance and payment history?">Balance &amp; payments</button>
       <button class="help-chip" type="button" data-ask="How do I get my Certificate of Registration?">Certificate of Registration</button>
-    </div>
+      </div>
+    </details>
 
     <div class="help-log" id="helpLog" role="log" aria-live="polite"
       aria-label="Conversation with the help assistant">
@@ -962,8 +964,7 @@
       <button class="btn btn-primary" type="submit" id="helpSend">Ask</button>
     </form>
     <p class="help-footnote">
-      The assistant cannot read your grades, balances or medical information,
-      and cannot change anything on your account.
+      I explain school processes. I cannot view or change your personal records.
     </p>
   </div>
 

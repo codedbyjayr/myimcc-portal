@@ -18,13 +18,13 @@ function setup(options = {}) {
     auth: { getUser: async () => ({ data: { user: options.anonymous ? null : { id: 'student' } } }) },
     rpc: async name => name === 'consume_faq_request'
       ? { data: !options.rateLimited, error: options.rateError ? { code: 'unavailable' } : null }
-      : { data: options.emptySemantic ? [] : [article] },
+      : { data: options.emptySemantic ? [] : options.articles ?? [article] },
     from(table) {
       return {
         select() { return this; }, eq() { return this; },
         single: async () => ({ data: { status: 'approved', is_active: !options.inactive } }),
         or(filter) { searches.push(filter); return this; },
-        limit: async () => ({ data: options.noArticles ? [] : [article] }),
+        limit: async () => ({ data: options.noArticles ? [] : options.articles ?? [article] }),
         insert: async row => { logs.push(row); return { error: options.logError ? { code: '42501' } : null }; },
       };
     },
@@ -41,7 +41,7 @@ function setup(options = {}) {
       if (options.live) return fetch(url, init);
       if (options.networkError) throw new Error('offline');
       if (options.badJson) return new Response('not json');
-      return Response.json(options.emptyAnswer ? {} : { choices: [{ message: { content: options.answer ?? article.answer } }] },
+      return Response.json(options.emptyAnswer ? {} : { choices: [{ message: { content: options.content ?? JSON.stringify({ answer: options.answer ?? article.answer, resolved: options.resolved ?? true, source_ids: options.sourceIds ?? [article.id] }) } }] },
         { status: options.providerStatus ?? 200 });
     },
   });
@@ -100,6 +100,23 @@ const followUp = setup();
 await followUp.send({ message: 'Where is that?', history: [{ role: 'user', content: 'How do I pay tuition?' }] });
 assert.match(followUp.searches[0], /tuition/);
 assert.equal(followUp.providerRequests[0].messages.filter(m => m.role === 'system').length, 1);
+
+const helpful = setup({answer:'Open Billing & History. If a payment is missing, book a consultation.'});
+assert.equal((await helpful.send()).data.resolved,true,'Optional staff help does not invalidate a useful answer');
+const noAnswer = setup({answer:'The articles do not cover that question.',resolved:false,sourceIds:[]});
+assert.equal((await noAnswer.send()).data.resolved,false);
+for(const options of [{content:'not JSON'}, {sourceIds:['invented']}, {sourceIds:[]}, {resolved:'yes'}]) {
+  assert.equal((await setup(options).send()).data.provider,'articles','Invalid model contracts use published guidance');
+}
+const grades = {...article,id:'grades',category:'Grades',question:'How do I check my grades?',answer:'1. Open Grades & Evaluation.\n2. Choose the Semester.',keywords:'view grades semester',similarity:0.7};
+const release = {...article,id:'release',category:'Grades',question:'When are grades released?',keywords:'grades release',similarity:0.9};
+const relevant = setup({articles:[release,article,grades],sourceIds:['grades'],answer:grades.answer});
+const gradeResult=await relevant.send({message:'How do I check my grades?'});
+assert.deepEqual(gradeResult.data.sources.map(row=>row.id),['grades']);
+assert(!relevant.providerRequests[0].messages[0].content.includes('When are grades released?'),'Direct guide outranks nearby semantic matches');
+assert.equal(relevant.providerRequests[0].response_format.type,'json_object');
+const selectedSources=setup({articles:[release,grades],sourceIds:['grades'],answer:grades.answer});
+assert.deepEqual((await selectedSources.send({message:'Help with grade results'})).data.sources.map(row=>row.id),['grades'],'Uncited retrieved rows are not displayed as sources');
 
 const embeddingCode = stripTypeScriptTypes(readFileSync(new URL('../supabase/functions/_shared/faq-embedding.ts', import.meta.url), 'utf8'))
   .replace('export async function', 'async function');
