@@ -46,6 +46,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const fullNameInput = document.getElementById('fullName');
     const idNumberInput = document.getElementById('idNumber');
     const requestedRoleSelect = document.getElementById('requestedRole');
+    const programSelect = document.getElementById('studentProgram');
+    const yearSelect = document.getElementById('studentYear');
+    const updateAcademicFields = () => {
+        const student = requestedRoleSelect.value === 'student';
+        document.getElementById('studentAcademicFields').hidden = !student;
+        programSelect.disabled = yearSelect.disabled = !student;
+        programSelect.required = yearSelect.required = student;
+    };
+    requestedRoleSelect.addEventListener('change', updateAcademicFields);
+    updateAcademicFields();
     const submitBtn = document.getElementById('submitBtn');
     const formError = document.getElementById('formError');
 
@@ -77,7 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // blank form with no explanation and no way forward.
     const { data: profile } = await supabaseClient
         .from('profiles')
-        .select('status, role, full_name, is_active')
+        .select('status, role, full_name, is_active, program, year_level')
         .eq('id', user.id)
         .single();
 
@@ -97,6 +107,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (route && route.kind === 'redirect' && !isThisPage(route.url)) {
         window.location.href = route.url;
         return;
+    }
+
+    const { data: curriculum, error: curriculumError } = await window.IMCC.fetchAll(() =>
+        supabaseClient.from('courses').select('program,year_level'));
+    programSelect.replaceChildren(new Option(curriculumError ? 'Programs could not load. Refresh to retry.' : 'Choose your program', ''));
+    if (!curriculumError) {
+        const programs = [...new Set((curriculum || []).map(course => course.program).filter(Boolean))].sort();
+        programs.forEach(program => programSelect.add(new Option(program, program)));
+        programSelect.value = profile?.program || '';
+        yearSelect.value = profile?.year_level || '';
     }
 
     // Prefill the name from the institutional address, e.g.
@@ -121,10 +141,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const fullName = fullNameInput.value.trim();
         const idNumber = idNumberInput.value.trim();
         const requestedRole = requestedRoleSelect.value;
+        const academicDetails = requestedRole === 'student'
+            ? { program: programSelect.value, year_level: yearSelect.value } : {};
 
-        if (!fullName || !idNumber) {
+        if (!fullName || !idNumber || (requestedRole === 'student' &&
+            !(curriculum || []).some(course => course.program === academicDetails.program &&
+                course.year_level === parseInt(academicDetails.year_level, 10)))) {
             if (formError) {
-                formError.textContent = 'Please fill out all required fields.';
+                formError.textContent = 'Please fill out all required fields, including a valid student program and year level.';
                 formError.hidden = false;
             }
             return;
@@ -133,18 +157,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Submitting...';
 
-        // Only these columns. 'status' and 'role' are deliberately absent:
-        // the profiles_protect_privileged() trigger owns them and rejects
-        // any client attempt to set them, which made this form fail
-        // outright. The trigger decides the outcome: a student-pattern
-        // address asking for 'student' is approved on the spot, anything
-        // else is parked as pending for an administrator.
+        // The database owns approval and validates student academic details.
         const { error } = await supabaseClient
             .from('profiles')
             .update({
                 full_name: fullName,
                 id_number: idNumber,
                 requested_role: requestedRole,
+                ...academicDetails,
                 updated_at: new Date().toISOString()
             })
             .eq('id', user.id);
