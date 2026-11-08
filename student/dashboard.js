@@ -777,6 +777,10 @@ async function confirmEnrollment() {
 }
 
 // ── Billing Module ───────────────────────────────────────────────────
+function studentBillingBalance(summary, assessment, totalPaid) {
+  return summary?.balance ?? Math.max(0, assessment - totalPaid);
+}
+
 async function loadBilling() {
   const profile = state.studentProfile;
   if (!profile) return;
@@ -816,7 +820,7 @@ async function loadBilling() {
   const miscTotal = (miscRes.data || []).reduce((s, f) => s + Number(f.amount || 0), 0);
   const totalAssessment = tuitionTotal + miscTotal;
   const totalPaid = Number(summaryRes.data?.total_paid || 0);
-  const balance = Math.max(0, totalAssessment - totalPaid);
+  const balance = studentBillingBalance(summaryRes.data, totalAssessment, totalPaid);
 
   // Installments come from the installments table only.
   //
@@ -1007,6 +1011,13 @@ function renderUpay() {
 // zero balance then cleared the cashier's hold on clearance. Recording a
 // payment is a cashier action; see database/security-hardening-phase0b.sql.
 
+function csvField(value) {
+  let text = String(value ?? '');
+  // A tab inside the quoted field keeps formula-like text literal in Excel.
+  if (typeof value === 'string' && /^(?:\s*[=+@＝＋－＠-]|[\t\r\n])/.test(text)) text = '\t' + text;
+  return '"' + text.replaceAll('"', '""') + '"';
+}
+
 getEl('exportBtn')?.addEventListener('click', () => {
   if (!state.billing.transactions.length) {
     showToast('No transactions to export.', true);
@@ -1014,8 +1025,8 @@ getEl('exportBtn')?.addEventListener('click', () => {
   }
   const csv = [
     ['OR NUMBER', 'DATE', 'DESCRIPTION', 'CHANNEL', 'AMOUNT'],
-    ...state.billing.transactions.map(t => [t.or_number, t.txn_date, `"${t.description}"`, t.channel, t.amount])
-  ].map(r => r.join(',')).join('\n');
+    ...state.billing.transactions.map(t => [t.or_number, t.txn_date, t.description, t.channel, t.amount == null ? '' : Number(t.amount)])
+  ].map(row => row.map(csvField).join(',')).join('\r\n');
 
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
@@ -1534,7 +1545,7 @@ function renderCorPage(d) {
   const misc = (miscFees || []).reduce((s, f) => s + Number(f.amount || 0), 0);
   const totalAssessment = tuition + misc;
   const totalPaid = billing?.total_paid || 0;
-  const balance = billing?.balance ?? (totalAssessment - totalPaid);
+  const balance = studentBillingBalance(billing, totalAssessment, totalPaid);
 
   let statusLabel = 'OFFICIALLY ENROLLED';
   let statusColor = 'var(--green)';
