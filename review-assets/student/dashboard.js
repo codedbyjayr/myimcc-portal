@@ -933,15 +933,19 @@ function renderBillingBreakdown() {
 function renderTxns() {
   const target = getEl('txnBody');
   if (!target) return;
-  target.innerHTML = (state.billing.transactions.length) ? state.billing.transactions.map(t => `
+  const { transactions } = state.billing;
+  target.innerHTML = transactions.length ? transactions.map(t => `
     <tr>
       <td class="or-num">${escapeHtml(t.or_number || '—')}</td>
       <td>${fmtDate(t.txn_date)}</td>
       <td>${escapeHtml(t.description)}</td>
       <td><span class="chan">${escapeHtml(t.channel)}</span></td>
       <td class="amt-green">${peso(t.amount)}</td>
-      <td><button class="mini-btn" onclick="showToast('OR #${t.or_number || ''} recorded.')">View</button></td>
+      <td><button class="mini-btn" type="button">View</button></td>
     </tr>`).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--ink-300);padding:20px;">No transaction records found.</td></tr>`;
+  target.querySelectorAll('button').forEach((button, index) => {
+    button.addEventListener('click', () => showToast(`OR #${transactions[index].or_number || ''} recorded.`));
+  });
 }
 
 function renderInstallments() {

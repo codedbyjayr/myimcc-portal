@@ -59,3 +59,27 @@ assert.equal(csvField('OR,123'), '"OR,123"');
 assert.equal(csvField('Paid "in full"'), '"Paid ""in full"""');
 assert.equal(csvField('=1+1'), '"\t=1+1"');
 assert.equal(csvField(-50), '"-50"');
+
+for (const path of ['./dashboard.js', '../review-assets/student/dashboard.js']) {
+  const dashboard = readFileSync(new URL(path, import.meta.url), 'utf8');
+  const receipt = `OR'123" <sample>`;
+  let viewReceipt;
+  let toast;
+  const table = { querySelectorAll: () => [{ addEventListener(event, handler) {
+    assert.equal(event, 'click');
+    viewReceipt = handler;
+  } }] };
+  const renderStart = dashboard.indexOf('function renderTxns(');
+  const renderEnd = dashboard.indexOf('function renderInstallments(', renderStart);
+  vm.runInNewContext(dashboard.slice(renderStart, renderEnd) + '\nrenderTxns();', {
+    getEl: () => table,
+    state: { billing: { transactions: [{ or_number: receipt }] } },
+    escapeHtml: value => String(value ?? '').replaceAll('<', '&lt;').replaceAll('>', '&gt;'),
+    fmtDate: () => '',
+    peso: () => '',
+    showToast: message => { toast = message; },
+  });
+  assert.doesNotMatch(table.innerHTML, /onclick=/);
+  viewReceipt();
+  assert.equal(toast, `OR #${receipt} recorded.`);
+}
