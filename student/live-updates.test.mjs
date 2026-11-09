@@ -24,3 +24,33 @@ const selectionLine=source.split('\n').find(line=>line.includes('state.selectedO
 const selectedState={selectedOfferingIds:new Set(['rejected','pending','closed']),courses:[{offering_id:'rejected',enrollmentStatus:'rejected',enrollment_open:true},{offering_id:'pending',enrollmentStatus:'pending',enrollment_open:true},{offering_id:'closed',enrollmentStatus:'rejected',enrollment_open:false}]};
 vm.runInNewContext(selectionLine,{state:selectedState,background:true});
 assert.deepEqual([...selectedState.selectedOfferingIds],['rejected'],'Retry choices survive a fetch while already submitted subjects are removed');
+
+const list = { innerHTML: '' };
+const dot = { textContent: 0, classList: { toggle() {} } };
+const storage = new Map();
+const query = {
+  select() { return this; }, eq() { return this; }, order() { return this; },
+  async limit(count) { assert.equal(count, 3); return result; },
+};
+const failedRead = { error: { message: 'Offline' } };
+let result = failedRead;
+Object.assign(context, {
+  getEl: id => ({ notifList: list, notifDot: dot })[id],
+  supabaseClient: { from: () => query },
+  localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) },
+  fmtDate: value => value,
+  renderStudentNotifications: ({ rows }) => rows?.map(row => row.description).join(',') ?? 'Unavailable',
+});
+vm.runInContext(source.slice(source.indexOf('async function loadNotifications('), source.indexOf('// ── Enrollment Module')), context);
+await context.loadNotifications();
+assert.equal(list.innerHTML, 'Unavailable');
+result = { data: [{ id: 'one', description: 'Enrollment opened' }] };
+await refresh(['activities']);
+assert.equal(list.innerHTML, 'Enrollment opened');
+assert.equal(dot.textContent, 1);
+result = failedRead;
+await refresh(['activities']);
+assert.equal(list.innerHTML, 'Enrollment opened');
+assert.equal(dot.textContent, 1);
+context.markBellSeen();
+assert.equal(dot.textContent, 0);

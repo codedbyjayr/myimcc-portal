@@ -1,11 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import DashboardView, { ClearanceCards, EnrollmentCourses, GradeInsight, GradeTerms, ProspectusContent, StudentGradeRows } from './dashboard-view';
+import DashboardView, { ClearanceCards, EnrollmentCourses, GradeInsight, GradeTerms, ProspectusContent, StudentGradeRows, StudentQuickLinks } from './dashboard-view';
 import { mountDashboard } from '../shared/dashboard-workspace';
 import { CorDocument, CorLoadMessage } from './cor-view';
 import { BillingContent } from './billing-view';
-import { StudentActivity, StudentSummary } from './summary-view';
+import { StudentActivity, StudentAnnouncement, StudentDeadlines, StudentNotifications, StudentSummary } from './summary-view';
 
 Object.assign(window, {
+  renderStudentQuickLinks: (props: Parameters<typeof StudentQuickLinks>[0]) => renderToStaticMarkup(<StudentQuickLinks {...props} />),
   renderStudentClearanceCards: (props: Parameters<typeof ClearanceCards>[0]) => renderToStaticMarkup(<ClearanceCards {...props} />),
   renderEnrollmentCourses: (props: Parameters<typeof EnrollmentCourses>[0]) => renderToStaticMarkup(<EnrollmentCourses {...props} />),
   renderStudentGradeTerms: (props: Parameters<typeof GradeTerms>[0]) => renderToStaticMarkup(<GradeTerms {...props} />),
@@ -17,6 +18,9 @@ Object.assign(window, {
   renderStudentBilling: (props: Parameters<typeof BillingContent>[0]) => renderToStaticMarkup(<BillingContent {...props} />),
   renderStudentSummary: (props: Parameters<typeof StudentSummary>[0]) => renderToStaticMarkup(<StudentSummary {...props} />),
   renderStudentActivity: (props: Parameters<typeof StudentActivity>[0]) => renderToStaticMarkup(<StudentActivity {...props} />),
+  renderStudentAnnouncement: (props: Parameters<typeof StudentAnnouncement>[0]) => renderToStaticMarkup(<StudentAnnouncement {...props} />),
+  renderStudentDeadlines: (props: Parameters<typeof StudentDeadlines>[0]) => renderToStaticMarkup(<StudentDeadlines {...props} />),
+  renderStudentNotifications: (props: Parameters<typeof StudentNotifications>[0]) => renderToStaticMarkup(<StudentNotifications {...props} />),
 });
 
 mountDashboard(<DashboardView />);

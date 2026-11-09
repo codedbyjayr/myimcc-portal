@@ -1,12 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import DashboardView, { DeanEnrollmentStats, DeanFlaggedCourses, DeanOverviewBars, DeanPerformanceStats } from './dean-dashboard-view';
-import { GradeRows, GradeHistoryMessage, GradeHistoryRows, GradeHistorySummary } from './gradebook-view';
+import { CourseList, GradeRows, GradeHistoryMessage, GradeHistoryRows, GradeHistorySummary } from './gradebook-view';
 import { AssignmentRows, InstructorField, OfferingFields, WorkloadRows, offeringFields } from './dean-schedule-view';
 import { ClearanceDetails, RecordDetails, StudentPicker } from './dean-records-view';
 import { mountDashboard } from '../shared/dashboard-workspace';
 import { saveClearanceNote } from '../shared/clearance-note';
 
 Object.assign(window, {
+  renderDeanCourseList: (props: Parameters<typeof CourseList>[0]) => renderToStaticMarkup(<CourseList {...props} />),
   renderDeanEnrollmentStats: (props: Parameters<typeof DeanEnrollmentStats>[0]) => renderToStaticMarkup(<DeanEnrollmentStats {...props} />),
   renderDeanOverviewBars: (props: Parameters<typeof DeanOverviewBars>[0]) => renderToStaticMarkup(<DeanOverviewBars {...props} />),
   renderDeanPerformanceStats: (props: Parameters<typeof DeanPerformanceStats>[0]) => renderToStaticMarkup(<DeanPerformanceStats {...props} />),

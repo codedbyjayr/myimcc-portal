@@ -156,3 +156,22 @@ export function GradeHistoryDialog() {
     </dialog>
   );
 }
+
+export function CourseList({ offerings, selectedId, showInstructor = false }: {
+  offerings: { id: number | string; code?: string; title?: string; schedule?: string; semester?: string; school_year?: string; instructor_name?: string }[];
+  selectedId?: number | string;
+  showInstructor?: boolean;
+}) {
+  return <>{offerings.map(offering => {
+    const selected = String(offering.id) === String(selectedId);
+    return <button key={offering.id} type="button" data-id={offering.id} aria-pressed={selected}
+      className={`nav-item mb-2! border-[var(--line)]! ${selected ? 'active' : ''}`}>
+      <div className="text-left">
+        <div className="text-[13.5px] font-extrabold">{offering.code || '—'}</div>
+        <div className="text-xs font-medium text-[var(--ink-500)]">{offering.title || '—'}</div>
+        <div className="mt-1 text-[11px] text-[var(--ink-300)]">{offering.schedule || 'Schedule TBA'} · {offering.semester || ''} {offering.school_year || ''}</div>
+        {showInstructor && <div className="mt-1 text-[11px] font-semibold text-[var(--pink-600)]">{offering.instructor_name || 'Unassigned'}</div>}
+      </div>
+    </button>;
+  })}</>;
+}

@@ -1,6 +1,6 @@
 # MyIMCC TSX and Tailwind migration
 
-Local workspace snapshot as of 2026-11-09, through Teacher class selection and Dean overview. Use this handoff to resume the frontend migration and update it after each completed workflow.
+Local workspace snapshot as of 2026-11-09, through Dean class selection and Student Quick Links. Use this handoff to resume the frontend migration and update it after each completed workflow.
 
 ## Objectives
 
@@ -25,7 +25,7 @@ Local workspace snapshot as of 2026-11-09, through Teacher class selection and D
 | Student Profile and Dashboard summary | TSX and Tailwind cover Profile, the summary cards, and the recent activity feed. Profile saves persist cleared contact fields. Profile, sidebar, and top bar share avatar rendering with an initials fallback. The Dashboard distinguishes a settled balance, no upcoming payment, and unavailable balance or schedule data. | [Profile view](../student/profile-view.tsx), [Summary view](../student/summary-view.tsx), [Student theme browser check](../scripts/student-theme.browser.test.mjs) |
 | Registrar | Clearance queue and details, student rows, subject offers, prospectus rows, and Summer subject options use TSX renderers. | [Registrar view](../staff/registrar-dashboard-view.tsx), [Registrar controller](../staff/registrar-dashboard.js) |
 | Teacher and Dean gradebooks | Both dashboards share TSX for grade rows and revision history. Their controllers still own grade entry, save, lock, and history actions. | [Shared gradebook](../faculty/gradebook-view.tsx), [Teacher controller](../faculty/teacher-dashboard.js), [Dean controller](../faculty/dean-dashboard.js) |
-| Teacher class selection | The desktop class list uses TSX and Tailwind. The shared filters and mobile picker still control the same selection. The class buttons expose the selected state and keep it when a teacher cancels a switch with unsaved grades. | [Teacher view](../faculty/teacher-dashboard-view.tsx), [Gradebook browser check](../scripts/grading-workspace.browser.test.mjs) |
+| Teacher and Dean class selection | The desktop class lists share a TSX and Tailwind picker. Dean's All Classes scope shows the instructor. The shared filters and mobile picker still control selection, and class buttons expose the selected state. | [Shared picker](../faculty/gradebook-view.tsx), [Gradebook browser check](../scripts/grading-workspace.browser.test.mjs) |
 | Dean overview | TSX renders enrollment cards, enrollment and performance bars, and flagged course rows. The controller retains the counts, retention calculation, thresholds, and empty states. | [Dean view](../faculty/dean-dashboard-view.tsx), [Overview regression check](../faculty/dean-dashboard.test.mjs) |
 | Dean Faculty & Schedule and View Records | TSX covers faculty workloads, assignment rows, offering and instructor fields, the student picker, and record details. | [Schedule views](../faculty/dean-schedule-view.tsx), [records views](../faculty/dean-records-view.tsx) |
 | Dean Student Compliance | The clearance details reuse the student picker and render in TSX. Approval checks that the student's Dean clearance still has the status shown at review time. A pending save stays disabled through a redraw. | [Clearance view](../faculty/dean-records-view.tsx), [Dean controller](../faculty/dean-dashboard.js), [regression test](../faculty/dean-clearance.test.mjs) |
@@ -34,8 +34,11 @@ Several TSX components render markup for existing JavaScript controllers. Those 
 
 ## Remaining frontend work
 
-1. **Dean class selection.** The [Dean class list](../faculty/dean-dashboard.js) still builds buttons in the controller. Preserve the All Classes and My Classes scopes, teaching assignment checks, and unsaved-grade protection when migrating it.
-2. **Review other enabled views.** The Student Dashboard controller still builds announcements, upcoming deadlines, notifications, and quick links. Keep Registrar Appointments and Messages disabled as Coming Soon.
+Student announcements, upcoming deadlines, and notifications now render in the [Student summary view](../student/summary-view.tsx). Notification refresh failures retain the last loaded list and unread count.
+
+**Student Quick Links** renders “Links coming soon” when no eligible links are configured. When the URLs arrive, add them to the existing `sso_links` configuration with a `label`, an absolute HTTP or HTTPS `url`, `student` in the comma-separated `roles`, `is_active = true`, and a `sort_order`. Keep the existing Library and Email exclusions. Adding URLs requires no frontend edit.
+
+The next step is a release checkout and signed-in preview. Keep Registrar Appointments and Messages disabled as Coming Soon.
 
 ## Release work
 

@@ -449,8 +449,9 @@ async function loadAnnouncements() {
         return;
       }
     } catch (_) {}
-    const deadline = a.deadline ? ` Deadline: <b>${fmtDate(a.deadline)}</b>.` : '';
-    banner.innerHTML = `<span class="banner-text">🔔 ${escapeHtml(a.content)}${deadline}</span><button class="banner-close" id="bannerCloseBtn" aria-label="Dismiss announcement" type="button">&times;</button>`;
+    banner.innerHTML = window.renderStudentAnnouncement({
+      content: a.content, deadline: a.deadline ? fmtDate(a.deadline) : undefined,
+    });
     banner.style.display = '';
     getEl('bannerCloseBtn')?.addEventListener('click', () => {
       banner.style.display = 'none';
@@ -475,54 +476,36 @@ async function loadDeadlines() {
   const container = getEl('deadlinesCard');
   if (!container) return;
 
-  const urgencyClass = (type) => type === 'urgent' ? 'urgent' : '';
-  const pillClass = (type) => type === 'urgent' ? 'pill-urgent' : 'pill-soft';
-  const pillText = (type) => type === 'urgent' ? 'URGENT' : (type === 'schedule' ? 'SCHEDULE' : 'OPTIONAL');
-  const dateColor = (type) => type === 'urgent' ? 'color:var(--pink-600);font-weight:700;' : 'color:var(--ink-500);';
-
-  container.innerHTML = `<div class="card-head"><h3>Upcoming Deadlines</h3></div>` +
-    ((rows && rows.length) ? rows.map(d => `
-      <div class="deadline ${urgencyClass(d.type)}" style="padding:10px 0;border-bottom:1px solid var(--line);">
-        <div class="deadline-top" style="display:flex;justify-space-between;align-items:center;">
-          <span class="t" style="font-size:13px;font-weight:600;">${escapeHtml(d.title)}</span>
-          <span class="pill ${pillClass(d.type)}">${pillText(d.type)}</span>
-        </div>
-        <div class="d" style="${dateColor(d.type)}font-size:12px;margin-top:2px;">${fmtDate(d.due_date)}</div>
-      </div>
-    `).join('') : `<div style="font-size:13px;color:var(--ink-500);padding:10px 0;">No upcoming deadlines.</div>`);
+  container.innerHTML = window.renderStudentDeadlines({ rows, date: fmtDate });
 }
 
 async function loadNotifications() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  const { data: rows } = await supabaseClient
+  const { data: rows, error } = await supabaseClient
     .from('activities')
     .select('*')
     .eq('student_id', profile.id)
     .order('created_at', { ascending: false })
     .limit(3);
 
-  if (Array.isArray(rows)) {
-    pendingNotifIds = rows.map(r => r.id);
-  } else {
-    pendingNotifIds = [];
-  }
-  refreshBellDot();
-
   const target = getEl('notifList');
+  if (error) {
+    if (pendingNotifIds === null && target) {
+      target.innerHTML = window.renderStudentNotifications({ rows: null, date: fmtDate });
+    }
+    return;
+  }
+  pendingNotifIds = (rows ?? []).map(row => row.id);
+  refreshBellDot();
   if (target) {
-    target.innerHTML = (rows && rows.length) ? rows.map(n => `
-      <div class="notif-item" style="padding:10px 14px;border-bottom:1px solid var(--line);">
-        <div class="t" style="font-size:12px;font-weight:600;">${escapeHtml(n.description)}</div>
-        <div class="d" style="font-size:10px;color:var(--ink-500);">${fmtDate(n.created_at)}</div>
-      </div>
-    `).join('') : `<div class="notif-item"><div class="t">No new notifications</div></div>`;
+    target.innerHTML = window.renderStudentNotifications({ rows: rows ?? [], date: fmtDate });
   }
 }
 
 // ── Notification unread badge (client-side "seen" tracking) ───────────
-let pendingNotifIds = [];
+let pendingNotifIds = null;
 function notifSeenKey() {
   return `imcc_notif_seen_${state.studentProfile?.id || 'anon'}`;
 }
@@ -542,13 +525,13 @@ function refreshBellDot() {
   const dot = getEl('notifDot');
   if (!dot) return;
   const seen = getNotifSeen();
-  const unseen = pendingNotifIds.filter(id => !seen.has(id)).length;
+  const unseen = pendingNotifIds?.filter(id => !seen.has(id)).length ?? 0;
   dot.textContent = unseen > 9 ? '9+' : unseen;
   dot.classList.toggle('show', unseen > 0);
 }
 function markBellSeen() {
   const seen = getNotifSeen();
-  pendingNotifIds.forEach(id => seen.add(id));
+  pendingNotifIds?.forEach(id => seen.add(id));
   saveNotifSeen(seen);
   refreshBellDot();
 }
@@ -1535,11 +1518,7 @@ async function loadSSOLinks() {
   const role = state.studentProfile?.role || 'student';
   const visible = (links || []).filter(l => (l.roles || '').split(',').map(r => r.trim()).includes(role))
     .filter(l => !['library', 'email'].includes((l.label || '').trim().toLowerCase()));
-  nav.innerHTML = visible.map(l => `
-    <a href="${l.url}" target="_blank" class="nav-item" style="text-decoration:none;">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-      ${escapeHtml(l.label)}
-    </a>`).join('') || '<div class="nav-item soon" style="opacity:.4;">No links configured</div>';
+  nav.innerHTML = window.renderStudentQuickLinks({ links: visible });
 }
 
 // ── Attendance Module ────────────────────────────────────────────────

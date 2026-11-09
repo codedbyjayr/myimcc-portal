@@ -616,19 +616,3 @@ export default function DashboardView() {
     <div className="toast" id="toast" />
   </>;
 }
-export function TeacherCourseList({ offerings, selectedId }: {
-  offerings: { id: number | string; code?: string; title?: string; schedule?: string; semester?: string; school_year?: string }[];
-  selectedId?: number | string;
-}) {
-  return <>{offerings.map(offering => {
-    const selected = String(offering.id) === String(selectedId);
-    return <button key={offering.id} type="button" data-id={offering.id} aria-pressed={selected}
-      className={`nav-item mb-2! border-[var(--line)]! ${selected ? 'active' : ''}`}>
-      <div className="text-left">
-        <div className="text-[13.5px] font-extrabold">{offering.code || '—'}</div>
-        <div className="text-xs font-medium text-[var(--ink-500)]">{offering.title || '—'}</div>
-        <div className="mt-1 text-[11px] text-[var(--ink-300)]">{offering.schedule || 'Schedule TBA'} · {offering.semester || ''} {offering.school_year || ''}</div>
-      </div>
-    </button>;
-  })}</>;
-}

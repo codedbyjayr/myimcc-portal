@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import DashboardView, { TeacherCourseList } from './teacher-dashboard-view';
-import { GradeRows, GradeHistoryMessage, GradeHistoryRows, GradeHistorySummary } from './gradebook-view';
+import DashboardView from './teacher-dashboard-view';
+import { CourseList, GradeRows, GradeHistoryMessage, GradeHistoryRows, GradeHistorySummary } from './gradebook-view';
 import { mountDashboard } from '../shared/dashboard-workspace';
 
 Object.assign(window, {
-  renderTeacherCourseList: (props: Parameters<typeof TeacherCourseList>[0]) => renderToStaticMarkup(<TeacherCourseList {...props} />),
+  renderTeacherCourseList: (props: Parameters<typeof CourseList>[0]) => renderToStaticMarkup(<CourseList {...props} />),
   renderTeacherGradeRows: (props: Parameters<typeof GradeRows>[0]) => renderToStaticMarkup(<GradeRows {...props} />),
   renderTeacherHistoryMessage: (props: Parameters<typeof GradeHistoryMessage>[0]) => renderToStaticMarkup(<GradeHistoryMessage {...props} />),
   renderTeacherHistoryRows: (props: Parameters<typeof GradeHistoryRows>[0]) => renderToStaticMarkup(<GradeHistoryRows {...props} />),

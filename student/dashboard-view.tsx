@@ -3,6 +3,22 @@ import { BillingContent } from './billing-view';
 import { avatarClass, StudentProfile } from './profile-view';
 import { StudentActivity, StudentSummary } from './summary-view';
 
+export function StudentQuickLinks({ links = [] }: { links?: { label: string; url: string }[] }) {
+  const items = links.flatMap(link => {
+    let url: URL;
+    try { url = new URL(link.url); } catch { return []; }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return [];
+    return <a key={link.label + url.href} href={url.href} target="_blank" rel="noopener noreferrer" className="nav-item no-underline">
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-[17px]">
+        <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+        <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+      </svg>
+      {link.label}
+    </a>;
+  });
+  return items.length ? <>{items}</> : <div className="nav-item">Links coming soon</div>;
+}
+
 export function EnrollmentCourses({ courses, selected, disabled }: {
   courses: { offering_id: string; code: string; title: string; units: number; instructor_name?: string;
     schedule?: string; enrollment_open: boolean; enrollmentStatus?: string; reviewNote?: string }[];
@@ -281,7 +297,7 @@ export default function DashboardView() {
         <div className="nav-label">
           {"Quick Links"}
         </div>
-        <div id="ssoLinksNav" />
+        <div id="ssoLinksNav"><StudentQuickLinks /></div>
         <div className="nav-label">
           {"Academics"}
         </div>

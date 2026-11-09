@@ -632,34 +632,34 @@
         }
         if (msg) msg.style.display = 'none';
 
-        wrap.innerHTML = visibleOfferings.map(o => `
-      <button type="button" class="nav-item dean-course-item" style="border:1px solid var(--line);margin-bottom:8px;width:100%;text-align:left;display:block;padding:10px 14px;" data-id="${o.id}">
-        <div style="font-weight:800;font-size:13.5px;">${escapeHtml(o.code || '—')}</div>
-        <div style="font-size:12px;color:var(--ink-500);font-weight:500;">${escapeHtml(o.title || '—')}</div>
-        <div style="font-size:11px;color:var(--ink-300);margin-top:4px;">${escapeHtml(o.schedule || 'Schedule TBA')} · ${escapeHtml(o.semester || '')} ${escapeHtml(o.school_year || '')}</div>
-        ${deanCourseScope === 'all' ? `<div style="font-size:11px;color:var(--pink-600);font-weight:600;margin-top:4px;">👨‍🏫 ${escapeHtml(o.instructor_name || 'Unassigned')}</div>` : ''}
-      </button>
-    `).join('');
+        wrap.innerHTML = window.renderDeanCourseList({
+            offerings: visibleOfferings,
+            selectedId: selectedMyOffering?.id,
+            showInstructor: deanCourseScope === 'all',
+        });
 
         document.querySelectorAll('#myCourseList .nav-item').forEach(btn => {
-            btn.addEventListener('click', () => selectMyCourse(btn.dataset.id, btn));
+            btn.addEventListener('click', () => selectMyCourse(btn.dataset.id));
         });
 
         // Automatically select target course or first course so it displays immediately!
         const targetId = autoSelectId || (selectedMyOffering ? selectedMyOffering.id : visibleOfferings[0]?.id);
         const targetBtn = document.querySelector(`#myCourseList .nav-item[data-id="${targetId}"]`) || document.querySelector('#myCourseList .nav-item');
         if (targetBtn) {
-            selectMyCourse(targetBtn.dataset.id, targetBtn);
+            selectMyCourse(targetBtn.dataset.id);
         }
     }
 
-    async function selectMyCourse(offeringId, btnEl) {
+    async function selectMyCourse(offeringId) {
         if (!gradingWorkspace.canLeave()) return;
         resetMyRoster();
         const version = rosterVersion;
         gradingWorkspace.startClass(offeringId);
-        document.querySelectorAll('#myCourseList .nav-item').forEach(b => b.classList.remove('active'));
-        if (btnEl) btnEl.classList.add('active');
+        document.querySelectorAll('#myCourseList .nav-item').forEach(button => {
+            const selected = button.dataset.id === String(offeringId);
+            button.classList.toggle('active', selected);
+            button.setAttribute('aria-pressed', String(selected));
+        });
 
         selectedMyOffering = myOfferings.find(o => String(o.id) === String(offeringId));
         if (!selectedMyOffering) return;

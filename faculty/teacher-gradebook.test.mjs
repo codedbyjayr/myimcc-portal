@@ -6,6 +6,13 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { loadDashboardView } from '../scripts/dashboard-markup.mjs';
 
 const view = await loadDashboardView(new URL('./gradebook-view.tsx', import.meta.url));
+const picker = props => renderToStaticMarkup(createElement(view.CourseList, {
+  offerings: [{ id: 1, instructor_name: '<Dean>' }, { id: 2 }],
+  selectedId: '1',
+  ...props,
+}));
+assert.match(picker({ showInstructor: true }), /data-id="1" aria-pressed="true".*&lt;Dean&gt;.*data-id="2" aria-pressed="false".*Unassigned/);
+assert.doesNotMatch(picker({}), /&lt;Dean&gt;|Unassigned/);
 for (const role of ['Teacher', 'Dean']) {
   const dean = role === 'Dean';
   const source = readFileSync(new URL('./' + role.toLowerCase() + '-dashboard.js', import.meta.url), 'utf8');

@@ -36,6 +36,50 @@ export function StudentSummary({ summary }: { summary?: Summary }) {
   </div>;
 }
 
+export function StudentAnnouncement({ content, deadline }: { content: string; deadline?: string }) {
+  return <>
+    <span className="banner-text">🔔 {content}{deadline && <> Deadline: <b>{deadline}</b>.</>}</span>
+    <button className="banner-close" id="bannerCloseBtn" aria-label="Dismiss announcement" type="button">×</button>
+  </>;
+}
+
+export function StudentDeadlines({ rows, date }: {
+  rows?: { id?: string | number; title: string; type: string; due_date: string }[] | null;
+  date: (value: string) => string;
+}) {
+  return <>
+    <div className="card-head"><h3>Upcoming Deadlines</h3></div>
+    {rows?.length ? rows.map((row, index) => {
+      const urgent = row.type === 'urgent';
+      return <div key={row.id ?? index} className={`deadline border-b-[var(--line)]! px-0! py-2.5! ${urgent ? 'urgent' : ''}`}>
+        <div className="deadline-top flex items-center justify-between gap-2">
+          <span className="wrap-anywhere text-[13px] font-semibold">{row.title}</span>
+          <span className={`pill shrink-0 ${urgent ? 'pill-urgent' : 'pill-soft'}`}>
+            {urgent ? 'URGENT' : row.type === 'schedule' ? 'SCHEDULE' : 'OPTIONAL'}
+          </span>
+        </div>
+        <div className={`mt-0.5 text-xs ${urgent ? 'font-bold text-[var(--pink-600)]' : 'text-[var(--ink-500)]'}`}>
+          {date(row.due_date)}
+        </div>
+      </div>;
+    }) : <p className="m-0 py-2.5 text-[13px] text-[var(--ink-500)]">No upcoming deadlines.</p>}
+  </>;
+}
+
+export function StudentNotifications({ rows, date }: {
+  rows: { id: string | number; description: string; created_at: string }[] | null;
+  date: (value: string) => string;
+}) {
+  if (!rows?.length) return <div className="notif-item">
+    <div className="t">{rows ? 'No new notifications' : 'Notifications unavailable'}</div>
+  </div>;
+
+  return <>{rows.map(row => <div key={row.id} className="notif-item border-b border-[var(--line)] px-3.5 py-2.5">
+    <div className="wrap-anywhere text-xs font-semibold">{row.description}</div>
+    <div className="text-[10px] text-[var(--ink-500)]">{date(row.created_at)}</div>
+  </div>)}</>;
+}
+
 export function StudentActivity({ rows, date }: {
   rows?: { id: string; description: string; created_at: string; color?: string }[] | null;
   date?: (value: string) => string;

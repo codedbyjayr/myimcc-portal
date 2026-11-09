@@ -73,6 +73,8 @@ try {
       let clearanceRead = { error: { message: 'Unavailable' } };
       let corReadFailure = true;
       const corRecords = {
+        announcements: [{ id: 'announcement', content: 'Enrollment is open <now>', deadline: '2026-10-30' }],
+        deadlines: [{ id: 'deadline', title: 'Subject advising', type: 'urgent', due_date: '2026-10-30' }],
         student_semesters: { school_year: '2026-2027', semester: '1st Semester', balance: 12450, units_enrolled: 21, subjects_enrolled: 7 },
         activities: [{ id: 'one', description: 'Enrollment confirmed', color: '#E7338A', created_at: '2026-10-30' }],
         enrollments: Array.from({ length: 10 }, (_, index) => ({ course_offerings: {
@@ -109,6 +111,7 @@ try {
       const closeMobileNav = () => {};
       ${js.slice(js.indexOf('function goto('), js.indexOf('// ── Dropdowns Setup'))}
       ${js.slice(js.indexOf('async function loadDashboard('), js.indexOf('// ── Announcements, Deadlines'))}
+      ${js.slice(js.indexOf('async function loadAnnouncements('), js.indexOf('async function loadNotifications('))}
       ${js.slice(js.indexOf('async function loadProfile('), js.indexOf('// ── Messages ──'))}
       ${js.slice(js.indexOf('function studentBillingBalance('), js.indexOf("getEl('gradeYearFilter')"))}
       ${js.slice(js.indexOf('function showReadFailure('), js.indexOf('async function loadAttendance()'))}
@@ -187,6 +190,16 @@ try {
       return { foreground: css.color, background: getComputedStyle(background).backgroundColor };
     });
     let lightPrint;
+    await page.evaluate(() => Promise.all([loadAnnouncements(), loadDeadlines()]));
+    assert.match(await page.locator('#topBanner').textContent(), /Enrollment is open <now>.*Oct 30, 2026/);
+    assert.match(await page.locator('#deadlinesCard .deadline').textContent(), /Subject advising.*URGENT.*Oct 30, 2026/);
+    await page.getByRole('button', { name: 'Dismiss announcement' }).click();
+    await page.evaluate(() => loadAnnouncements());
+    assert(await page.locator('#topBanner').isHidden(), 'Dismissal survives loading the same announcement again');
+    await page.evaluate(async () => {
+      localStorage.removeItem('myimcc_banner_dismissed_announcement');
+      await loadAnnouncements();
+    });
     for (const theme of ['light', 'dark']) {
       await page.evaluate(theme => document.documentElement.dataset.theme = document.body.dataset.theme = theme, theme);
       await page.evaluate(async () => {
@@ -196,12 +209,11 @@ try {
         await loadDashboard();
         const samples = { sidebarName: 'Alex Reyes', sidebarStudentNo: 'TEST-001', sidebarAvatar: 'AR', topAvatar: 'AR',
           topName: 'Alex', heroGreeting: 'Good morning, Alex!', heroSubtitle: 'Your academic journey, at a glance.',
-          sidebarMeta: 'BSIT · 4th Year · 1st Semester', topBanner: 'Enrollment for the first semester is open.',
+          sidebarMeta: 'BSIT · 4th Year · 1st Semester',
           'stat-gwa': '1.75', 'stat-units': '21', 'stat-subjects': '7 subjects enrolled',
           'stat-balance': '₱12,450', 'stat-due': 'View your account details', 'stat-clearance': '3 / 4',
           sidebarFoot: 'Academic Year 2026–2027' };
         for (const [id, text] of Object.entries(samples)) document.getElementById(id).textContent = text;
-        document.querySelector('#deadlinesCard .deadline').innerHTML = '<div class="deadline-top"><span class="t">Subject advising</span></div><div class="d">Check the enrollment schedule</div>';
       });
       for (const width of [320, 390, 768, 1024, 1440]) {
         await page.setViewportSize({ width, height: 950 });

@@ -1,7 +1,13 @@
-import { dashboardMarkup } from '../scripts/dashboard-markup.mjs';
+import { dashboardMarkup, loadDashboardView } from '../scripts/dashboard-markup.mjs';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+
+const { StudentQuickLinks } = await loadDashboardView(new URL('./dashboard-view.tsx', import.meta.url));
+const renderStudentQuickLinks = props => renderToStaticMarkup(createElement(StudentQuickLinks, props));
+assert.match(renderStudentQuickLinks({ links: [{ label: 'Unsafe', url: 'javascript:alert(1)' }] }), /^<div[^>]*>Links coming soon<\/div>$/);
 
 for (const prefix of ['', 'review-assets/']) {
   const html = (await dashboardMarkup(new URL('../' + prefix + 'student/dashboard.html', import.meta.url))).replace(/\r/g, '');
@@ -24,6 +30,7 @@ for (const prefix of ['', 'review-assets/']) {
     const nav = {};
     const context = vm.createContext({document:{getElementById:()=>nav},getEl:()=>nav, state:{studentProfile:{role}},supabaseClient:client,escapeHtml:String});
     if (role === 'student') {
+      context.window = { renderStudentQuickLinks };
       const source = readFileSync(prefix + 'student/dashboard.js', 'utf8');
       vm.runInContext(source.slice(source.indexOf('async function loadSSOLinks()'),source.indexOf('// ── Attendance Module')),context);
       await context.loadSSOLinks();
