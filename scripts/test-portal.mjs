@@ -78,7 +78,7 @@ export const server = createServer(async (req, res) => {
   }
   try {
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
-    if (pathname.startsWith('/shared/dist/')) res.setHeader('Access-Control-Allow-Origin', '*');
+    if (/^\/(review-assets\/)?shared\/dist\//.test(pathname)) res.setHeader('Access-Control-Allow-Origin', '*');
     let body;
     let type = 'text/html';
     if (['/', '/index.html', '/test-login', '/auth/login.html'].includes(pathname)) {

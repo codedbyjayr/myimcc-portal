@@ -186,7 +186,7 @@ try {
   await demoFrame.locator('summary').filter({hasText:"Finalize a student's enrollment"}).click();
   await demoFrame.getByRole('button',{name:'Finalize Enrollment',exact:true}).click();
   await demoFrame.locator('dialog').getByRole('button',{name:'Continue',exact:true}).click();
-  await demoFrame.locator('dialog').waitFor({state:'detached'});
+  await demoFrame.locator('dialog').waitFor({state:'hidden'});
   await demoFrame.waitForFunction(()=>!document.getElementById('refresh').disabled);
   assert(demoWrites.some(r=>r.body?.p_decision==='approved'));
   assert(demoWrites.some(r=>r.body?.p_decision==='rejected' && r.body?.p_review_note==='Demo prerequisite missing'));
