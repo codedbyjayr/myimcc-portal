@@ -225,11 +225,10 @@
    * True when the instant has already passed, judged in school time so the
    * answer does not change with the viewer's clock.
    */
-  function isPast(value, timeZone) {
+  function isPast(value) {
     const date = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(date.getTime())) return false;
-    const nowOffset = zoneOffsetMs(new Date());
-    return date.getTime() - nowOffset <= Date.now() - zoneOffsetMs(new Date());
+    return date.getTime() <= Date.now();
   }
 
   /** Human distance, e.g. "in 2 days", judged in school time. */

@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { loadDashboardView } from '../scripts/dashboard-markup.mjs';
 const source = readFileSync(new URL('./dean-dashboard.js', import.meta.url), 'utf8');
+const { AssignmentRows, InstructorField } = await loadDashboardView(new URL('./dean-schedule-view.tsx', import.meta.url));
 const nodes = new Map();
-const getEl = id => { if (!nodes.has(id)) nodes.set(id, { innerHTML: '', style: {}, addEventListener() {} }); return nodes.get(id); };
+const getEl = id => { if (!nodes.has(id)) nodes.set(id, { innerHTML: '', style: {}, addEventListener() {}, querySelectorAll: () => [] }); return nodes.get(id); };
 const state = { instructorOptions: null, facultyList: [], offerings: [{ id: 1, code: 'TEST', instructor_id: 'self', instructor_name: 'Demo Dean' }] };
 const context = vm.createContext({
   currentUserId: 'self', currentProfile: { id: 'self', role: 'dean', status: 'approved' }, state, getEl, console,
@@ -14,10 +18,14 @@ const context = vm.createContext({
     { id: 'other', full_name: 'Other Dean', role: 'dean' },
   ] }) },
   document: { querySelectorAll: () => [] }, offeringsForSelectedTerm: () => state.offerings,
+  window: {
+    renderDeanAssignmentRows: props => renderToStaticMarkup(createElement(AssignmentRows, props)),
+    renderDeanInstructorField: props => renderToStaticMarkup(createElement(InstructorField, props)),
+  },
 });
 vm.runInContext(source.slice(source.indexOf('    async function loadInstructorOptions('), source.indexOf('    async function loadAllData(')), context);
 vm.runInContext(source.slice(source.indexOf('    function renderInstructorDropdown('), source.indexOf('    function openModal(')), context);
-vm.runInContext(source.slice(source.indexOf('    function renderAssignments('), source.indexOf('    async function deleteOffering(')), context);
+vm.runInContext(source.slice(source.indexOf('    const pendingAssignments'), source.indexOf('    async function deleteOffering(')), context);
 await vm.runInContext('loadInstructorOptions()', context);
 assert.deepEqual(Array.from(state.instructorOptions, p => p.id), ['teacher', 'self']);
 assert.deepEqual(Array.from(state.facultyList, p => p.id), ['teacher', 'self']);
@@ -29,6 +37,8 @@ assert(!getEl('instructorSelectWrapper').innerHTML.includes('legacy-assignment-a
 vm.runInContext('renderAssignments()', context);
 assert(getEl('assignBody').innerHTML.includes('Demo Dean (You)'));
 assert(!getEl('assignBody').innerHTML.includes('Other Dean'));
+vm.runInContext("pendingAssignments.set('1', 'teacher'); renderAssignments(); pendingAssignments.clear();", context);
+assert.match(getEl('assignBody').innerHTML, /<select[^>]*disabled=""[^>]*>.*<option value="teacher" selected="">Demo Teacher/);
 
 // Reproduce startup: profiles only expose the dean; the instructor RPC arrives later.
 const start = source.indexOf('    async function loadAllData(');
@@ -43,6 +53,7 @@ context.supabaseClient.from = table => ({
 });
 context.document.currentScript = null;
 vm.runInContext(readFileSync(new URL('../shared/identity.js', import.meta.url), 'utf8'), context);
+context.IMCC = context.window.IMCC;
 let loaded = false;
 const loading = vm.runInContext('loadAllData()', context).then(() => { loaded = true; });
 await new Promise(resolve => setImmediate(resolve));

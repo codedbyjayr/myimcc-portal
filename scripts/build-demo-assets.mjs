@@ -4,7 +4,7 @@ import { join, dirname } from 'node:path';
 // Keep the adviser review release separate from the current school screens.
 for (const directory of ['student','faculty','staff','admin','shared']) {
   for (const file of await readdir(directory,{recursive:true})) {
-    if (!/\.(html|js|css|svg)$/.test(file)) continue;
+    if (!/\.(html|js|css|svg|png)$/.test(file)) continue;
     const target=join('review-assets',directory,file);
     await mkdir(dirname(target),{recursive:true});
     const content=directory==='shared' && file==='supabase-config.js'

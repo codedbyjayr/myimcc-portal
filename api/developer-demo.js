@@ -7,7 +7,7 @@ import { verifyDeveloperAccess } from './developer-preview.js';
 const paths = { student:'/student/dashboard.html', faculty:'/faculty/teacher-dashboard.html',
   dean:'/faculty/dean-dashboard.html', admin:'/admin/admin-dashboard.html',
   registrar:'/staff/registrar-dashboard.html', staff:'/staff/staff-dashboard.html' };
-const rpc = 'get_class_roster|get_subject_instructor_options|get_dean_student_directory|list_student_records|get_student_record|helpdesk_recipient_id|save_course_offering_with_instructor|review_enrollment_request|cancel_enrollment_request|list_enrollment_request_history|get_enrollment_workspace|finalize_enrollment|lock_class_grades|set_enrollment_term|revert_grade|admin_set_profile_access|set_user_role|set_user_approval|set_user_active|initialize_student_clearances';
+const rpc = 'get_class_roster|get_subject_instructor_options|get_dean_student_directory|list_student_records|get_student_record|helpdesk_recipient_id|save_course_offering_with_instructor|publish_summer_offering|review_enrollment_request|cancel_enrollment_request|list_enrollment_request_history|get_enrollment_workspace|get_clearance_workspace|get_registrar_clearance_workspace|get_attendance_history|finalize_enrollment|lock_class_grades|set_enrollment_term|revert_grade|admin_set_profile_access|set_user_role|set_user_approval|set_user_active|initialize_student_clearances';
 const authOptions = { persistSession:false, autoRefreshToken:false, detectSessionInUrl:false };
 async function provisionDemo(access) {
   const service = createClient(access.url,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:authOptions});

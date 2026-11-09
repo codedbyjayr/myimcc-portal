@@ -98,61 +98,6 @@
     return value != null && Number.isFinite(Number(value)) && Number(value) >= 1 && Number(value) <= 5 ? Number(value).toFixed(2) : '—';
   }
 
-  function escapeHtml(str) {
-    return String(str == null ? '' : str)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  function renderHistoryRows(rows, targetStudent, onRevert, locked = false, readOnly = false) {
-    var doc = typeof document !== 'undefined' ? document : null;
-    if (!doc) return;
-    var body = doc.getElementById('gradeHistoryBody');
-    var noMsg = doc.getElementById('noGradeHistoryMsg');
-    if (!body) return;
-
-    if (!rows || !rows.length) {
-      body.innerHTML = '';
-      if (noMsg) noMsg.style.display = 'block';
-      return;
-    }
-
-    if (noMsg) noMsg.style.display = 'none';
-    body.innerHTML = rows.map(function (h) {
-      var dt = new Date(h.created_at).toLocaleString('en-US', {
-        month: 'short', day: 'numeric', year: 'numeric',
-        hour: 'numeric', minute: '2-digit', hour12: true
-      });
-      var typeLabel = h.change_type === 'revert' ? 'Reverted' : (h.change_type === 'initial_entry' ? 'Initial' : 'Updated');
-      var typeClass = h.change_type || 'before_update';
-      var studentCol = targetStudent ? '' : '<td><b>' + escapeHtml(h.student_name || 'N/A') + '</b><br><small style="color:var(--ink-500);">' + escapeHtml(h.student_no || '') + '</small></td>';
-
-      return '<tr>' +
-        '<td style="white-space:nowrap;font-size:11.5px;">' + escapeHtml(dt) + '</td>' +
-        studentCol +
-        '<td style="font-size:12px;">' + escapeHtml(h.changed_by_name || 'Faculty / Dean') + '</td>' +
-        '<td><span class="history-badge ' + typeClass + '">' + typeLabel + '</span></td>' +
-        '<td><span class="history-chip">' + (h.prelim != null ? Number(h.prelim).toFixed(2) : '—') + '</span></td>' +
-        '<td><span class="history-chip">' + (h.midterm != null ? Number(h.midterm).toFixed(2) : '—') + '</span></td>' +
-        '<td><span class="history-chip">' + (h.semifinal != null ? Number(h.semifinal).toFixed(2) : '—') + '</span></td>' +
-        '<td><span class="history-chip">' + (h.final != null ? Number(h.final).toFixed(2) : '—') + '</span></td>' +
-        '<td><b>' + (h.equivalent != null ? Number(h.equivalent).toFixed(2) : '—') + '</b></td>' +
-        '<td>' + (h.remark ? '<span class="badge ' + (h.remark === 'Passed' ? 'badge-green' : (h.remark === 'Failed' ? 'badge-red' : 'badge-amber')) + '">' + escapeHtml(h.remark) + '</span>' : '—') + '</td>' +
-        '<td style="text-align:center;white-space:nowrap;">' +
-        '<button type="button" class="btn btn-outline revert-btn" ' + (locked || readOnly || global.IMCC_DEVELOPER_VIEW ? 'disabled ' : '') + 'data-hist-id="' + h.id + '" data-student-id="' + h.student_id + '" style="padding:3px 8px;font-size:11.5px;color:var(--pink-600);border-color:var(--pink-200);" title="' + (locked ? 'Grades are finalized and locked' : readOnly ? 'Active teaching assignment required' : 'Revert to this past version') + '">⏪ Revert</button>' +
-        '</td></tr>';
-    }).join('');
-
-    body.querySelectorAll('.revert-btn').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var histId = btn.dataset.histId;
-        var studentId = btn.dataset.studentId;
-        var histEntry = rows.find(function (x) { return x.id === histId; });
-        if (onRevert) onRevert(histEntry, studentId);
-      });
-    });
-  }
-
   async function executeRevert(options) {
     var supabaseClient = options.supabaseClient;
     var histEntry = options.histEntry;
@@ -375,7 +320,6 @@
     previewEquivalent: previewEquivalent,
     previewRemarkBadge: previewRemarkBadge,
     computeRemark: computeRemark,
-    renderHistoryRows: renderHistoryRows,
     executeRevert: executeRevert
   };
 

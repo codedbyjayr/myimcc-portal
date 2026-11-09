@@ -1,11 +1,12 @@
+import { dashboardMarkup } from '../scripts/dashboard-markup.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
 for (const prefix of ['', 'review-assets/']) {
-  const html = readFileSync(prefix + 'student/dashboard.html', 'utf8').replace(/\r/g, '');
+  const html = (await dashboardMarkup(new URL('../' + prefix + 'student/dashboard.html', import.meta.url))).replace(/\r/g, '');
   const sidebar = html.slice(html.indexOf('<aside'), html.indexOf('</aside>'));
-  for (const label of ['Billing &amp; History', 'Attendance', 'Faculty Evaluation', 'Help', 'Messages']) {
+  for (const label of ['Attendance', 'Faculty Evaluation', 'Help', 'Messages', 'Billing &amp; History']) {
     const button = [...sidebar.matchAll(/<button\b[^>]*>[\s\S]*?<\/button>/g)].map(m => m[0]).find(b => b.includes('\n        ' + label + '\n'));
     assert(button, label + ' remains visible');
     assert.match(button, /\bdisabled\b/);
@@ -13,6 +14,7 @@ for (const prefix of ['', 'review-assets/']) {
     assert(!button.includes('data-page='), label + ' cannot navigate');
   }
   assert(sidebar.includes('data-page="profile"'));
+  assert(!/data-(page|goto)="billing"/.test(html), 'Billing has no live navigation entry');
   assert(!sidebar.includes('data-page="help"'));
 
   const links = ['LMS', 'Career Hub', ' Email ', 'EMAIL', 'Library'].map(label => ({label, roles:'student, teacher, dean', url:'https://example.invalid'}));
@@ -33,4 +35,4 @@ for (const prefix of ['', 'review-assets/']) {
     assert(!/email|library|Other role only/i.test(nav.innerHTML),role + ' hides Email and preserves role filtering');
   }
 }
-console.log('Sidebar: coming-soon items including Help disabled; Profile active; Email hidden for student/teacher/dean in normal and demo pages.');
+console.log('Sidebar: Coming Soon items including Billing are disabled, Profile is active, and Email is hidden in normal and demo pages.');

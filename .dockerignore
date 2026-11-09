@@ -1,4 +1,12 @@
 **
+!package.json
+!package-lock.json
+!vite.config.ts
+!tsconfig.frontend.json
+!scripts/
+!scripts/build-demo-assets.mjs
+!config/
+!config/nginx.conf
 !index.html
 !logo.png
 !auth/

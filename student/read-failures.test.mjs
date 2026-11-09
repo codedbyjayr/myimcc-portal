@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const source = readFileSync(new URL('./dashboard.js', import.meta.url), 'utf8');
 for (const section of ['billing','attendance']) {
-  const start = source.indexOf(section === 'billing' ? 'async function loadBilling()' : 'async function loadAttendance()');
-  const end = source.indexOf(section === 'billing' ? 'function renderBillingStats()' : '// ── Faculty Evaluation Module', start);
+  const start = source.indexOf(section === 'billing' ? 'function studentBillingBalance(' : 'async function loadAttendance()');
+  const end = source.indexOf(section === 'billing' ? 'function renderBilling()' : '// ── Faculty Evaluation Module', start);
   for (const failedTable of section === 'billing' ? ['student_semesters','billing_summary','transactions','installments','enrollments','misc_fees'] : ['attendance']) {
     let failing = true, notice, rendered = 0, removed = 0;
     const billing = { balance: 750 };
@@ -14,9 +14,15 @@ for (const section of ['billing','attendance']) {
     const context = { state, supabaseClient: { from: query },
       getEl: () => ({ remove() { removed++; }, innerHTML: '' }), setText() { rendered++; },
       showReadFailure(name, retry) { notice = { name, retry }; },
-      renderBillingStats() { rendered++; }, renderBillingBreakdown() {},renderInstallments() {},renderUpay() {},renderTxns() {},
+      renderBilling() { rendered++; },
     };
     vm.runInNewContext(source.slice(start,end),context);
+    if (failedTable === 'billing_summary') {
+      assert.equal(context.studentBillingBalance({ balance: 5500 }, 10000, 4000), 5500);
+      assert.equal(context.studentBillingBalance({ balance: 0 }, 10000, 4000), 0);
+      assert.equal(context.studentBillingBalance({ balance: null }, 10000, 4000), 6000);
+      assert.equal(context.studentBillingBalance(null, 10000, 11000), 0);
+    }
     await context[section === 'billing' ? 'loadBilling' : 'loadAttendance']();
     assert.equal(notice.name,section);
     assert.equal(rendered,0);

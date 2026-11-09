@@ -291,23 +291,6 @@ body {
     font-weight: 700;
 }
 
-.nav-item.soon {
-    opacity: .45;
-    cursor: not-allowed;
-}
-
-.soon-badge {
-    margin-left: auto;
-    white-space: nowrap;
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: .05em;
-    background: var(--line);
-    color: var(--ink-500);
-    padding: 2px 6px;
-    border-radius: 5px;
-}
-
 .nav-item .ic {
     width: 18px;
     text-align: center;
@@ -684,16 +667,6 @@ tr:last-child td {
     color: var(--pink-600);
 }
 
-.badge.offered {
-    background: #fff4d9;
-    color: #8a6100;
-}
-
-.badge.enrolled {
-    background: #eafaf0;
-    color: var(--ok);
-}
-
 .badge.removed {
     background: #f2f2f4;
     color: var(--ink-400);
@@ -711,16 +684,6 @@ tr:last-child td {
 }
 
 /* modal */
-.overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(20, 15, 25, .4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 50;
-}
-
 .modal {
     background: var(--white);
     border-radius: 14px;
@@ -787,14 +750,6 @@ tr:last-child td {
 
 .toast.err {
     background: var(--danger);
-}
-
-.student-row {
-    cursor: pointer;
-}
-
-.student-row:hover {
-    background: var(--pink-50);
 }
 
 /* ==========================================================================
@@ -907,27 +862,8 @@ button.quick-card > span:not(.ic-pill) { display: block; }
   padding: 14px 6px 0;
 }
 
-/* Spacing between stacked panels in the offers view. */
-.panel-spaced { margin-bottom: 18px; }
-.registrar-clearance-layout { display: grid; grid-template-columns: minmax(260px, .8fr) minmax(0, 1.5fr); gap: 16px; }
-.registrar-clearance-panel { min-width: 0; padding: 20px; }
-.registrar-clearance-panel input[type="search"] { width: 100%; min-width: 0; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px; color: var(--ink-900); background: var(--white); }
-.registrar-clearance-panel label:not(.sr-only) { display: block; margin: 4px 0; color: var(--ink-600); font-size: 12px; font-weight: 600; }
-.registrar-clearance-panel select, .registrar-clearance-panel > .btn { width: 100%; margin-bottom: 10px; }
-.registrar-clearance-list { display: grid; gap: 8px; max-height: 68vh; overflow-y: auto; margin-top: 8px; }
-.registrar-clearance-list button { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; text-align: left; color: var(--ink-900); background: var(--white); cursor: pointer; }
-.registrar-clearance-list button:hover, .registrar-clearance-list button[aria-pressed="true"] { border-color: var(--pink-500); background: var(--pink-50); }
-.registrar-clearance-list small { display: block; margin-top: 3px; color: var(--ink-500); }
-.registrar-clearance-details table { width: 100%; border-collapse: collapse; }
-.registrar-clearance-details th, .registrar-clearance-details td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: left; }
-@media (max-width: 760px) { .registrar-clearance-layout { grid-template-columns: 1fr; } .registrar-clearance-list { max-height: 34vh; } }
-
 /* "Major" reads more accurately than "IT" for the is_major column. */
 .badge.major { background: #e7edff; color: #2947c4; }
-
-/* Row-level affordance now that rows are focusable. */
-tr[role="button"] { cursor: pointer; }
-tr[role="button"]:hover { background: var(--pink-50); }
 
 /* Route-change focus target must not show a stray ring on click. */
 section h1[tabindex="-1"],

@@ -9,7 +9,11 @@ vm.runInNewContext(source.slice(start,end),context);context.startAcademicUpdates
 await refresh(['enrollment_requests']);assert.equal(calls.length,0,'Unsaved subjects must survive background events');
 context.state.selectedOfferingIds.clear();context.state.enrollmentSubmitting=true;await refresh(['enrollments']);assert.equal(calls.length,0,'In-flight submission must not be redrawn');
 context.state.enrollmentSubmitting=false;await refresh(['enrollments']);assert.deepEqual(calls,[['enrollment',true]]);
+await refresh(['enrollment_terms']);assert.deepEqual(calls,[['enrollment',true],['enrollment',true]],'Term changes refresh enrollment');
 await refresh(['grades']);assert.deepEqual(calls.at(-1),['grades']);assert(!calls.some(c=>c[0]==='prospectus'),'Closed prospectus must not reopen');
+context.getEl = id => id === 'prospectusModal' ? { open: true } : null;
+await refresh(['grades']);
+assert.deepEqual(calls.at(-1), ['prospectus'], 'An open prospectus refreshes when grades change');
 let notificationRefreshes = 0;
 context.loadNotifications = async () => { notificationRefreshes++; };
 await refresh(['activities']);

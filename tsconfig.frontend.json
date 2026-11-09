@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["vite/client"]
+  },
+  "include": ["admin/**/*.tsx", "auth/**/*.tsx", "faculty/**/*.tsx", "staff/**/*.tsx", "staff/**/*.ts", "student/**/*.tsx", "shared/**/*.tsx", "shared/**/*.d.ts", "onboarding/**/*.tsx"]
+}

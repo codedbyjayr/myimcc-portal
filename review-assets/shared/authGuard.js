@@ -13,62 +13,32 @@
 
   const LOGIN_PATH = '/auth/login.html';
 
-  // Fallback map, used only when shared/identity.js has not loaded.
-  const FALLBACK_DASHBOARDS = Object.freeze({
-    admin: '/admin/admin-dashboard.html',
-    dean: '/faculty/dean-dashboard.html',
-    faculty: '/faculty/teacher-dashboard.html',
-    teacher: '/faculty/teacher-dashboard.html',
-    staff: '/staff/staff-dashboard.html',
-    registrar: '/staff/registrar-dashboard.html',
-    student: '/student/dashboard.html'
-  });
-
   function identity() {
     return global.IMCC || null;
   }
 
   function siteUrl(path) {
     const imcc = identity();
-    if (imcc && typeof imcc.siteUrl === 'function') return imcc.siteUrl(path);
-    return path;
+    return (imcc && typeof imcc.siteUrl === 'function') ? imcc.siteUrl(path) : path;
   }
 
   function normalizeRole(role) {
     const imcc = identity();
-    if (imcc && typeof imcc.normalizeRole === 'function') return imcc.normalizeRole(role);
-    return (role || '').toString().trim().toLowerCase();
+    return (imcc && typeof imcc.normalizeRole === 'function') ? imcc.normalizeRole(role) : (role || '').toString().trim().toLowerCase();
   }
 
   function roleLabel(role) {
     const imcc = identity();
-    if (imcc && typeof imcc.roleLabel === 'function') return imcc.roleLabel(role);
-    return (role || '').toString().toUpperCase() || 'UNKNOWN';
+    return (imcc && typeof imcc.roleLabel === 'function') ? imcc.roleLabel(role) : (role || '').toString().toUpperCase() || 'UNKNOWN';
   }
 
-  /**
-   * Where should this user be sent? Never to a portal chosen by guesswork:
-   * an unrecognised role resolves to the sign-in screen.
-   */
   function destinationFor(profile) {
     const imcc = identity();
     if (imcc && typeof imcc.resolveRoute === 'function') {
       const route = imcc.resolveRoute(profile);
       if (route.kind === 'redirect') return route.url;
-      return siteUrl(LOGIN_PATH);
     }
-
-    const role = normalizeRole(profile && profile.role);
-    const status = ((profile && profile.status) || '').toString().toLowerCase();
-
-    if (status === 'onboarding') return siteUrl('/onboarding/select-role.html');
-    if (status === 'pending') return siteUrl('/onboarding/awaiting-approval.html');
-    if (status !== 'approved') return siteUrl(LOGIN_PATH);
-    if (!role || role === 'pending') return siteUrl('/onboarding/awaiting-approval.html');
-
-    return Object.prototype.hasOwnProperty.call(FALLBACK_DASHBOARDS, role)
-      ? siteUrl(FALLBACK_DASHBOARDS[role])
-      : siteUrl(LOGIN_PATH);
+    return siteUrl(LOGIN_PATH);
   }
 
   // Blocking alert() for an access decision is jarring and, in the
@@ -272,8 +242,6 @@
       .subscribe();
   }
 
-  // Expose both the guard and the map, so pages that referenced
-  // ROLE_DASHBOARDS directly keep working.
-  global.ROLE_DASHBOARDS = FALLBACK_DASHBOARDS;
+  global.ROLE_DASHBOARDS = (global.IMCC && global.IMCC.PORTALS) || {};
   global.initAuthGuard = initAuthGuard;
 })(typeof window !== 'undefined' ? window : globalThis);

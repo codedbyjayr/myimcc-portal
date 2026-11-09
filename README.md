@@ -11,6 +11,10 @@ The **MyIMCC Portal** is a Capstone project engineered to modernize and streamli
 
 Built with modern web standards, Supabase (PostgreSQL with Row Level Security), and AI integration via Groq LLM edge functions, the system centralizes enrollment, grading, curriculum review, clearance processing, billing ledgers, and student inquiries into a unified, secure digital campus.
 
+The frontend is moving from standalone HTML and feature-specific CSS to TSX and Tailwind one workflow at a time. Locally migrated areas include login and onboarding, Student Dashboard summaries and activity, Profile, Enrollment, Grades, Clearance, Prospectus, the Certificate of Registration, and read-only Billing. Staff Clearance, Enrollment Requests, and parts of the Admin, Teacher, Dean, and Registrar dashboards have also migrated.
+
+Teacher class selection and Dean overview summaries have also migrated locally. The wider migration still needs integration with current `main` and verification in a signed-in preview. Existing HTML routes, shared theme and print styles, and workflow controllers are part of the current design. See the [frontend migration handoff](docs/frontend-migration-readme.md) for scope, checks, and release steps.
+
 ---
 
 ## 🚀 Key Features by User Role
@@ -20,7 +24,7 @@ Built with modern web standards, Supabase (PostgreSQL with Row Level Security), 
 - **Class Schedules**: Weekly timetable view read from the real `timetable` table, with room assignments and instructor info.
 - **Grades & Evaluation**: Transparent view of midterm and final grades per subject once verified and released.
 - **Enrollment & Prospectus**: Interactive course curriculum tracking and subject offering intake.
-- **Billing & Account Ledger**: Fee assessment and payment history as recorded by Cashier staff. There is no student-side payment action; the portal does not present a button that does not exist.
+- **Billing & History**: Coming Soon in the Student portal. The dashboard balance summary and Certificate of Registration remain available.
 - **Clearance Tracker**: Multi-department clearance sign-off statuses (Library, Dean, Accounting, Registrar).
 - **Faculty Evaluation**: End-of-term instructor and subject evaluation forms.
 - **Help Assistant**: A chatbot that answers from published articles only, cites which article it used, and refuses personal, medical or urgent matters. When it cannot help, the student books a consultation instead of writing to a person.
@@ -77,8 +81,8 @@ Two things follow from the trigger design, and both are handled in the UI. If no
 
 | Layer | Technologies |
 |---|---|
-| **Frontend** | HTML5, CSS3, Modern JavaScript (ES Modules, Vanilla JS) |
-| **Styling & UI** | Custom Responsive Design Tokens, Glassmorphism, Print CSS (`@media print`) |
+| **Frontend** | React and TypeScript (TSX) built with Vite, HTML entry pages, and JavaScript workflow controllers |
+| **Styling & UI** | Tailwind CSS utilities, shared theme tokens, existing dashboard styles, and print CSS |
 | **Authentication** | Supabase Auth (Google OAuth SSO + TOTP Multi-Factor Authentication) |
 | **Backend / Database** | Supabase (PostgreSQL, Cloud-hosted) with Row Level Security (RLS) & Triggers |
 | **AI Assistant** | Supabase Edge Functions (Deno / TypeScript) + Groq API (`openai/gpt-oss-20b`) |
@@ -94,13 +98,14 @@ myimcc-portal/
 ├── index.html                    # Root routing entry point (handles OAuth redirects)
 ├── auth/
 │   ├── login.html                # SSO + TOTP MFA authentication portal
-│   ├── login.css                 # Login styling and responsive modal layouts
+│   ├── login-view.tsx            # Login and MFA screens styled with Tailwind
 │   └── login.js                  # Supabase OAuth & MFA verification flow
 ├── student/
-│   ├── dashboard.html            # Main student academic & self-service dashboard
-│   ├── dashboard.css             # Student portal styling & dashboard themes
-│   ├── dashboard.js              # Student features (grades, billing, clearance, AI chat)
-│   └── cor.html                  # Official Certificate of Registration (COR) printable view
+│   ├── dashboard.html            # Student dashboard entry route
+│   ├── dashboard-view.tsx        # Dashboard shell and student workflow views
+│   ├── dashboard.css             # Shared student theme, layout, and print styles
+│   ├── dashboard.js              # Student workflow controller
+│   └── *-view.tsx                # Billing, COR, Profile, and Dashboard summary views
 ├── faculty/
 │   ├── teacher-dashboard.html    # Faculty teaching loads & grade entry interface
 │   ├── teacher-dashboard.js      # Grade computation, history, and submission logic
@@ -116,7 +121,8 @@ myimcc-portal/
 │   ├── admin-dashboard.html      # System administration dashboard
 │   └── admin-dashboard.js        # User approval, database metrics, and configuration
 ├── onboarding/
-│   ├── select-role.html          # New user role selection interface
+│   ├── select-role.html          # New user role selection entry route
+│   ├── select-role.tsx           # Profile setup and role request view
 │   ├── select-role.js            # Role request submission
 │   └── awaiting-approval.html    # Pending account verification notice
 ├── shared/
@@ -157,36 +163,16 @@ git clone https://github.com/your-username/myimcc-portal.git
 cd myimcc-portal
 ```
 
-Configure your Supabase credentials in `shared/supabase-config.js`:
-```javascript
-const SUPABASE_URL = "https://your-project-id.supabase.co";
-const SUPABASE_ANON_KEY = "your-anon-key";
-```
+For a signed-in development session, use the [isolated test portal](supabase/test-environment/README.md). For a separate preview deployment, set `SUPABASE_URL` and `SUPABASE_ANON_KEY` to the preview project's URL and public key. The frontend loads those values from `env-config.js`.
 
 ### 2. Configure Database & Migrations
-1. Navigate to your [Supabase Dashboard](https://supabase.com/dashboard).
-2. Open the **SQL Editor**.
-3. Run the schema migrations located under `database/` in sequential order:
-   - `database/supabase-schema.sql`
-   - `database/supabase-schema-v2.sql`
-   - `database/supabase-schema-v3-rag.sql`
-   - `database/supabase-schema-v4-evaluations.sql`
-4. Run the security migrations. These are required; without them the portal ships with the privilege defects fixed by these files:
-   - `database/security-hardening-phase0a.sql` - identity, approval and role
-   - `database/security-hardening-phase0b.sql` - clearance, installments, transactions and message content
-   - `database/timetable-integrity.sql` - per-offering meeting validation and registrar write access for the Class Schedule
-   - `database/messaging-qa.sql` - message `topic`, help desk routing, and the student-to-student block
-   - `database/appointments.sql` - consultation requests for students the assistant could not help
-   - `database/faq-content-corrections.sql` - removes the stale "Pay Now" FAQ answer
-5. Verify. Each phase has a test script; run them after applying:
-   - `database/test-security-hardening-phase0a.sql`
-   - `database/test-security-hardening-phase0b.sql`
-   - `database/test-appointments-and-messaging.sql` - run last, after `messaging-qa.sql` and `appointments.sql`
-6. Set the Edge Function secrets, or the help assistant will not answer:
-   - `GROQ_API_KEY` - optional. Without it the assistant returns the matched articles instead of a composed answer, which is honest but less useful.
-   - `SUPABASE_SERVICE_ROLE_KEY` - required by `faq-assistant`. The function also writes an audit trail to `chat_logs` and resolves the help desk recipient, neither of which a user JWT may do.
-7. **Order matters.** `timetable-integrity.sql`, `messaging-qa.sql` and `appointments.sql` each open with a `SELECT` report. Run those reports before you trust the feature. The timetable seed in `supabase-schema-v2.sql` hardcodes `offering_id` 1, 2, 3, which only matches the intended subjects on a brand-new database; on a live database those ids belong to whatever offerings were created first, so the sample schedule can be attached to the wrong subjects. `messaging-qa.sql` must be applied before deploying the updated front-end, because both portals now select `messages.topic` and will error until the column exists. `appointments.sql` must come after `messaging-qa.sql`, because the notification trigger writes to `messages` and calls `helpdesk_recipient_id()`.
-8. Enable the **Google Provider** under `Authentication -> Providers`.
+Use [`supabase/migrations/`](supabase/migrations/) for database upgrades. The recovered migration history assumes an existing portal baseline. For a new preview project, start from a sanitized portal baseline with its matching migration history. The SQL under `database/` is historical and omits later functions such as `get_enrollment_workspace()`.
+
+1. Follow the [backend release guide](docs/backend-release.md#promotion-order) and [migration history verification](supabase/migration-history.md#verification) to reconcile the target. Review `supabase db push --linked --dry-run` against the intended project before applying any pending migrations.
+2. Run `npm run check:release` with the target URL and public key before building for release. It checks the academic backend and Registrar Summer publishing for the school and demo workspaces.
+3. For a full preview, configure Google OAuth and the [Edge Function settings](docs/backend-release.md#promotion-order) on the test project.
+
+For database tests from a fresh checkout, run the isolated workflow below. It loads a test baseline and the maintained migrations needed by the academic regression suite.
 
 ### Appointment times are Manila time
 
@@ -215,7 +201,12 @@ node --check staff/registrar-dashboard.js
 
 `npm run check:edge` checks the maintained Edge Function sources without emitting files. Login enrolls and verifies MFA through the Supabase Auth SDK directly.
 
-Run `npm run test:db` for the isolated SQL authorization and academic-workflow checks. These use fictional records and never connect to production.
+Run the isolated SQL authorization and academic workflow checks with fictional records:
+
+```bash
+npm install --prefix .temp/adviser-db --no-save --package-lock=false @electric-sql/pglite@0.5.11 @electric-sql/pglite-pgvector@0.0.12
+npm run test:db
+```
 
 `database/test-appointments-and-messaging.sql` is the one script that exercises the support flow end to end: a student cannot open a peer channel, a filed request really does notify the help desk, a past Manila time is rejected by the database rather than only in the browser, and a registrar can still offer a time earlier than the student asked for. It runs in a transaction it rolls back, and it stands down pre-existing registrar and admin accounts for the duration so the routing assertions are deterministic on a live database. **It has never been executed**: Docker was unavailable while it was written, so it has only passed the static check. Treat its first run as a debugging session, not a green light.
 
@@ -223,6 +214,16 @@ Run `npm run test:db` for the isolated SQL authorization and academic-workflow c
 `appointments-rollback.sql` and `messaging-qa-rollback.sql` are paired with their migrations. The two `security-hardening-phase*-rollback.sql` files deliberately reinstate privilege defects, including the student-to-student message channel, so they are for recovering from a bad deploy and nothing else. `timetable-integrity.sql` and `faq-content-corrections.sql` have no rollback: the first is additive validation and the second is idempotent content, and in both cases a hand-written reversal would be more dangerous than re-running the forward file. Read the warning at the top of each rollback first.
 
 ### 3. Launch the Application Locally
+Run `npm ci` and `npm run build` first. Vite compiles the TSX entries for all six dashboards, Enrollment Requests, Login, Select Role, and Awaiting Approval into `shared/dist`. Tailwind scans the frontend TSX source. The existing HTML URLs load the compiled entries, and the full build refreshes demo assets. Use `npm run build:watch` while editing TSX and run a full build to refresh the demo copies.
+
+Run `npm run test:approval` for Select Role and Awaiting Approval browser checks. The browser tests require Playwright and Microsoft Edge. Set `PLAYWRIGHT_MODULE` to an existing Playwright module path if it is installed outside this project.
+
+Run `npm run test:dashboards` for workspace ownership, grade saving, enrollment, and role-preview browser checks. Many migrated views are in `*-view.tsx` and use existing workflow controllers and shared styles. `shared/dashboard-workspace.tsx` initializes each controller after its markup mounts and keeps React updates outside the controller-owned subtree. Navigation between dashboards still loads a new document. Add controller teardown before introducing client-side routing.
+
+Staff Clearance is fully rendered by React in `staff/staff-dashboard.tsx`, with Tailwind utilities and the shared theme tokens. It uses the existing clearance workspace query and verified office-scoped writes through `staff/clearance-workspace.ts`. Run `npm run test:staff` for filtering, confirmation, saves, reload failures, pagination, sign-out, responsive layouts, and sandboxed role-preview checks.
+
+Enrollment Requests is fully rendered by React in `staff/enrollment-requests.tsx`, with Tailwind utilities and the shared theme tokens. `staff/enrollment-workspace.ts` keeps its existing review, finalization, and term-setting RPCs together. Run `npm run test:enrollment` for decisions, rejection validation, all three terms, stale responses, live refresh cleanup, role permissions, and normal/demo browser workflows.
+
 Since the project uses ES Modules and modern web APIs, serve it with any local static HTTP server:
 
 **Using Python:**

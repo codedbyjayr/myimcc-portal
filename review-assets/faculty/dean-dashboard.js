@@ -1,5 +1,5 @@
 // dean-dashboard.js
-document.addEventListener('DOMContentLoaded', async () => {
+(async () => {
     let supabaseClient;
     try {
         supabaseClient = await getSupabaseClientAsync();
@@ -13,8 +13,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const escapeHtml = FC.escapeHtml;
     const fmtDate = FC.fmtDate;
     const showToast = FC.showToast;
-    const isMissingTableError = FC.isMissingTableError;
-    const peso = n => '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
     const SEMESTER_ORDER = { '1st Semester': 1, '2nd Semester': 2, 'Summer': 3, 'Summer Semester': 3 };
     function termKey(schoolYear, semester) { return `${schoolYear || '—'} · ${semester || '—'}`; }
@@ -34,6 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Each entry: { id, full_name, role }
         instructorOptions: null,   // null = not yet loaded; [] = loaded but empty
         instructorOptionsError: null,
+        instructorOptionsRequest: null,
     };
 
     // ── Mobile Navigation — delegated to FC ──
@@ -77,12 +76,16 @@ document.addEventListener('DOMContentLoaded', async () => {
      * @param {boolean} force - if true, bypasses the cache and re-fetches.
      */
     async function loadInstructorOptions(force = false) {
+        if (state.instructorOptionsRequest) return state.instructorOptionsRequest;
         if (!force && state.instructorOptions !== null) return;
 
         state.instructorOptions = null;  // mark as loading
         state.instructorOptionsError = null;
 
-        const { data, error } = await supabaseClient.rpc('get_subject_instructor_options');
+        const request = Promise.resolve(supabaseClient.rpc('get_subject_instructor_options')).catch(error => ({ error }));
+        state.instructorOptionsRequest = request;
+        const { data, error } = await request;
+        state.instructorOptionsRequest = null;
 
         if (error) {
             console.error('get_subject_instructor_options RPC error:', error);
@@ -110,7 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadAllData() {
         const results = await Promise.all([
-            supabaseClient.rpc('list_student_records'),
+            supabaseClient.rpc(window.IMCC_DEVELOPER_VIEW ? 'get_dean_student_directory' : 'list_student_records'),
             IMCC.fetchAll(() => supabaseClient.from('course_offerings').select('*')),
             IMCC.fetchAll(() => supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)')),
             IMCC.fetchAll(() => supabaseClient.from('enrollments').select('id, student_id, status, offering_id, course_offerings(school_year, semester)').eq('status', 'enrolled')),
@@ -159,36 +162,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const retention = computeRetentionRate();
 
-        getEl('enrollmentStats').innerHTML = `
-      <div class="stat">
-        <div class="stat-top"><span class="stat-label">TOTAL STUDENTS</span><div class="stat-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0116 0" /></svg>
-        </div></div>
-        <div class="stat-value">${students.length}</div>
-        <div class="stat-sub">Across ${programs.size} program${programs.size === 1 ? '' : 's'}</div>
-      </div>
-      <div class="stat c2">
-        <div class="stat-top"><span class="stat-label">AVG. DEPARTMENT GWA</span><div class="stat-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9" /><path d="M9 12l2 2 4-4" /></svg>
-        </div></div>
-        <div class="stat-value">${avgEquivalent}</div>
-        <div class="stat-sub">From ${withFinal.length} recorded final${withFinal.length === 1 ? '' : 's'}</div>
-      </div>
-      <div class="stat c3">
-        <div class="stat-top"><span class="stat-label">RETENTION RATE</span><div class="stat-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12l6 6 12-12" /></svg>
-        </div></div>
-        <div class="stat-value">${retention === null ? '—' : retention.toFixed(0) + '%'}</div>
-        <div class="stat-sub">${retention === null ? 'Not enough term data yet' : 'Latest vs. prior term'}</div>
-      </div>
-      <div class="stat c4">
-        <div class="stat-top"><span class="stat-label">ACTIVE OFFERINGS</span><div class="stat-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z" /></svg>
-        </div></div>
-        <div class="stat-value">${state.offerings.length}</div>
-        <div class="stat-sub">All recorded terms</div>
-      </div>
-    `;
+        getEl('enrollmentStats').innerHTML = window.renderDeanEnrollmentStats({
+            students: students.length, programs: programs.size, average: avgEquivalent,
+            finals: withFinal.length, retention, offerings: state.offerings.length,
+        });
     }
 
     function renderProgramBars() {
@@ -198,13 +175,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const max = Math.max(1, ...Object.values(counts));
         const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
 
-        getEl('programBars').innerHTML = entries.length ? entries.map(([program, count]) => `
-      <div class="bar-row">
-        <div class="bar-label" title="${escapeHtml(program)}">${escapeHtml(program)}</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${(count / max * 100).toFixed(0)}%;"></div></div>
-        <div class="bar-value">${count}</div>
-      </div>
-    `).join('') : '<div class="empty-state">No approved students on file.</div>';
+        getEl('programBars').innerHTML = window.renderDeanOverviewBars({
+            rows: entries.map(([label, value]) => ({ label, value, width: value / max * 100 })),
+            empty: 'No approved students on file.',
+        });
     }
 
     function getTermCounts() {
@@ -225,13 +199,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const terms = getTermCounts().slice(-6);
         const max = Math.max(1, ...terms.map(t => t.count));
 
-        getEl('semesterTrendBars').innerHTML = terms.length ? terms.map(t => `
-      <div class="bar-row">
-        <div class="bar-label" title="${escapeHtml(t.key)}">${escapeHtml(t.key)}</div>
-        <div class="bar-track"><div class="bar-fill ok" style="width:${(t.count / max * 100).toFixed(0)}%;"></div></div>
-        <div class="bar-value">${t.count}</div>
-      </div>
-    `).join('') : '<div class="empty-state">No enrollment history found yet.</div>';
+        getEl('semesterTrendBars').innerHTML = window.renderDeanOverviewBars({
+            rows: terms.map(term => ({ label: term.key, value: term.count, width: term.count / max * 100, color: 'ok' })),
+            empty: 'No enrollment history found yet.',
+        });
     }
 
     function computeRetentionRate() {
@@ -252,32 +223,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const pending = state.grades.length - withRemark.length;
         const total = Math.max(1, state.grades.length);
 
-        getEl('performanceStats').innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
-        <div class="stat" style="border-left-color:var(--green);">
-          <div class="stat-label">Passed</div><div class="stat-value" style="color:var(--green);font-size:22px;">${passed}</div>
-        </div>
-        <div class="stat" style="border-left-color:var(--red);">
-          <div class="stat-label">Failed</div><div class="stat-value" style="color:var(--red);font-size:22px;">${failed}</div>
-        </div>
-        <div class="stat" style="border-left-color:var(--amber);">
-          <div class="stat-label">Pending</div><div class="stat-value" style="color:var(--amber);font-size:22px;">${pending}</div>
-        </div>
-      </div>
-    `;
-
-        getEl('passFailBars').innerHTML = `
-      <div class="bar-row">
-        <div class="bar-label">Passed</div>
-        <div class="bar-track"><div class="bar-fill ok" style="width:${(passed / total * 100).toFixed(0)}%;"></div></div>
-        <div class="bar-value">${((passed / total) * 100).toFixed(0)}%</div>
-      </div>
-      <div class="bar-row">
-        <div class="bar-label">Failed</div>
-        <div class="bar-track"><div class="bar-fill danger" style="width:${(failed / total * 100).toFixed(0)}%;"></div></div>
-        <div class="bar-value">${((failed / total) * 100).toFixed(0)}%</div>
-      </div>
-    `;
+        getEl('performanceStats').innerHTML = window.renderDeanPerformanceStats({ passed, failed, pending });
+        getEl('passFailBars').innerHTML = window.renderDeanOverviewBars({
+            rows: [
+                { label: 'Passed', value: (passed / total * 100).toFixed(0) + '%', width: passed / total * 100, color: 'ok' },
+                { label: 'Failed', value: (failed / total * 100).toFixed(0) + '%', width: failed / total * 100, color: 'danger' },
+            ],
+        });
     }
 
     function renderFlaggedCourses() {
@@ -300,14 +252,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const msg = getEl('noFlaggedMsg');
         if (!flagged.length) { body.innerHTML = ''; msg.style.display = 'block'; return; }
         msg.style.display = 'none';
-        body.innerHTML = flagged.map(c => `
-      <tr>
-        <td><b>${escapeHtml(c.code)}</b></td>
-        <td>${escapeHtml(c.program || '—')}</td>
-        <td>${c.total}</td>
-        <td><span class="badge badge-red">${((c.failed / c.total) * 100).toFixed(0)}%</span></td>
-      </tr>
-    `).join('');
+        body.innerHTML = window.renderDeanFlaggedCourses({ rows: flagged });
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -327,8 +272,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     function initTermFilter() {
         const terms = getTermList();
         const select = getEl('assignSemesterFilter');
+        if (!terms.some(term => term.key === selectedTermKey)) selectedTermKey = terms[0]?.key ?? null;
         if (!terms.length) { select.innerHTML = '<option>No terms found</option>'; return; }
-        if (!selectedTermKey) selectedTermKey = terms[0].key;
         select.innerHTML = terms.map(t => `<option value="${escapeHtml(t.key)}" ${t.key === selectedTermKey ? 'selected' : ''}>${escapeHtml(t.key)}</option>`).join('');
         select.onchange = () => { selectedTermKey = select.value; renderFacultyPage(); };
         getEl('assignYearFilter').onchange = renderFacultyPage;
@@ -351,7 +296,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         offerings.forEach(o => {
             const id = o.instructor_id || 'unassigned';
             const name = o.instructor_name || 'Unassigned';
-            if (!byInstructor[id]) byInstructor[id] = { name, sections: 0, units: 0 };
+            if (!byInstructor[id]) byInstructor[id] = { id, name, sections: 0, units: 0 };
             byInstructor[id].sections++;
             byInstructor[id].units += Number(o.units || 0);
         });
@@ -362,20 +307,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!rows.length) { body.innerHTML = ''; msg.style.display = 'block'; return; }
         msg.style.display = 'none';
 
-        body.innerHTML = rows.map(r => {
-            const load = r.units >= 24 ? { label: 'Heavy', cls: 'badge-red' }
-                : r.units >= 12 ? { label: 'Balanced', cls: 'badge-green' }
-                    : { label: 'Light', cls: 'badge-amber' };
-            return `
-        <tr>
-          <td><b>${escapeHtml(r.name)}</b></td>
-          <td>${r.sections}</td>
-          <td>${r.units}</td>
-          <td><span class="badge ${load.cls}">${load.label}</span></td>
-        </tr>
-      `;
-        }).join('');
+        body.innerHTML = window.renderDeanWorkloadRows({ rows });
     }
+
+    const pendingAssignments = new Map();
 
     function renderAssignments() {
         const offerings = offeringsForSelectedTerm();
@@ -388,50 +323,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         const instructorSource = (state.instructorOptions && state.instructorOptions.length)
             ? state.instructorOptions
             : state.facultyList.filter(f => f.role === 'teacher' || f.role === 'faculty' || (f.role === 'dean' && f.id === currentUserId));
-        const facultyOptions = instructorSource
-            .slice().sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
-            .map(f => `<option value="${f.id}">${escapeHtml(f.full_name)}${f.id === currentUserId ? ' (You)' : ''}</option>`).join('');
-
-        body.innerHTML = offerings.map(o => `
-      <tr>
-        <td><b>${escapeHtml(o.code || '—')}</b></td>
-        <td>${escapeHtml(o.title || '—')}</td>
-        <td>${escapeHtml(o.program || '—')}</td>
-        <td>${escapeHtml(o.schedule || 'TBA')}</td>
-        <td>
-          <select class="field-input assign-select" style="width:auto;" data-id="${o.id}">
-            <option value="">— Unassigned —</option>
-            ${facultyOptions}
-          </select>
-        </td>
-        <td>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <button type="button" class="mini-btn edit-offering-btn" data-id="${o.id}" style="background:var(--blue,#0284c7);color:#fff;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-weight:600;font-size:11.5px;">Edit</button>
-            <button type="button" class="mini-btn danger delete-offering-btn" data-id="${o.id}">Delete</button>
-          </div>
-        </td>
-      </tr>
-    `).join('');
-
-        document.querySelectorAll('.assign-select').forEach(sel => {
-            const offering = offerings.find(o => String(o.id) === sel.dataset.id);
-            if (offering?.instructor_id) {
-                sel.value = offering.instructor_id;
-            } else if (offering?.instructor_name) {
-                // Try RPC-based list first, then fall back to profiles-derived list.
-                const sourceList = (state.instructorOptions && state.instructorOptions.length)
-                    ? state.instructorOptions
-                    : state.facultyList;
-                const match = sourceList.find(f => f.full_name === offering.instructor_name);
-                if (match) sel.value = match.id;
-            }
+        const instructors = instructorSource.slice().sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+        body.innerHTML = window.renderDeanAssignmentRows({ offerings, instructors, currentUserId, pending: pendingAssignments });
+        body.querySelectorAll('.assign-select').forEach(sel => {
             sel.addEventListener('change', () => assignFaculty(sel));
         });
 
         document.querySelectorAll('.edit-offering-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const offering = offerings.find(o => String(o.id) === btn.dataset.id);
-                if (offering) openModal('courseOffering', offering);
+                if (offering && !pendingAssignments.has(btn.dataset.id)) openModal(offering);
             });
         });
 
@@ -441,9 +342,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function deleteOffering(offeringId) {
+        if (pendingAssignments.has(offeringId)) return;
         if (!confirm('Are you sure you want to delete this subject offering?')) return;
-        const { error } = await supabaseClient.from('course_offerings').delete().eq('id', offeringId);
-        if (error) { showToast('Failed to delete offering: ' + error.message, true); return; }
+        const { data, error } = await supabaseClient.from('course_offerings').delete().eq('id', offeringId).select('id').maybeSingle();
+        if (error || String(data?.id) !== String(offeringId)) {
+            showToast('Failed to delete offering: ' + (error?.message || 'No subject offering was deleted.'), true);
+            return;
+        }
         showToast('Subject offering deleted.');
         state.offerings = state.offerings.filter(o => String(o.id) !== String(offeringId));
         renderFacultyPage();
@@ -453,7 +358,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function assignFaculty(sel) {
         const offeringId = sel.dataset.id;
         const offering = state.offerings.find(o => String(o.id) === offeringId);
-        if (!offering || sel.disabled) return;
+        if (!offering || sel.disabled || pendingAssignments.has(offeringId)) return;
         const previousId = offering.instructor_id || '';
         const facultyId = sel.value;
         const faculty = state.facultyList.find(f => f.id === facultyId);
@@ -463,6 +368,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         sel.disabled = true;
+        pendingAssignments.set(offeringId, facultyId);
         try {
             // The database trigger synchronizes assignments in this same transaction.
             const { data, error } = await supabaseClient.from('course_offerings')
@@ -471,13 +377,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (error) throw error;
             if (!data) throw new Error('No subject offering was updated.');
             Object.assign(offering, data);
+            const currentOffering = state.offerings.find(o => String(o.id) === offeringId);
+            if (currentOffering && currentOffering !== offering) {
+                currentOffering.instructor_id = data.instructor_id;
+                currentOffering.instructor_name = data.instructor_name;
+            }
             sel.value = offering.instructor_id || '';
         } catch (error) {
             sel.value = previousId;
             showToast('Failed to update faculty assignment: ' + error.message, true);
             return;
         } finally {
+            pendingAssignments.delete(offeringId);
             sel.disabled = false;
+            if (!sel.isConnected) renderAssignments();
         }
         showToast(offering.instructor_name ? 'Assigned ' + offering.instructor_name + '.' : 'Unassigned faculty.');
         renderWorkloads();
@@ -487,6 +400,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
     let selectedRecord = { record: null, clearance: null };
+    const recordRequestVersion = { record: 0, clearance: 0 };
+    let deanClearanceRows = [];
+    const pendingDeanClearances = new Set();
     function renderStudentPicker(kind) {
         if (kind === 'clearance' && getEl('clearanceCourseFilter') && state.profiles.length) {
             const courseSelect = getEl('clearanceCourseFilter');
@@ -511,66 +427,33 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (year && studentYear !== year) return false;
             return true;
         });
-        getEl(kind + 'Students').innerHTML = students.map(p => '<button class="nav-item" type="button" data-student="' + escapeHtml(p.id) + '">' + escapeHtml(p.full_name) + '<small>' + escapeHtml([p.student_no, p.program, p.year_level].filter(Boolean).join(' · ')) + '</small></button>').join('') || '<p>No matching students.</p>';
+        getEl(kind + 'Students').innerHTML = window.renderDeanStudentPicker({ students });
     }
-    function recordsTable(rows, columns) {
-        if (!rows?.length) return '<p>No records.</p>';
-        return '<div class="table-responsive"><table><thead><tr>' + columns.map(([label]) => '<th>' + escapeHtml(label) + '</th>').join('') + '</tr></thead><tbody>' + rows.map(row => '<tr>' + columns.map(([, value]) => '<td>' + escapeHtml(value(row) ?? '—') + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
+    function renderDeanClearances() {
+        getEl('clearanceDetails').innerHTML = window.renderDeanClearanceDetails({
+            rows: deanClearanceRows, pending: pendingDeanClearances,
+            readOnly: !!window.IMCC_DEVELOPER_VIEW, formatDate: fmtDate,
+        });
     }
     async function loadStudentRecord(kind, id) {
-            selectedRecord[kind] = id;
-            const target = getEl(kind + 'Details');
-            target.textContent = 'Loading records…';
-            getEl(kind + 'Title').textContent = state.profiles.find(p => p.id === id)?.full_name || 'Student records';
-            const { data, error } = await supabaseClient.rpc('get_student_record', { p_student_id: id });
-            if (selectedRecord[kind] !== id) return;
-            if (error) { target.textContent = 'Could not load records: ' + error.message; return; }
-            if (kind === 'clearance') {
-                const rows = data.clearances || [];
-                if (!rows.length) {
-                    target.innerHTML = '<p>No clearance records on file.</p>';
-                    return;
-                }
-                target.innerHTML = '<div class="table-responsive"><table><thead><tr>' +
-                    '<th>Office / Department</th><th>Status</th><th>Approval / Action</th><th>Note</th><th>Cleared Date</th>' +
-                    '</tr></thead><tbody>' +
-                    rows.map(r => {
-                        const isDean = r.department_code === 'dean';
-                        const isCleared = r.status === 'cleared';
-                        const statusBadge = isCleared
-                            ? '<span class="badge badge-green">✓ Cleared</span>'
-                            : '<span class="badge badge-yellow">Pending</span>';
-                        let actionCell = '';
-                        if (isDean) {
-                            actionCell = isCleared
-                                ? '<span style="color:var(--emerald);font-weight:600;display:inline-flex;align-items:center;gap:4px;">✓ Cleared requirement</span>'
-                                : '<button type="button" class="mini-btn success" data-clearance-id="' + escapeHtml(r.id) + '">✓ Clear College Dean requirement</button>';
-                        } else {
-                            actionCell = isCleared
-                                ? '<span style="color:var(--emerald);font-size:12px;">✓ Cleared</span>'
-                                : '<span style="color:var(--ink-400);font-size:12px;">Awaiting office approval</span>';
-                        }
-                        return '<tr>' +
-                            '<td><b>' + escapeHtml(r.department_name || r.department_code) + '</b></td>' +
-                            '<td>' + statusBadge + '</td>' +
-                            '<td>' + actionCell + '</td>' +
-                            '<td>' + escapeHtml(r.note || '—') + '</td>' +
-                            '<td>' + fmtDate(r.cleared_at) + '</td>' +
-                            '</tr>';
-                    }).join('') +
-                    '</tbody></table></div>';
-                return;
-            }
-            const clearance = recordsTable(data.clearances, [['Office', r => r.department_name], ['Status', r => r.status], ['Note', r => r.note], ['Cleared', r => fmtDate(r.cleared_at)]]);
-            const p = data.profile;
-            target.innerHTML = '<h4>Student Information</h4>' + recordsTable([p], [['Student No.', r => r.student_no || r.id_number], ['Program', r => r.program], ['Year / Section', r => [r.year_level, r.section].filter(Boolean).join(' / ')], ['Email', r => r.email], ['Phone', r => r.phone], ['Address', r => r.address]]) +
-                '<h4>Enrollment & Terms</h4>' + recordsTable(data.enrollments, [['Subject', r => r.code + ' — ' + r.title], ['Term', r => r.semester + ' ' + r.school_year], ['Status', r => r.status], ['Units', r => r.units]]) +
-                '<h4>Grades</h4>' + recordsTable(data.grades, [['Subject', r => r.code], ['Term', r => r.semester + ' ' + r.school_year], ['Prelim', r => Grading.formatGrade(r.prelim)], ['Midterm', r => Grading.formatGrade(r.midterm)], ['Semifinal', r => Grading.formatGrade(r.semifinal)], ['Final', r => Grading.formatGrade(r.final)], ['Equivalent', r => Grading.formatGrade(r.equivalent)], ['Remark', r => r.remark]]) +
-                '<h4>Clearance</h4>' + clearance +
-                '<h4>Attendance</h4>' + recordsTable(data.attendance, [['Subject', r => r.code], ['Date', r => fmtDate(r.date)], ['Status', r => r.status], ['Notes', r => r.notes]]) +
-                '<h4>Payment Records</h4>' + recordsTable(data.transactions, [['Receipt', r => r.or_number], ['Date', r => fmtDate(r.txn_date)], ['Description', r => r.description], ['Amount', r => peso(r.amount)]]) +
-                '<h4>Balance</h4><p>' + escapeHtml(peso(data.billing?.balance)) + '</p>' +
-                '<h4>Installments</h4>' + recordsTable(data.installments, [['Name', r => r.name], ['Due', r => fmtDate(r.due_date)], ['Amount', r => peso(r.amount)], ['Status', r => r.status]]);
+        const version = ++recordRequestVersion[kind];
+        selectedRecord[kind] = id;
+        if (kind === 'clearance') deanClearanceRows = [];
+        const target = getEl(kind + 'Details');
+        target.textContent = 'Loading records…';
+        getEl(kind + 'Title').textContent = state.profiles.find(p => p.id === id)?.full_name || 'Student records';
+        const { data, error } = await supabaseClient.rpc('get_student_record', { p_student_id: id });
+        if (version !== recordRequestVersion[kind]) return;
+        if (error || !data || (kind === 'record' && !data.profile)) {
+            target.textContent = 'Could not load records: ' + (error?.message || 'No student record returned.');
+            return;
+        }
+        if (kind === 'clearance') {
+            deanClearanceRows = data.clearances || [];
+            renderDeanClearances();
+            return;
+        }
+        target.innerHTML = window.renderDeanRecordDetails({ record: data, formatDate: fmtDate, formatGrade: Grading.formatGrade });
     }
     for (const kind of ['record', 'clearance']) {
         getEl(kind + 'Search').addEventListener('input', () => renderStudentPicker(kind));
@@ -581,27 +464,61 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (id) loadStudentRecord(kind, id);
         });
     }
+    getEl('clearanceDetails').addEventListener('submit', async event => {
+        const form = event.target;
+        const id = form.dataset.clearanceNote;
+        if (!id) return;
+        event.preventDefault();
+        const studentId = selectedRecord.clearance;
+        const row = deanClearanceRows.find(item => String(item.id) === id && item.department_code === 'dean');
+        if (window.IMCC_DEVELOPER_VIEW || !studentId || !row || row.status === 'cleared' || pendingDeanClearances.has(id)) return;
+        pendingDeanClearances.add(id);
+        const fields = form.querySelector('fieldset');
+        fields.disabled = true;
+        let saved = false;
+        try {
+            const note = await window.saveClearanceNote(supabaseClient, { ...row, student_id: studentId }, form.elements.note.value);
+            const current = deanClearanceRows.find(item => String(item.id) === id);
+            if (selectedRecord.clearance === studentId && current) current.note = note;
+            saved = true;
+            showToast('Clearance note saved.');
+        } catch (error) {
+            showToast('Could not save clearance note: ' + error.message, true);
+        } finally {
+            pendingDeanClearances.delete(id);
+            fields.disabled = false;
+            if ((saved || !form.isConnected) && selectedRecord.clearance === studentId && deanClearanceRows.some(item => String(item.id) === id)) renderDeanClearances();
+        }
+    });
     getEl('clearanceDetails').addEventListener('click', async event => {
         const button = event.target.closest('button[data-clearance-id]');
         const studentId = selectedRecord.clearance;
         if (!button || button.disabled || !studentId) return;
+        const id = button.dataset.clearanceId;
+        const row = deanClearanceRows.find(item => String(item.id) === id && item.department_code === 'dean');
+        if (window.IMCC_DEVELOPER_VIEW || !row || row.status === 'cleared' || pendingDeanClearances.has(id)) return;
         const studentName = state.profiles.find(profile => String(profile.id) === String(studentId))?.full_name || 'this student';
         if (!window.confirm('Do you want to clear the College Dean requirement for ' + studentName + '?')) return;
+        pendingDeanClearances.add(id);
         button.disabled = true;
         try {
-            const { data, error } = await supabaseClient.from('clearances')
+            const update = supabaseClient.from('clearances')
                 .update({ status: 'cleared', cleared_at: new Date().toISOString() })
-                .eq('id', button.dataset.clearanceId).eq('student_id', studentId).eq('department_code', 'dean')
-                .select('id').single();
+                .eq('id', id).eq('student_id', studentId).eq('department_code', 'dean');
+            const reviewedStatus = row.status == null ? update.is('status', null) : update.eq('status', row.status);
+            const { data, error } = await reviewedStatus.select('id').maybeSingle();
             if (error) throw error;
-            if (!data?.id) throw new Error('No clearance was changed. Refresh and retry.');
-            showToast('College Dean clearance approved.');
-            if (selectedRecord.clearance === studentId) await loadStudentRecord('clearance', studentId);
+            if (String(data?.id) !== id) throw new Error('No clearance was changed. Refresh and retry.');
         } catch (error) {
             showToast('Could not approve clearance: ' + error.message, true);
+            return;
         } finally {
+            pendingDeanClearances.delete(id);
             button.disabled = false;
+            if (!button.isConnected && deanClearanceRows.some(item => String(item.id) === id)) renderDeanClearances();
         }
+        showToast('College Dean clearance approved.');
+        if (selectedRecord.clearance === studentId) await loadStudentRecord('clearance', studentId);
     });
 
     // ══════════════════════════════════════════════════════════════════
@@ -636,6 +553,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const gradingWorkspace = Grading.initWorkspace();
 
     let deanCourseScope = 'my';
+    let classListVersion = 0;
+    let rosterVersion = 0;
+    let historyVersion = 0;
+    let revertingGrade = false;
 
     getEl('deanScopeMyBtn')?.addEventListener('click', () => {
         if (!gradingWorkspace.canLeave()) return;
@@ -655,30 +576,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadMyClasses();
     });
 
-    async function loadMyClasses(autoSelectId = null) {
-        if (deanCourseScope === 'all') {
-            myOfferings = (state.offerings || []).slice();
-        } else {
-            myOfferings = (state.offerings || []).filter(o =>
-                (o.instructor_id && o.instructor_id === currentUserId) ||
-                (o.instructor_name && currentProfile && o.instructor_name === currentProfile.full_name)
-            );
+    function resetMyRoster() {
+        ++rosterVersion;
+        closeDeanGradeHistory();
+        selectedMyOffering = null;
+        myRoster = [];
+        getEl('deanClassAuditLogBtn').style.display = 'none';
+    }
 
-            if (!myOfferings.length) {
-                // Fall back to teacher_assignments table
-                const { data: taRows } = await supabaseClient
-                    .from('teacher_assignments')
-                    .select('offering_id, course_offerings(*)')
-                    .eq('teacher_id', currentUserId)
-                    .eq('is_active', true);
-                if (taRows && taRows.length > 0) {
-                    myOfferings = taRows.map(t => t.course_offerings).filter(Boolean);
-                }
-            }
+    async function loadMyClasses(autoSelectId = null) {
+        if (!gradingWorkspace.canLeave()) return;
+        const version = ++classListVersion;
+        const targetId = autoSelectId ?? selectedMyOffering?.id;
+        const offerings = state.offerings || [];
+        let nextOfferings = deanCourseScope === 'all' ? offerings.slice() : offerings.filter(o =>
+            (o.instructor_id && o.instructor_id === currentUserId) ||
+            (o.instructor_name && currentProfile && o.instructor_name === currentProfile.full_name)
+        );
+
+        if (deanCourseScope === 'my' && !nextOfferings.length) {
+            resetMyRoster();
+            myOfferings = [];
+            getEl('myCourseList').replaceChildren();
+            gradingWorkspace.startClass('');
+            getEl('selectedMyCourseTitle').textContent = 'Select a class';
+            getEl('selectedMyCourseSub').textContent = '';
+            const { data: taRows } = await supabaseClient.from('teacher_assignments')
+                .select('offering_id, course_offerings(*)').eq('teacher_id', currentUserId).eq('is_active', true);
+            if (version !== classListVersion) return;
+            nextOfferings = (taRows || []).map(t => t.course_offerings).filter(Boolean);
         }
 
-        myOfferings.sort((a, b) => (b.school_year || '').localeCompare(a.school_year || ''));
-        renderMyCourseList(autoSelectId);
+        myOfferings = nextOfferings.sort((a, b) => (b.school_year || '').localeCompare(a.school_year || ''));
+        renderMyCourseList(targetId);
     }
 
     function renderMyCourseList(autoSelectId = null) {
@@ -686,6 +616,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const wrap = getEl('myCourseList');
         const msg = getEl('noMyCoursesMsg');
         if (!visibleOfferings.length) {
+            resetMyRoster();
             if (wrap) wrap.innerHTML = '';
             if (msg) { msg.style.display = 'block'; msg.textContent = deanCourseScope === 'my' ? 'No classes assigned. Switch to All Classes, or assign yourself under Faculty & Schedule.' : 'No course offerings found.'; }
             if (getEl('selectedMyCourseTitle')) getEl('selectedMyCourseTitle').textContent = 'Select a class';
@@ -724,6 +655,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function selectMyCourse(offeringId, btnEl) {
         if (!gradingWorkspace.canLeave()) return;
+        resetMyRoster();
+        const version = rosterVersion;
         gradingWorkspace.startClass(offeringId);
         document.querySelectorAll('#myCourseList .nav-item').forEach(b => b.classList.remove('active'));
         if (btnEl) btnEl.classList.add('active');
@@ -743,14 +676,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             currentProfile.role === 'admin' ? Promise.resolve({ data: [true] }) : supabaseClient.from('teacher_assignments').select('offering_id').eq('teacher_id', currentUserId).eq('offering_id', offeringId).eq('is_active', true).limit(1),
         ]);
 
-        if (String(selectedMyOffering?.id) !== String(offeringId)) return;
-        if (gradesError || offeringError) { myRoster = []; renderMyRoster(); showToast('Could not load grades or finalization status. Please retry.', true); return; }
+        if (version !== rosterVersion) return;
+        if (gradesError || offeringError) { renderMyRoster(); showToast('Could not load grades or finalization status. Please retry.', true); return; }
         selectedMyOffering.grades_locked = offeringState?.grades_locked === true;
         selectedMyOffering.canEditGrades = !assignment.error && assignment.data?.length > 0;
         gradingWorkspace.setReadOnly(!selectedMyOffering.canEditGrades);
         if (assignment.error) showToast('Could not verify teaching assignment. Class is read-only; retry to edit.', true);
         gradingWorkspace.setLocked(selectedMyOffering.grades_locked);
-        if (rosterError) { myRoster = []; renderMyRoster(); showToast('Could not load class roster: ' + rosterError.message, true); return; }
+        if (rosterError) { renderMyRoster(); showToast('Could not load class roster: ' + rosterError.message, true); return; }
 
         const gradeByStudent = {};
         (existingGrades || []).forEach(g => { gradeByStudent[g.student_id] = g; });
@@ -790,33 +723,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         table.style.display = 'table';
         if (getEl('deanClassAuditLogBtn')) getEl('deanClassAuditLogBtn').style.display = 'inline-flex';
 
-        const periodInput = (r, idx, field, cls) =>
-            `<input type="number" min="1" max="${r.grade_scale === 'percentage' ? 100 : 5}" step="0.01" class="field-input ${cls}" style="width:72px;" data-idx="${idx}" ${window.IMCC_DEVELOPER_VIEW || !selectedMyOffering?.canEditGrades || selectedMyOffering?.grades_locked || r.grade_scale === 'percentage' ? 'readonly' : ''} aria-label="${escapeHtml(r.student.full_name || 'Student')} ${field} school grade" value="${r[field] ?? ''}">`;
+        const readOnly = !!(window.IMCC_DEVELOPER_VIEW || !selectedMyOffering?.canEditGrades || selectedMyOffering.grades_locked);
+        body.innerHTML = window.renderDeanGradeRows({
+            rows: myRoster.map(row => ({ ...row, draftRemark: row.final == null || row.equivalent == null ? 'Pending' : Grading.computeRemark(row) })),
+            readOnly,
+        });
 
-        body.innerHTML = myRoster.map((r, idx) => `
-      <tr>
-        <td><b>${escapeHtml(r.student.full_name || 'N/A')}</b><small class="student-number">${escapeHtml(r.student.student_no || r.student.id_number || '—')}</small></td>
-        <td>${periodInput(r, idx, 'prelim', 'my-prelim-input')}</td>
-        <td>${periodInput(r, idx, 'midterm', 'my-mid-input')}</td>
-        <td>${periodInput(r, idx, 'semifinal', 'my-semifinal-input')}</td>
-        <td>${periodInput(r, idx, 'final', 'my-final-input')}</td>
-        <td>${periodInput(r, idx, 'equivalent', 'my-equivalent-input')}</td>
-        <td class="my-remark-cell" data-idx="${idx}">${previewMyRemarkBadge(r)}</td>
-        <td style="text-align:center;white-space:nowrap;">
-          <button type="button" class="btn btn-ghost dean-grade-hist-btn" data-idx="${idx}" style="padding:4px 9px;font-size:12px;display:inline-flex;align-items:center;gap:4px;" title="View history & revert">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
-            History
-          </button>
-        </td>
-      </tr>
-    `).join('');
-
-        const fieldByClass = { 'my-prelim-input': 'prelim', 'my-mid-input': 'midterm', 'my-semifinal-input': 'semifinal', 'my-final-input': 'final', 'my-equivalent-input': 'equivalent' };
-        document.querySelectorAll('.my-prelim-input, .my-mid-input, .my-semifinal-input, .my-final-input, .my-equivalent-input').forEach(input => {
+        body.querySelectorAll('input[data-grade-field]').forEach(input => {
             input.addEventListener('input', (e) => {
                 const idx = Number(e.target.dataset.idx);
                 const val = e.target.value === '' ? null : Number(e.target.value);
-                const field = fieldByClass[[...e.target.classList].find(c => fieldByClass[c])];
+                const field = e.target.dataset.gradeField;
                 myRoster[idx][field] = val;
                 document.querySelector(`.my-remark-cell[data-idx="${idx}"]`).innerHTML = previewMyRemarkBadge(myRoster[idx]);
             });
@@ -826,7 +743,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const idx = Number(btn.dataset.idx);
-                if (myRoster[idx]) openDeanStudentGradeHistory(myRoster[idx]);
+                if (myRoster[idx]) openDeanGradeHistory(myRoster[idx]);
             });
         });
     }
@@ -835,6 +752,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!selectedMyOffering || !gradingWorkspace.canFinalize()) return;
         if (!confirm('Lock all grades for this class? Normal grade entry and history reverts will be disabled.')) return;
         const button = document.querySelector('.lock-grades-btn');
+        gradingWorkspace.setSaving(true);
         button.disabled = true;
         try {
             const { error } = await supabaseClient.rpc('lock_class_grades', { p_offering_id: Number(selectedMyOffering.id) });
@@ -845,12 +763,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             gradingWorkspace.markClean();
             showToast('Grades finalized and locked.');
         } catch (error) { showToast('Could not lock grades: ' + error.message, true); }
-        finally { gradingWorkspace.refresh(); }
+        finally { gradingWorkspace.setSaving(false); }
     });
 
     // Grade preview — delegated to shared/grading.js
-    function previewMyEquivalent(r) { return Grading.previewEquivalent(r); }
-    function previewMyRemarkBadge(r) { return Grading.previewRemarkBadge(r); }
+    const previewMyRemarkBadge = Grading.previewRemarkBadge;
 
     getEl('saveMyGradesBtn').addEventListener('click', async () => {
         if (!selectedMyOffering?.canEditGrades || !myRoster.length) return;
@@ -893,466 +810,310 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // ── Dean Grade History & Revert System ───────────────────────────────
-    async function openDeanStudentGradeHistory(r) {
-        if (!selectedMyOffering || !r || !r.student) return;
+    function closeDeanGradeHistory() {
+        ++historyVersion;
+        getEl('gradeHistoryModal').close();
+    }
+
+    async function openDeanGradeHistory(studentRow = null) {
+        const offering = selectedMyOffering;
+        if (!offering) return;
+        const version = ++historyVersion;
         const modal = getEl('gradeHistoryModal');
-        const title = getEl('gradeHistoryModalTitle');
-        const sub = getEl('gradeHistoryModalSub');
-        const currentBox = getEl('gradeHistoryCurrentBox');
         const body = getEl('gradeHistoryBody');
         const noMsg = getEl('noGradeHistoryMsg');
+        const student = studentRow?.student;
+        getEl('gradeHistoryModalTitle').textContent = student
+            ? 'Grade History — ' + (student.full_name || 'Student')
+            : 'Class Grade Audit Log — ' + offering.code;
+        getEl('gradeHistoryModalSub').textContent = student
+            ? offering.code + ': ' + offering.title + ' · Student No: ' + (student.student_no || student.id_number || 'N/A')
+            : offering.title + ' · ' + (offering.semester || '') + ' ' + (offering.school_year || '');
+        getEl('gradeHistoryCurrentBox').innerHTML = window.renderDeanHistorySummary({
+            student: !!student, saved: studentRow?.savedGrade, count: myRoster.length,
+        });
+        getEl('gradeHistoryStudentHeader').hidden = !!student;
+        body.innerHTML = window.renderDeanHistoryMessage({ message: 'Loading revision history…', student: !!student });
+        noMsg.hidden = true;
+        if (!modal.open) modal.showModal();
 
-        title.textContent = `Grade History — ${r.student.full_name || 'Student'}`;
-        sub.textContent = `${selectedMyOffering.code}: ${selectedMyOffering.title} · Student No: ${r.student.student_no || r.student.id_number || 'N/A'}`;
-
-        const eq = previewMyEquivalent(r);
-        const rem = previewMyRemarkBadge(r);
-
-        currentBox.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-weight:700;font-size:13px;color:var(--ink-700);">Current Active Grade</span>
-                <span style="font-size:11.5px;color:var(--ink-500);font-weight:500;">Saved in Portal</span>
-            </div>
-            <div class="current-grade-grid">
-                <div class="current-grade-item"><div class="current-grade-label">Prelim</div><div class="current-grade-val">${r.prelim != null ? r.prelim : '—'}</div></div>
-                <div class="current-grade-item"><div class="current-grade-label">Midterm</div><div class="current-grade-val">${r.midterm != null ? r.midterm : '—'}</div></div>
-                <div class="current-grade-item"><div class="current-grade-label">Semi-Final</div><div class="current-grade-val">${r.semifinal != null ? r.semifinal : '—'}</div></div>
-                <div class="current-grade-item"><div class="current-grade-label">Final</div><div class="current-grade-val">${r.final != null ? r.final : '—'}</div></div>
-                <div class="current-grade-item"><div class="current-grade-label">Equivalent</div><div class="current-grade-val">${eq}</div></div>
-                <div class="current-grade-item"><div class="current-grade-label">Remark</div><div class="current-grade-val" style="font-size:12px;">${rem}</div></div>
-            </div>
-        `;
-
-        body.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--ink-500);">Loading revision history…</td></tr>';
-        noMsg.style.display = 'none';
-        modal.classList.add('open');
-
-        const { data: historyRows, error } = await supabaseClient
-            .from('v_grade_history')
-            .select('*')
-            .eq('offering_id', selectedMyOffering.id)
-            .eq('student_id', r.student.id)
-            .order('created_at', { ascending: false });
+        let query = supabaseClient.from('v_grade_history').select('*').eq('offering_id', offering.id);
+        if (student) query = query.eq('student_id', student.id);
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (version !== historyVersion || !modal.open || selectedMyOffering !== offering) return;
 
         if (error) {
-            body.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--red);">Failed to load history: ${escapeHtml(error.message)}</td></tr>`;
+            body.innerHTML = window.renderDeanHistoryMessage({ message: 'Failed to load history: ' + error.message, student: !!student });
             return;
         }
-
-        renderDeanHistoryRows(historyRows || [], r);
-    }
-
-    async function openDeanClassGradeHistory() {
-        if (!selectedMyOffering) return;
-        const modal = getEl('gradeHistoryModal');
-        const title = getEl('gradeHistoryModalTitle');
-        const sub = getEl('gradeHistoryModalSub');
-        const currentBox = getEl('gradeHistoryCurrentBox');
-        const body = getEl('gradeHistoryBody');
-        const noMsg = getEl('noGradeHistoryMsg');
-
-        title.textContent = `Class Grade Audit Log — ${selectedMyOffering.code}`;
-        sub.textContent = `${selectedMyOffering.title} · ${selectedMyOffering.semester || ''} ${selectedMyOffering.school_year || ''}`;
-
-        currentBox.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-weight:700;font-size:13px;color:var(--ink-700);">Class Audit Trail & Revision History (Dean Oversight)</span>
-                <span style="font-size:12px;color:var(--ink-500);">${myRoster.length} students enrolled</span>
-            </div>
-            <div style="font-size:12px;color:var(--ink-500);margin-top:6px;">
-                Complete record of all grade entries, faculty updates, and reversions for this class. Reverting will restore prior grade values and append a new audit log.
-            </div>
-        `;
-
-        body.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--ink-500);">Loading class grade history…</td></tr>';
-        noMsg.style.display = 'none';
-        modal.classList.add('open');
-
-        const { data: historyRows, error } = await supabaseClient
-            .from('v_grade_history')
-            .select('*')
-            .eq('offering_id', selectedMyOffering.id)
-            .order('created_at', { ascending: false });
-
-        if (error) {
-            body.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--red);">Failed to load history: ${escapeHtml(error.message)}</td></tr>`;
-            return;
-        }
-
-        renderDeanHistoryRows(historyRows || [], null);
-    }
-
-    function renderDeanHistoryRows(rows, targetStudent) {
-        Grading.renderHistoryRows(rows, targetStudent, (histEntry, studentId) => {
-            executeDeanRevert(histEntry, targetStudent || myRoster.find(x => x.student.id === studentId));
-        }, selectedMyOffering?.grades_locked, !selectedMyOffering?.canEditGrades);
-    }
-
-    async function executeDeanRevert(histEntry, studentRosterItem) {
-        await Grading.executeRevert({
-            supabaseClient,
-            histEntry,
-            studentRosterItem,
-            locked: selectedMyOffering?.grades_locked,
-            readOnly: !selectedMyOffering?.canEditGrades,
-            roleLabel: '(Dean Oversight)',
-            showToast,
-            async onDone(data, item) {
-                if (item) {
-                    renderMyRoster();
-                    if (getEl('gradeHistoryModal').classList.contains('open')) {
-                        openDeanStudentGradeHistory(item);
-                    }
-                } else if (selectedMyOffering) {
-                    selectMyCourse(selectedMyOffering.id);
-                }
-                showToast('Grade successfully reverted!');
-
-                // Refresh overview
-                const { data: gradeRows, error } = await IMCC.fetchAll(() => supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)'));
-                if (error) { showToast('Grade reverted, but reports could not refresh. Displayed reports may be outdated.', true); return; }
-                state.grades = gradeRows;
-                renderOverview();
-                    }
+        const rows = data || [];
+        noMsg.hidden = rows.length !== 0;
+        body.innerHTML = window.renderDeanHistoryRows({
+            rows, student: !!student, readOnly: !!(offering.grades_locked || !offering.canEditGrades || window.IMCC_DEVELOPER_VIEW),
+        });
+        body.querySelectorAll('.revert-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const revision = rows.find(row => String(row.id) === button.dataset.histId);
+                if (!revision || version !== historyVersion || !modal.open || button.disabled) return;
+                executeDeanRevert(revision, studentRow || myRoster.find(row => row.student.id === revision.student_id));
+            });
         });
     }
 
-    getEl('gradeHistoryCloseBtn')?.addEventListener('click', () => getEl('gradeHistoryModal').classList.remove('open'));
-    getEl('gradeHistoryDoneBtn')?.addEventListener('click', () => getEl('gradeHistoryModal').classList.remove('open'));
-    getEl('deanClassAuditLogBtn')?.addEventListener('click', openDeanClassGradeHistory);
+    async function executeDeanRevert(histEntry, studentRosterItem) {
+        if (revertingGrade || !gradingWorkspace.canLeave()) return;
+        const version = historyVersion;
+        const request = rosterVersion;
+        const offering = selectedMyOffering;
+        let reverted = false;
+        revertingGrade = true;
+        gradingWorkspace.setSaving(true);
+        try {
+            await Grading.executeRevert({
+                supabaseClient,
+                histEntry,
+                studentRosterItem,
+                locked: offering?.grades_locked,
+                readOnly: window.IMCC_DEVELOPER_VIEW || !offering?.canEditGrades,
+                roleLabel: '(Dean Oversight)',
+                showToast,
+                onDone() { reverted = true; },
+            });
+        } catch (error) {
+            showToast('Could not revert grade: ' + error.message, true);
+        } finally {
+            revertingGrade = false;
+            gradingWorkspace.setSaving(false);
+        }
+        if (!reverted) return;
+        if (request === rosterVersion) {
+            if (studentRosterItem) {
+                renderMyRoster();
+                gradingWorkspace.markClean();
+                if (version === historyVersion && getEl('gradeHistoryModal').open) openDeanGradeHistory(studentRosterItem);
+            } else {
+                selectMyCourse(offering.id);
+            }
+        }
+        showToast('Grade successfully reverted!');
+        const { data: gradeRows, error } = await IMCC.fetchAll(() => supabaseClient.from('grades').select('*, course_offerings(code, title, units, program, instructor_name)'));
+        if (error) { showToast('Grade reverted, but reports could not refresh. Displayed reports may be outdated.', true); return; }
+        state.grades = gradeRows;
+        renderOverview();
+    }
+
+    getEl('gradeHistoryModal').addEventListener('cancel', event => {
+        event.preventDefault();
+        closeDeanGradeHistory();
+    });
+    getEl('gradeHistoryCloseBtn')?.addEventListener('click', closeDeanGradeHistory);
+    getEl('gradeHistoryDoneBtn')?.addEventListener('click', closeDeanGradeHistory);
+    getEl('deanClassAuditLogBtn')?.addEventListener('click', () => openDeanGradeHistory());
 
     getEl('deanAddClassBtn')?.addEventListener('click', () => {
-        openModal('courseOffering');
+        openModal();
     });
 
     // ══════════════════════════════════════════════════════════════════
-    // GENERIC MODAL SYSTEM
+    // COURSE OFFERING FORM
     // ══════════════════════════════════════════════════════════════════
-    const modalConfigs = {
-        courseOffering: {
-            title: 'Add Subject / Course Offering',
-            table: 'course_offerings',
-            fields: [
-                { name: 'catalog_search', label: 'Search subjects', type: 'search', required: false, placeholder: 'Subject code or title' },
-                { name: 'catalog_course', label: 'Quick Select Subject from Curriculum (Auto-fills details)', type: 'select', required: false, optionsFn: () => [{ value: '', label: '— Choose from Curriculum (50+ Subjects) —' }, ...state.courses.map(c => ({ value: c.code, label: `${c.code} — ${c.title} (${(c.lec_units || 0) + (c.lab_units || 0) || c.units || 3.0} units)` }))] },
-                { name: 'code', label: 'Subject Code', type: 'text', required: true, placeholder: 'e.g. CAP 102 or CC 101' },
-                { name: 'title', label: 'Course Title', type: 'text', required: true, placeholder: 'e.g. Capstone Project and Research 2' },
-                { name: 'program', label: 'Program', type: 'select', required: true, options: [{ value: 'BSIT', label: 'BSIT' }, { value: 'BSCS', label: 'BSCS' }, { value: 'BSIS', label: 'BSIS' }] },
-                { name: 'year', label: 'Year Level', type: 'select', required: true, options: [{ value: '1', label: '1st Year' }, { value: '2', label: '2nd Year' }, { value: '3', label: '3rd Year' }, { value: '4', label: '4th Year' }] },
-                { name: 'semester', label: 'Semester', type: 'select', required: true, options: [{ value: '1st Semester', label: '1st Semester' }, { value: '2nd Semester', label: '2nd Semester' }, { value: 'Summer', label: 'Summer' }] },
-                { name: 'school_year', label: 'School Year', type: 'text', required: true, placeholder: '2026-2027', default: '2026-2027' },
-                { name: 'units', label: 'Total Units', type: 'number', required: true, placeholder: '3.0', default: '3.0' },
-                { name: 'schedule', label: 'Schedule', type: 'text', required: false, placeholder: 'e.g. MWF 08:00–09:30 or TTH 13:00–14:30' },
-                // instructor_id uses a dedicated async-populated dropdown (type: 'instructor_select').
-                // openModal handles the RPC load and renders the <select> itself.
-                { name: 'instructor_id', label: 'Assigned Instructor (optional)', type: 'instructor_select', required: false },
-            ],
-            transform: (values) => {
-                // Resolve full_name from whichever instructor list is available.
-                const instructorSource = (state.instructorOptions && state.instructorOptions.length)
-                    ? state.instructorOptions
-                    : state.facultyList;
-                const instructor = instructorSource.find(f => f.id === values.instructor_id);
-                return {
-                    code: values.code,
-                    title: values.title,
-                    program: values.program,
-                    year: Number(values.year) || 1,
-                    semester: values.semester,
-                    school_year: values.school_year || '2026–2027',
-                    units: Number(values.units),
-                    schedule: values.schedule || null,
-                    // Set instructor_id to the selected profile's id (null if unselected).
-                    instructor_id: values.instructor_id || null,
-                    // Set instructor_name to the selected profile's full_name (null if unselected).
-                    instructor_name: instructor ? instructor.full_name : null,
-                };
-            },
-            onSaved: async (savedRow) => {
-                const { data: offerings, error } = await IMCC.fetchAll(() => supabaseClient.from('course_offerings').select('*'));
-                if (error) { showToast('Subject saved, but the list could not refresh. Reload to retry.', true); return; }
-                state.offerings = offerings;
-                renderFacultyPage();
-                await loadMyClasses(savedRow?.id);
-                showToast('Subject offering saved successfully.');
-            },
-        },
-    };
-
-    let activeModalKey = null;
+    let offeringModalOpen = false;
     let editingOfferingId = null;
+    let modalVersion = 0;
 
-    document.querySelectorAll('[data-modal]').forEach(btn => btn.addEventListener('click', () => openModal(btn.dataset.modal)));
+    document.querySelector('[data-modal="courseOffering"]').addEventListener('click', () => openModal());
 
     // An unavailable instructor list must still allow saving an unassigned subject.
     function renderInstructorDropdown(existingInstructorId = null, existingInstructorName = null) {
         const wrapper = getEl('instructorSelectWrapper');
         if (!wrapper) return;
-        const options = state.instructorOptions || [];
-        const legacy = existingInstructorId && !options.some(f => String(f.id) === String(existingInstructorId));
-        wrapper.innerHTML = '<label for="field_instructor_id">Assigned Instructor (optional)</label>' +
-            '<select id="field_instructor_id" class="field-input"><option value="">Unassigned — pending assignment</option>' +
-            (legacy ? '<option selected value="' + escapeHtml(existingInstructorId) + '">' + escapeHtml(existingInstructorName || 'Previous instructor') + ' (choose an active replacement or Unassigned)</option>' : '') +
-            options.map(f => '<option value="' + escapeHtml(f.id) + '" ' + (String(f.id) === String(existingInstructorId) ? 'selected' : '') + '>' + escapeHtml(f.full_name) + (f.id === currentUserId ? ' (You)' : '') + '</option>').join('') + '</select>' +
-            (state.instructorOptions === null ? '<p role="status">Loading instructors. You can save the subject as unassigned.</p>' : state.instructorOptionsError ? '<p role="status">Instructors could not be loaded. Save as unassigned or <button type="button" id="retryInstructorLoad">Retry</button>.</p>' : '');
-        getEl('retryInstructorLoad')?.addEventListener('click', async () => { await loadInstructorOptions(true); renderInstructorDropdown(existingInstructorId, existingInstructorName); });
+        wrapper.innerHTML = window.renderDeanInstructorField({
+            options: state.instructorOptions || [], selectedId: existingInstructorId, selectedName: existingInstructorName,
+            currentUserId, loading: state.instructorOptions === null, error: !!state.instructorOptionsError,
+        });
+        getEl('retryInstructorLoad')?.addEventListener('click', event => {
+            event.currentTarget.disabled = true;
+            refreshInstructorDropdown(true, existingInstructorId, existingInstructorName);
+        });
     }
 
-    function openModal(key, initialValues = null) {
-        const cfg = modalConfigs[key];
-        if (!cfg) return;
-        activeModalKey = key;
-        editingOfferingId = (initialValues && initialValues.id) ? initialValues.id : null;
-        getEl('modalTitle').textContent = editingOfferingId ? `Edit ${cfg.title.replace(/^Add\s+/i, '')}` : cfg.title;
+    async function refreshInstructorDropdown(force, existingInstructorId, existingInstructorName) {
+        const version = modalVersion;
+        await loadInstructorOptions(force);
+        if (version !== modalVersion) return;
 
-        getEl('modalOverlay').classList.toggle('course-offering-modal', key === 'courseOffering');
-        getEl('modalSaveBtn').textContent = key === 'courseOffering' ? (editingOfferingId ? 'Save changes' : 'Add course offering') : 'Save';
+        const select = getEl('field_instructor_id');
+        const selectedId = select?.value ?? existingInstructorId;
+        const selectedName = selectedId === existingInstructorId ? existingInstructorName : select?.selectedOptions[0]?.textContent;
+        renderInstructorDropdown(selectedId, selectedName);
+    }
+
+    function openModal(initialValues = null) {
+        ++modalVersion;
+        offeringModalOpen = true;
+        editingOfferingId = initialValues?.id ?? null;
+        getEl('modalTitle').textContent = editingOfferingId ? 'Edit Subject / Course Offering' : 'Add Subject / Course Offering';
+        getEl('modalSaveBtn').disabled = false;
+        getEl('modalSaveBtn').textContent = editingOfferingId ? 'Save changes' : 'Add course offering';
         const form = getEl('modalForm');
-        form.innerHTML = cfg.fields.map(f => {
-            const id = `field_${f.name}`;
-            const initialVal = (initialValues && initialValues[f.name] !== undefined) ? initialValues[f.name] : (f.default ?? '');
+        form.innerHTML = window.renderDeanOfferingFields({ initial: initialValues, courses: state.courses });
 
-            // instructor_select: rendered asynchronously by renderInstructorDropdown().
-            // We emit a wrapper div here; the actual <select> is injected after the RPC.
-            if (f.type === 'instructor_select') {
-                return `<div class="form-row" id="instructorSelectWrapper"></div>`;
-            }
+        const codeInput = getEl('field_code');
+        const search = getEl('field_catalog_search');
+        const catalogSelect = getEl('field_catalog_course');
+        const insights = window.imccSubjectPicker(catalogSelect, search, state.courses, form);
 
-            if (f.type === 'select') {
-                const options = f.options || (f.optionsFn ? f.optionsFn() : []);
-                return `
-          <div class="form-row">
-            <label for="${id}">${escapeHtml(f.label)}</label>
-            <select id="${id}" class="field-input" ${f.required ? 'required' : ''}>
-              <option value="">Select…</option>
-              ${options.map(o => `<option value="${escapeHtml(o.value)}" ${String(o.value) === String(initialVal) ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
-            </select>
-          </div>`;
-            }
-            if (f.type === 'textarea') {
-                return `
-          <div class="form-row">
-            <label for="${id}">${escapeHtml(f.label)}</label>
-            <textarea id="${id}" class="field-input" placeholder="${escapeHtml(f.placeholder || '')}" ${f.required ? 'required' : ''}>${escapeHtml(String(initialVal || ''))}</textarea>
-          </div>`;
-            }
-            return `
-        <div class="form-row">
-          <label for="${id}">${escapeHtml(f.label)}</label>
-          <input type="${f.type}" id="${id}" class="field-input" placeholder="${escapeHtml(f.placeholder || '')}" value="${escapeHtml(String(initialVal ?? ''))}" ${f.required ? 'required' : ''}>
-        </div>`;
-        }).join('');
+        const existingInstructorId = (initialValues && initialValues.instructor_id) ? initialValues.instructor_id : null;
+        const existingInstructorName = (initialValues && initialValues.instructor_name) ? initialValues.instructor_name : null;
 
-        // If courseOffering, bind catalog course auto-fill and populate instructor dropdown.
-        if (key === 'courseOffering') {
-            const codeInput = getEl('field_code');
-            const search = getEl('field_catalog_search');
-            const catalogSelect = getEl('field_catalog_course');
-            const insights = window.imccSubjectPicker(catalogSelect, search, state.courses, form);
+        // Show whatever we have immediately (may be loading state, legacy state, or eligible).
+        renderInstructorDropdown(existingInstructorId, existingInstructorName);
 
-            const isEdit = Boolean(editingOfferingId);
-            const existingInstructorId = (initialValues && initialValues.instructor_id) ? initialValues.instructor_id : null;
-            const existingInstructorName = (initialValues && initialValues.instructor_name) ? initialValues.instructor_name : null;
-
-            // Show whatever we have immediately (may be loading state, legacy state, or eligible).
-            renderInstructorDropdown(existingInstructorId, existingInstructorName, isEdit);
-
-            // If the RPC hasn't resolved yet, kick off the load and refresh the dropdown when done.
-            if (state.instructorOptions === null) {
-                loadInstructorOptions().then(() => renderInstructorDropdown(existingInstructorId, existingInstructorName, isEdit));
-            } else if (!state.instructorOptions.length && !state.instructorOptionsError) {
-                // We have a stale empty result — re-fetch once to be sure.
-                loadInstructorOptions(true).then(() => renderInstructorDropdown(existingInstructorId, existingInstructorName, isEdit));
-            }
-
-            // Add datalist for codeInput
-            if (codeInput && state.courses && state.courses.length) {
-                let dl = getEl('deanCurriculumDatalist');
-                if (!dl) {
-                    dl = document.createElement('datalist');
-                    dl.id = 'deanCurriculumDatalist';
-                    document.body.appendChild(dl);
-                }
-                dl.innerHTML = state.courses.map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.title)}</option>`).join('');
-                codeInput.setAttribute('list', 'deanCurriculumDatalist');
-                codeInput.setAttribute('autocomplete', 'off');
-            }
-
-            const applyCourse = (c) => {
-                if (!c) return;
-                insights.textContent = [c.code + ' — ' + c.title, 'Year ' + (c.year_level || '—'), c.semester === 3 ? 'Summer' : c.semester === 2 ? '2nd Semester' : '1st Semester', ((c.lec_units || 0) + (c.lab_units || 0) || c.units || 3) + ' units', 'Prerequisites: ' + (c.prerequisites || 'None')].join(' · ');
-                const units = (c.lec_units || 0) + (c.lab_units || 0) || c.units || 3.0;
-                const semStr = c.semester === 2 ? '2nd Semester' : (c.semester === 3 ? 'Summer' : '1st Semester');
-                if (getEl('field_code')) getEl('field_code').value = c.code || '';
-                if (getEl('field_title')) getEl('field_title').value = c.title || '';
-                if (getEl('field_units')) getEl('field_units').value = units;
-                if (getEl('field_program')) getEl('field_program').value = c.program || 'BSIT';
-                if (getEl('field_year') && c.year_level) getEl('field_year').value = String(c.year_level);
-                if (getEl('field_semester')) getEl('field_semester').value = semStr;
-                if (catalogSelect) catalogSelect.value = c.code || '';
-            };
-
-            catalogSelect?.addEventListener('change', (e) => {
-                const val = (e.target.value || '').trim().toLowerCase();
-                const matched = state.courses.find(c => c.code.toLowerCase() === val);
-                if (matched) applyCourse(matched);
-            });
-
-            codeInput?.addEventListener('input', (e) => {
-                const rawVal = (e.target.value || '').trim();
-                const normalized = rawVal.replace(/\s+/g, '').toLowerCase();
-                if (!normalized) return;
-                const matched = state.courses.find(c =>
-                    c.code.toLowerCase() === rawVal.toLowerCase() ||
-                    c.code.replace(/\s+/g, '').toLowerCase() === normalized
-                );
-                if (matched) applyCourse(matched);
-            });
+        // If the RPC hasn't resolved yet, kick off the load and refresh the dropdown when done.
+        if (state.instructorOptions === null) {
+            refreshInstructorDropdown(false, existingInstructorId, existingInstructorName);
+        } else if (!state.instructorOptions.length && !state.instructorOptionsError) {
+            // We have a stale empty result — re-fetch once to be sure.
+            refreshInstructorDropdown(true, existingInstructorId, existingInstructorName);
         }
 
-        getEl('modalOverlay').classList.add('open');
+        // Add datalist for codeInput
+        if (codeInput && state.courses && state.courses.length) {
+            let dl = getEl('deanCurriculumDatalist');
+            if (!dl) {
+                dl = document.createElement('datalist');
+                dl.id = 'deanCurriculumDatalist';
+                document.body.appendChild(dl);
+            }
+            dl.innerHTML = state.courses.map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.title)}</option>`).join('');
+            codeInput.setAttribute('list', 'deanCurriculumDatalist');
+            codeInput.setAttribute('autocomplete', 'off');
+        }
+
+        const applyCourse = (c) => {
+            if (!c) return;
+            insights.textContent = [c.code + ' — ' + c.title, 'Year ' + (c.year_level || '—'), c.semester === 3 ? 'Summer' : c.semester === 2 ? '2nd Semester' : '1st Semester', ((c.lec_units || 0) + (c.lab_units || 0) || c.units || 3) + ' units', 'Prerequisites: ' + (c.prerequisites || 'None')].join(' · ');
+            const units = (c.lec_units || 0) + (c.lab_units || 0) || c.units || 3.0;
+            const semStr = c.semester === 2 ? '2nd Semester' : (c.semester === 3 ? 'Summer' : '1st Semester');
+            if (getEl('field_code')) getEl('field_code').value = c.code || '';
+            if (getEl('field_title')) getEl('field_title').value = c.title || '';
+            if (getEl('field_units')) getEl('field_units').value = units;
+            if (getEl('field_program')) getEl('field_program').value = c.program || 'BSIT';
+            if (getEl('field_year') && c.year_level) getEl('field_year').value = String(c.year_level);
+            if (getEl('field_semester')) getEl('field_semester').value = semStr;
+            if (catalogSelect) catalogSelect.value = c.code || '';
+        };
+
+        catalogSelect?.addEventListener('change', (e) => {
+            const val = (e.target.value || '').trim().toLowerCase();
+            const matched = state.courses.find(c => c.code.toLowerCase() === val);
+            if (matched) applyCourse(matched);
+        });
+
+        codeInput?.addEventListener('input', (e) => {
+            const rawVal = (e.target.value || '').trim();
+            const normalized = rawVal.replace(/\s+/g, '').toLowerCase();
+            if (!normalized) return;
+            const matched = state.courses.find(c =>
+                c.code.toLowerCase() === rawVal.toLowerCase() ||
+                c.code.replace(/\s+/g, '').toLowerCase() === normalized
+            );
+            if (matched) applyCourse(matched);
+        });
+
+        const modal = getEl('modalOverlay');
+        modal.classList.add('open');
+        if (!modal.open) modal.showModal();
+        search.focus();
     }
 
-    function closeModal() { getEl('modalOverlay').classList.remove('open'); activeModalKey = null; editingOfferingId = null; }
+    function closeModal() {
+        ++modalVersion;
+        const modal = getEl('modalOverlay');
+        modal.close();
+        modal.classList.remove('open');
+        offeringModalOpen = false;
+        editingOfferingId = null;
+    }
     getEl('modalCancelBtn').addEventListener('click', closeModal);
+    getEl('modalOverlay').addEventListener('cancel', event => { event.preventDefault(); closeModal(); });
     getEl('modalOverlay').addEventListener('click', (e) => { if (e.target.id === 'modalOverlay') closeModal(); });
 
     getEl('modalSaveBtn').addEventListener('click', async () => {
-        const cfg = modalConfigs[activeModalKey];
-        if (!cfg) return;
-
+        const saveBtn = getEl('modalSaveBtn');
+        if (!offeringModalOpen || saveBtn.disabled) return;
+        const offeringId = editingOfferingId;
+        const version = modalVersion;
         const values = {};
-        for (const f of cfg.fields) {
-            // Skip the catalog auto-fill helper and the instructor_select placeholder
-            // (instructor_select is validated and read specifically below).
-            if (f.name === 'catalog_course' || f.name === 'catalog_search') continue;
-            if (f.type === 'instructor_select') continue;
-
-            const el = getEl(`field_${f.name}`);
-            if (!el) continue;
-            const val = el.value.trim();
-            if (f.required && !val) { showToast(`${f.label} is required.`, true); if (el.closest('details')) el.closest('details').open = true; el.focus(); return; }
-            if (f.type === 'number' && (!Number.isFinite(Number(val)) || Number(val) <= 0)) { showToast(`${f.label} must be a positive number.`, true); el.focus(); return; }
-            values[f.name] = f.type === 'number' ? (val === '' ? null : Number(val)) : (val || null);
+        for (const field of window.deanOfferingFields) {
+            const input = getEl('field_' + field.name);
+            const value = input.value.trim();
+            if (field.required && !value) {
+                showToast(field.label + ' is required.', true);
+                const details = input.closest('details');
+                if (details) details.open = true;
+                input.focus();
+                return;
+            }
+            if (field.type === 'number' && (!Number.isFinite(Number(value)) || Number(value) <= 0)) {
+                showToast(field.label + ' must be a positive number.', true);
+                const details = input.closest('details');
+                if (details) details.open = true;
+                input.focus();
+                return;
+            }
+            values[field.name] = field.type === 'number' ? Number(value) : value || null;
         }
 
-        // Special handling for courseOffering: instructor assignment validation & atomic save
-        if (activeModalKey === 'courseOffering') {
-            const selectedInstructorId = getEl('field_instructor_id')?.value.trim() || '';
-            const selectedInstructor = (state.instructorOptions || []).find(o => String(o.id) === selectedInstructorId);
-            if (selectedInstructorId && !selectedInstructor) {
-                showToast('Choose an approved active instructor or leave the subject unassigned.', true); return;
+        const selectedInstructorId = getEl('field_instructor_id')?.value.trim() || '';
+        const instructor = (state.instructorOptions || []).find(person => String(person.id) === selectedInstructorId);
+        if (selectedInstructorId && !instructor) {
+            showToast('Choose an approved active instructor or leave the subject unassigned.', true);
+            return;
+        }
+        values.instructor_id = instructor?.id || null;
+        values.instructor_name = instructor?.full_name || null;
+        values.year = Number(values.year) || 1;
+
+        const originalBtnText = saveBtn.textContent;
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving…';
+        let savedRow;
+        try {
+            let { data, error } = await supabaseClient.rpc('save_course_offering_with_instructor', {
+                p_offering_id: offeringId ? Number(offeringId) : null,
+                p_code: values.code, p_title: values.title, p_units: values.units, p_program: values.program,
+                p_year: values.year, p_semester: values.semester, p_school_year: values.school_year,
+                p_schedule: values.schedule, p_instructor_id: values.instructor_id,
+            });
+            const isRpcMissing = error?.code === 'PGRST202' ||
+                (error?.message?.includes('function') && error.message.includes('does not exist'));
+            if (isRpcMissing) {
+                console.warn('save_course_offering_with_instructor RPC not found, falling back to trigger-synchronized offering write:', error.message);
+                const table = supabaseClient.from('course_offerings');
+                const write = offeringId ? table.update(values).eq('id', offeringId) : table.insert(values);
+                ({ data, error } = await write.select().single());
             }
-            values.instructor_id = selectedInstructor?.id || null;
-            values.instructor_name = selectedInstructor?.full_name || null;
-
-            const saveBtn = getEl('modalSaveBtn');
-            const originalBtnText = saveBtn.textContent;
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Saving…';
-
-            try {
-                // Attempt atomic write via Postgres RPC
-                const rpcPayload = {
-                    p_offering_id: editingOfferingId ? Number(editingOfferingId) : null,
-                    p_code: values.code,
-                    p_title: values.title,
-                    p_units: Number(values.units),
-                    p_program: values.program,
-                    p_year: Number(values.year) || 1,
-                    p_semester: values.semester,
-                    p_school_year: values.school_year || '2026–2027',
-                    p_schedule: values.schedule || null,
-                    p_instructor_id: selectedInstructor?.id || null,
-                };
-
-                let savedRow = null;
-                let saveErr = null;
-
-                const { data: rpcData, error: rpcErr } = await supabaseClient.rpc(
-                    'save_course_offering_with_instructor',
-                    rpcPayload
-                );
-
-                if (!rpcErr) {
-                    savedRow = rpcData;
-                } else {
-                    // A direct offering write is also atomic through the database assignment trigger.
-                    const isRpcMissing = rpcErr.code === 'PGRST202' ||
-                        (rpcErr.message && rpcErr.message.includes('function') && rpcErr.message.includes('does not exist'));
-
-                    if (isRpcMissing) {
-                        console.warn('save_course_offering_with_instructor RPC not found, falling back to trigger-synchronized offering write:', rpcErr.message);
-                        const directPayload = {
-                            code: values.code,
-                            title: values.title,
-                            program: values.program,
-                            year: Number(values.year) || 1,
-                            semester: values.semester,
-                            school_year: values.school_year || '2026–2027',
-                            units: Number(values.units),
-                            schedule: values.schedule || null,
-                            instructor_id: selectedInstructor?.id || null,
-                            instructor_name: selectedInstructor?.full_name || null,
-                        };
-
-                        if (editingOfferingId) {
-                            const { data, error } = await supabaseClient.from('course_offerings')
-                                .update(directPayload).eq('id', editingOfferingId).select().single();
-                            if (error) {
-                                saveErr = error;
-                            } else {
-                                savedRow = data;
-                            }
-                        } else {
-                            const { data, error } = await supabaseClient.from('course_offerings')
-                                .insert(directPayload).select().single();
-                            if (error) {
-                                saveErr = error;
-                            } else {
-                                savedRow = data;
-                            }
-                        }
-                    } else {
-                        saveErr = rpcErr;
-                    }
-                }
-
-                if (saveErr) {
-                    showToast('Failed to save offering: ' + (saveErr.message || 'Database error'), true);
-                    return;
-                }
-
-                showToast(editingOfferingId ? 'Updated successfully.' : 'Saved successfully.');
-                closeModal();
-                if (cfg.onSaved) cfg.onSaved(savedRow);
-            } finally {
+            if (error) throw error;
+            if (!data?.id) throw new Error('No subject offering was saved.');
+            savedRow = data;
+        } catch (error) {
+            showToast('Failed to save offering: ' + (error.message || 'Database error'), true);
+            return;
+        } finally {
+            if (version === modalVersion) {
                 saveBtn.disabled = false;
                 saveBtn.textContent = originalBtnText;
             }
-            return;
         }
 
-        // Standard save logic for faculty notes.
-        const payload = cfg.transform ? cfg.transform(values) : values;
-        let saveRes;
-        if (editingOfferingId) {
-            saveRes = await supabaseClient.from(cfg.table).update(payload).eq('id', editingOfferingId).select().single();
-        } else {
-            saveRes = await supabaseClient.from(cfg.table).insert(payload).select().single();
-        }
-
-        const { data: savedRow, error } = saveRes;
-
-        if (error) {
-            if (isMissingTableError(error)) showToast(`This feature needs the "${cfg.table}" table — run dean-dashboard-schema.sql first.`, true);
-            else showToast('Failed to save: ' + error.message, true);
-            return;
-        }
-
-        showToast(editingOfferingId ? 'Updated successfully.' : 'Saved successfully.');
-        closeModal();
-        if (cfg.onSaved) cfg.onSaved(savedRow);
+        showToast(offeringId ? 'Updated successfully.' : 'Saved successfully.');
+        if (version === modalVersion) closeModal();
+        const { data: offerings, error } = await IMCC.fetchAll(() => supabaseClient.from('course_offerings').select('*'));
+        if (error) { showToast('Subject saved, but the list could not refresh. Reload to retry.', true); return; }
+        state.offerings = offerings;
+        renderFacultyPage();
+        await loadMyClasses(savedRow.id);
     });
 
     // ── Quick Links (SSO) — delegated to FC ──
@@ -1391,4 +1152,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderStudentPicker('record');
 
     if (window.imccHidePreloader) window.imccHidePreloader();
-});
+})();

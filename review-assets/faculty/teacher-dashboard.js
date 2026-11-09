@@ -1,5 +1,5 @@
 // faculty-dashboard.js
-document.addEventListener('DOMContentLoaded', async () => {
+(async () => {
     let supabaseClient;
     try {
         supabaseClient = await getSupabaseClientAsync();
@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let offerings = [];
     let selectedOffering = null;
     let roster = [];
+    let rosterVersion = 0;
+    let historyVersion = 0;
     let darkMode = false;
 
     // ── Mobile Navigation — delegated to FC ──
@@ -59,24 +61,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Dashboard stats ───────────────────────────────────────────────────
 
     async function loadDashboardStats() {
-        if (!offerings.length) {
+        const term = getEl('page-classes').querySelector('.grading-term-select').value;
+        const year = getEl('page-classes').querySelector('.grading-year-select').value;
+        const termOfferings = offerings.filter(o => IMCC.termKey(o) === term && (!year || String(o.year) === year));
+        if (!termOfferings.length) {
             getEl('stat-classes').textContent = '0';
             getEl('stat-students').textContent = '0';
             getEl('stat-pending').textContent = '0';
             return;
         }
-        const offeringIds = offerings.map(o => o.id);
+        const offeringIds = termOfferings.map(o => o.id);
 
         const [{ data: enrollments }, { data: gradeRows }] = await Promise.all([
             supabaseClient.from('enrollments').select('student_id, offering_id').in('offering_id', offeringIds).eq('status', 'enrolled'),
             supabaseClient.from('grades').select('student_id, offering_id, final').in('offering_id', offeringIds),
         ]);
+        if (term !== getEl('page-classes').querySelector('.grading-term-select').value || year !== getEl('page-classes').querySelector('.grading-year-select').value) return;
 
         const uniqueStudents = new Set((enrollments || []).map(e => e.student_id));
         const gradedSet = new Set((gradeRows || []).filter(g => g.final !== null && g.final !== undefined).map(g => `${g.student_id}|${g.offering_id}`));
         const pending = (enrollments || []).filter(e => !gradedSet.has(`${e.student_id}|${e.offering_id}`)).length;
 
-        getEl('stat-classes').textContent = offerings.length;
+        getEl('stat-classes').textContent = termOfferings.length;
         getEl('stat-students').textContent = uniqueStudents.size;
         getEl('stat-pending').textContent = pending;
     }
@@ -116,33 +122,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function renderCourseList() {
-        gradingWorkspace.setCourses(offerings, selectedOffering?.id);
+        const visibleOfferings = gradingWorkspace.setCourses(offerings, selectedOffering?.id, () => {
+            ++rosterVersion;
+            closeGradeHistory();
+            selectedOffering = null;
+            roster = [];
+            renderCourseList();
+            loadDashboardStats();
+        });
         const wrap = getEl('courseList');
         const msg = getEl('noCoursesMsg');
-        if (!offerings.length) { wrap.innerHTML = ''; msg.style.display = 'block'; return; }
+        if (!visibleOfferings.length) { wrap.innerHTML = ''; msg.style.display = 'block'; return; }
         msg.style.display = 'none';
 
-        wrap.innerHTML = offerings.map(o => `
-      <button type="button" class="nav-item" style="border:1px solid var(--line);margin-bottom:8px;" data-id="${o.id}">
-        <div style="text-align:left;">
-          <div style="font-weight:800;font-size:13.5px;">${escapeHtml(o.code || '—')}</div>
-          <div style="font-size:12px;color:var(--ink-500);font-weight:500;">${escapeHtml(o.title || '—')}</div>
-          <div style="font-size:11px;color:var(--ink-300);margin-top:4px;">${escapeHtml(o.schedule || 'Schedule TBA')} · ${escapeHtml(o.semester || '')} ${escapeHtml(o.school_year || '')}</div>
-        </div>
-      </button>
-    `).join('');
-
-        document.querySelectorAll('#courseList .nav-item').forEach(btn => {
-            btn.addEventListener('click', () => selectCourse(btn.dataset.id, btn));
+        wrap.innerHTML = window.renderTeacherCourseList({ offerings: visibleOfferings, selectedId: selectedOffering?.id });
+        wrap.querySelectorAll('[data-id]').forEach(button => {
+            button.addEventListener('click', () => selectCourse(button.dataset.id));
         });
     }
 
     // ── Roster + grade entry ─────────────────────────────────────────────
-    async function selectCourse(offeringId, btnEl) {
+    async function selectCourse(offeringId) {
         if (!gradingWorkspace.canLeave()) return;
+        const version = ++rosterVersion;
+        closeGradeHistory();
+        roster = [];
+        getEl('classAuditLogBtn').style.display = 'none';
         gradingWorkspace.startClass(offeringId);
-        document.querySelectorAll('#courseList .nav-item').forEach(b => b.classList.remove('active'));
-        if (btnEl) btnEl.classList.add('active');
+        getEl('courseList').querySelectorAll('[data-id]').forEach(button => {
+            const selected = button.dataset.id === String(offeringId);
+            button.classList.toggle('active', selected);
+            button.setAttribute('aria-pressed', String(selected));
+        });
 
         selectedOffering = offerings.find(o => String(o.id) === String(offeringId));
         if (!selectedOffering) return;
@@ -157,7 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             supabaseClient.from('course_offerings').select('grades_locked').eq('id', offeringId).single(),
         ]);
 
-        if (String(selectedOffering?.id) !== String(offeringId)) return;
+        if (version !== rosterVersion) return;
         if (gradesError || offeringError) { roster = []; renderRoster(); showToast('Could not load grades or finalization status. Please retry.', true); return; }
         selectedOffering.grades_locked = offeringState?.grades_locked === true;
         gradingWorkspace.setLocked(selectedOffering.grades_locked);
@@ -170,7 +181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .map(e => {
                 const g = gradeByStudent[e.student_id];
                 return {
-                    student: e.profiles, gradeId: g?.id || null, grade_scale: g ? (g.grade_scale || 'percentage') : 'school', equivalent: g?.equivalent == null ? null : Number(g.equivalent), remark: g?.remark,
+                    student: e.profiles, gradeId: g?.id || null, savedGrade: g || null, grade_scale: g ? (g.grade_scale || 'percentage') : 'school', equivalent: g?.equivalent == null ? null : Number(g.equivalent), remark: g?.remark,
                     prelim: g?.prelim ?? null, midterm: g?.midterm ?? null,
                     semifinal: g?.semifinal ?? null, final: g?.final ?? null,
                 };
@@ -181,7 +192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderRoster();
         gradingWorkspace.markClean();
         gradingWorkspace.refresh();
-        if (getEl('classAuditLogBtn')) getEl('classAuditLogBtn').style.display = roster.length > 0 ? 'inline-flex' : 'none';
+        getEl('classAuditLogBtn').style.display = roster.length ? 'inline-flex' : 'none';
     }
 
     function renderRoster() {
@@ -199,33 +210,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         msg.style.display = 'none';
         table.style.display = 'table';
 
-        const periodInput = (r, idx, field, cls) =>
-            `<input type="number" min="1" max="${r.grade_scale === 'percentage' ? 100 : 5}" step="0.01" class="field-input ${cls}" style="width:72px;" data-idx="${idx}" ${window.IMCC_DEVELOPER_VIEW || selectedOffering?.grades_locked || r.grade_scale === 'percentage' ? 'readonly' : ''} aria-label="${escapeHtml(r.student.full_name || 'Student')} ${field} school grade" value="${r[field] ?? ''}">`;
+        body.innerHTML = window.renderTeacherGradeRows({
+            rows: roster.map(row => ({ ...row, draftRemark: row.final == null || row.equivalent == null ? 'Pending' : Grading.computeRemark(row) })),
+            readOnly: !!(window.IMCC_DEVELOPER_VIEW || selectedOffering?.grades_locked),
+        });
 
-        body.innerHTML = roster.map((r, idx) => `
-      <tr data-idx="${idx}">
-        <td><b>${escapeHtml(r.student.full_name || 'N/A')}</b><small class="student-number">${escapeHtml(r.student.student_no || r.student.id_number || '—')}</small></td>
-        <td>${periodInput(r, idx, 'prelim', 'prelim-input')}</td>
-        <td>${periodInput(r, idx, 'midterm', 'mid-input')}</td>
-        <td>${periodInput(r, idx, 'semifinal', 'semifinal-input')}</td>
-        <td>${periodInput(r, idx, 'final', 'final-input')}</td>
-        <td>${periodInput(r, idx, 'equivalent', 'equivalent-input')}</td>
-        <td class="remark-cell" data-idx="${idx}">${previewRemarkBadge(r)}</td>
-        <td style="text-align:center;white-space:nowrap;">
-          <button type="button" class="btn btn-ghost grade-hist-btn" data-idx="${idx}" style="padding:4px 9px;font-size:12px;display:inline-flex;align-items:center;gap:4px;" title="View history & revert">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
-            History
-          </button>
-        </td>
-      </tr>
-    `).join('');
-
-        const fieldByClass = { 'prelim-input': 'prelim', 'mid-input': 'midterm', 'semifinal-input': 'semifinal', 'final-input': 'final', 'equivalent-input': 'equivalent' };
         document.querySelectorAll('.prelim-input, .mid-input, .semifinal-input, .final-input, .equivalent-input').forEach(input => {
             input.addEventListener('input', (e) => {
                 const idx = Number(e.target.dataset.idx);
                 const val = e.target.value === '' ? null : Number(e.target.value);
-                const field = fieldByClass[[...e.target.classList].find(c => fieldByClass[c])];
+                const field = e.target.dataset.gradeField;
                 roster[idx][field] = val;
                 document.querySelector(`.remark-cell[data-idx="${idx}"]`).innerHTML = previewRemarkBadge(roster[idx]);
             });
@@ -235,7 +229,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const idx = Number(btn.dataset.idx);
-                if (roster[idx]) openStudentGradeHistory(roster[idx]);
+                if (roster[idx]) openGradeHistory(roster[idx]);
             });
         });
     }
@@ -258,7 +252,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Grading helpers — delegated to shared/grading.js
-    const previewEquivalent = Grading.previewEquivalent;
     const previewRemarkBadge = Grading.previewRemarkBadge;
 
     getEl('saveGradesBtn').addEventListener('click', async () => {
@@ -274,23 +267,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             for (const r of roster) {
                 if (r.grade_scale === 'percentage' || selectedOffering?.grades_locked) continue;
-                const equivalent = r.equivalent;
-                const remark = Grading.computeRemark(r);
-
-                const payload = {
-                    student_id: r.student.id, offering_id: selectedOffering.id,
-                    prelim: r.prelim, midterm: r.midterm, semifinal: r.semifinal, final: r.final,
-                    equivalent, remark, grade_scale: 'school',
-                    graded_by: currentUser.id, graded_at: new Date().toISOString(),
-                };
-
-                const { data, error } = await supabaseClient
-                    .from('grades')
-                    .upsert(payload, { onConflict: 'student_id,offering_id' })
-                    .select()
-                    .single();
-                if (!error && data) r.gradeId = data.id;
-                if (error) failCount++; else successCount++;
+                const { data, error, skipped } = await Grading.saveGrade(supabaseClient, r, selectedOffering.id);
+                if (skipped) continue;
+                if (error || !data) { failCount++; showToast(`${r.student.full_name || 'Student'}: ${error?.message || 'Save failed'}`, true); }
+                else { Object.assign(r, data, { gradeId: data.id, savedGrade: data }); successCount++; }
             }
 
         } catch (error) {
@@ -299,113 +279,71 @@ document.addEventListener('DOMContentLoaded', async () => {
         } finally {
             gradingWorkspace.setSaving(false);
         }
+        if (successCount) renderRoster();
         if (failCount === 0) gradingWorkspace.markClean();
         else gradingWorkspace.saveFailed();
         btn.textContent = 'Save Grades';
 
         if (failCount === 0) showToast(`Saved grades for ${successCount} student${successCount === 1 ? '' : 's'}.`);
-        else showToast(`Saved ${successCount}, failed ${failCount}. Check console for details.`, true);
+        else showToast(`Saved ${successCount}, failed ${failCount}. Changes kept; reload the class to resolve conflicts.`, true);
 
         await loadDashboardStats();
     });
 
     // ── Grade History & Reversion System ──────────────────────────────────
-    async function openStudentGradeHistory(r) {
-        if (!selectedOffering || !r || !r.student) return;
-        const modal = getEl('gradeHistoryModal');
-        const title = getEl('gradeHistoryModalTitle');
-        const sub = getEl('gradeHistoryModalSub');
-        const currentBox = getEl('gradeHistoryCurrentBox');
-        const body = getEl('gradeHistoryBody');
-        const noMsg = getEl('noGradeHistoryMsg');
-
-        title.textContent = `Grade History — ${r.student.full_name || 'Student'}`;
-        sub.textContent = `${selectedOffering.code}: ${selectedOffering.title} · Student No: ${r.student.student_no || r.student.id_number || 'N/A'}`;
-
-        const eq = previewEquivalent(r);
-        const rem = previewRemarkBadge(r);
-
-        currentBox.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-weight:700;font-size:13px;color:var(--ink-700);">Current Active Grade</span>
-                <span style="font-size:11.5px;color:var(--ink-500);font-weight:500;">Saved in Portal</span>
-            </div>
-            <div class="current-grade-grid">
-                <div class="current-grade-item"><div class="current-grade-label">Prelim</div><div class="current-grade-val">${r.prelim != null ? r.prelim : '—'}</div></div>
-                <div class="current-grade-item"><div class="current-grade-label">Midterm</div><div class="current-grade-val">${r.midterm != null ? r.midterm : '—'}</div></div>
-                <div class="current-grade-item"><div class="current-grade-label">Semi-Final</div><div class="current-grade-val">${r.semifinal != null ? r.semifinal : '—'}</div></div>
-                <div class="current-grade-item"><div class="current-grade-label">Final</div><div class="current-grade-val">${r.final != null ? r.final : '—'}</div></div>
-                <div class="current-grade-item"><div class="current-grade-label">Equivalent</div><div class="current-grade-val">${eq}</div></div>
-                <div class="current-grade-item"><div class="current-grade-label">Remark</div><div class="current-grade-val" style="font-size:12px;">${rem}</div></div>
-            </div>
-        `;
-
-        body.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--ink-500);">Loading revision history…</td></tr>';
-        noMsg.style.display = 'none';
-        modal.classList.add('open');
-
-        const { data: historyRows, error } = await supabaseClient
-            .from('v_grade_history')
-            .select('*')
-            .eq('offering_id', selectedOffering.id)
-            .eq('student_id', r.student.id)
-            .order('created_at', { ascending: false });
-
-        if (error) {
-            body.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--red);">Failed to load history: ${escapeHtml(error.message)}</td></tr>`;
-            return;
-        }
-
-        renderHistoryRows(historyRows || [], r);
+    function closeGradeHistory() {
+        ++historyVersion;
+        getEl('gradeHistoryModal').close();
     }
 
-    async function openClassGradeHistory() {
-        if (!selectedOffering) return;
+    async function openGradeHistory(studentRow = null) {
+        const offering = selectedOffering;
+        if (!offering) return;
+        const version = ++historyVersion;
         const modal = getEl('gradeHistoryModal');
-        const title = getEl('gradeHistoryModalTitle');
-        const sub = getEl('gradeHistoryModalSub');
-        const currentBox = getEl('gradeHistoryCurrentBox');
         const body = getEl('gradeHistoryBody');
         const noMsg = getEl('noGradeHistoryMsg');
+        const student = studentRow?.student;
+        getEl('gradeHistoryModalTitle').textContent = student
+            ? 'Grade History — ' + (student.full_name || 'Student')
+            : 'Class Grade Audit Log — ' + offering.code;
+        getEl('gradeHistoryModalSub').textContent = student
+            ? offering.code + ': ' + offering.title + ' · Student No: ' + (student.student_no || student.id_number || 'N/A')
+            : offering.title + ' · ' + (offering.semester || '') + ' ' + (offering.school_year || '');
+        getEl('gradeHistoryCurrentBox').innerHTML = window.renderTeacherHistorySummary({
+            student: !!student, saved: studentRow?.savedGrade, count: roster.length,
+        });
+        getEl('gradeHistoryStudentHeader').hidden = !!student;
+        body.innerHTML = window.renderTeacherHistoryMessage({ message: 'Loading revision history…', student: !!student });
+        noMsg.hidden = true;
+        if (!modal.open) modal.showModal();
 
-        title.textContent = `Class Grade Audit Log — ${selectedOffering.code}`;
-        sub.textContent = `${selectedOffering.title} · ${selectedOffering.semester || ''} ${selectedOffering.school_year || ''}`;
-
-        currentBox.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-weight:700;font-size:13px;color:var(--ink-700);">Class Audit Trail & Revision History</span>
-                <span style="font-size:12px;color:var(--ink-500);">${roster.length} students enrolled</span>
-            </div>
-            <div style="font-size:12px;color:var(--ink-500);margin-top:6px;">
-                Shows every grade entry, update, and revert operation for this subject. Click "Revert" on any historical record to restore that student's prior grade.
-            </div>
-        `;
-
-        body.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--ink-500);">Loading class grade history…</td></tr>';
-        noMsg.style.display = 'none';
-        modal.classList.add('open');
-
-        const { data: historyRows, error } = await supabaseClient
-            .from('v_grade_history')
-            .select('*')
-            .eq('offering_id', selectedOffering.id)
-            .order('created_at', { ascending: false });
+        let query = supabaseClient.from('v_grade_history').select('*').eq('offering_id', offering.id);
+        if (student) query = query.eq('student_id', student.id);
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (version !== historyVersion || !modal.open || selectedOffering !== offering) return;
 
         if (error) {
-            body.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--red);">Failed to load history: ${escapeHtml(error.message)}</td></tr>`;
+            body.innerHTML = window.renderTeacherHistoryMessage({ message: 'Failed to load history: ' + error.message, student: !!student });
             return;
         }
-
-        renderHistoryRows(historyRows || [], null);
-    }
-
-    function renderHistoryRows(rows, targetStudent) {
-        Grading.renderHistoryRows(rows, targetStudent, (histEntry, studentId) => {
-            executeRevert(histEntry, targetStudent || roster.find(x => x.student.id === studentId));
-        }, selectedOffering?.grades_locked);
+        const rows = data || [];
+        noMsg.hidden = rows.length !== 0;
+        body.innerHTML = window.renderTeacherHistoryRows({
+            rows, student: !!student, readOnly: !!(offering.grades_locked || window.IMCC_DEVELOPER_VIEW),
+        });
+        body.querySelectorAll('.revert-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const revision = rows.find(row => String(row.id) === button.dataset.histId);
+                if (!revision || version !== historyVersion || !modal.open || button.disabled) return;
+                executeRevert(revision, roster.find(row => row.student.id === revision.student_id));
+            });
+        });
     }
 
     async function executeRevert(histEntry, studentRosterItem) {
+        const version = historyVersion;
+        const offering = selectedOffering;
         await Grading.executeRevert({
             supabaseClient,
             histEntry,
@@ -413,10 +351,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             locked: selectedOffering?.grades_locked,
             showToast,
             async onDone(data, item) {
+                if (selectedOffering !== offering || (item && !roster.includes(item))) return;
                 if (item) {
                     renderRoster();
-                    if (getEl('gradeHistoryModal').classList.contains('open')) {
-                        openStudentGradeHistory(item);
+                    if (version === historyVersion && getEl('gradeHistoryModal').open) {
+                        openGradeHistory(item);
                     }
                 } else if (selectedOffering) {
                     selectCourse(selectedOffering.id);
@@ -427,21 +366,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    getEl('gradeHistoryCloseBtn')?.addEventListener('click', () => getEl('gradeHistoryModal').classList.remove('open'));
-    getEl('gradeHistoryDoneBtn')?.addEventListener('click', () => getEl('gradeHistoryModal').classList.remove('open'));
-    getEl('classAuditLogBtn')?.addEventListener('click', openClassGradeHistory);
+    getEl('gradeHistoryModal').addEventListener('cancel', event => {
+        event.preventDefault();
+        closeGradeHistory();
+    });
+    getEl('gradeHistoryCloseBtn')?.addEventListener('click', closeGradeHistory);
+    getEl('gradeHistoryDoneBtn')?.addEventListener('click', closeGradeHistory);
+    getEl('classAuditLogBtn')?.addEventListener('click', () => openGradeHistory());
 
 
     // ══════════════════════════════════════════════════════════════════
     // ATTENDANCE
     // ══════════════════════════════════════════════════════════════════
     let attRoster = [];
+    let attLoadedKey = null, attLoadVersion = 0, attSaving = false;
 
     function initAttendancePage() {
         const select = getEl('attClassSelect');
         select.innerHTML = offerings.map(o => `<option value="${o.id}">${escapeHtml(o.code)} — ${escapeHtml(o.title)}</option>`).join('') || '<option>No classes assigned</option>';
         const dateInput = getEl('attDateInput');
-        if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+        if (!dateInput.value) dateInput.value = SCHOOLTIME.schoolToday();
 
         select.onchange = loadAttendanceRoster;
         dateInput.onchange = loadAttendanceRoster;
@@ -450,43 +394,52 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function loadAttendanceRoster() {
+        if (attSaving) return;
+        const version = ++attLoadVersion;
         const offeringId = getEl('attClassSelect').value;
         const date = getEl('attDateInput').value;
-        if (!offeringId || !date) return;
-
+        attLoadedKey = null;
         getEl('saveAttendanceBtn').disabled = true;
-        const [{ data: enrollments, error: rosterError }, existingRes] = await Promise.all([
-            supabaseClient.rpc('get_class_roster', { p_offering_id: Number(offeringId) }),
-            supabaseClient.from('attendance').select('*').eq('offering_id', offeringId).eq('date', date),
-        ]);
+        if (!offeringId || !date) return;
+        try {
+            const [{ data: enrollments, error: rosterError }, existingRes] = await Promise.all([
+                supabaseClient.rpc('get_class_roster', { p_offering_id: Number(offeringId) }),
+                supabaseClient.from('attendance').select('*').eq('offering_id', offeringId).eq('date', date),
+            ]);
 
-        if (rosterError) { attRoster = []; renderAttendanceRoster(); showToast('Could not load attendance roster: ' + rosterError.message, true); return; }
+            if (version !== attLoadVersion || offeringId !== getEl('attClassSelect').value || date !== getEl('attDateInput').value) return;
+            if (rosterError || existingRes.error) throw rosterError || existingRes.error;
 
-        if (isMissingTableError(existingRes.error)) {
-            getEl('attTable').style.display = 'none';
+            const existingByStudent = {};
+            (existingRes.data || []).forEach(r => { existingByStudent[r.student_id] = r.status; });
+
+            attRoster = (enrollments || [])
+                .filter(e => e.profiles)
+                .map(e => ({ student: e.profiles, status: existingByStudent[e.student_id] || 'present' }))
+                .sort((a, b) => (a.student.full_name || '').localeCompare(b.student.full_name || ''));
+
+            attLoadedKey = `${offeringId}|${date}`;
+            renderAttendanceRoster();
+        } catch (error) {
+            if (version !== attLoadVersion || offeringId !== getEl('attClassSelect').value || date !== getEl('attDateInput').value) return;
             const msg = getEl('noAttMsg');
             msg.style.display = 'block';
-            msg.textContent = 'Attendance table could not be loaded.';
-            getEl('saveAttendanceBtn').disabled = true;
-            return;
+            msg.textContent = 'Attendance is unavailable. Previous entries have not been changed. ';
+            const retry = document.createElement('button');
+            retry.type = 'button';
+            retry.className = 'btn btn-ghost';
+            retry.textContent = 'Retry';
+            retry.addEventListener('click', loadAttendanceRoster);
+            msg.appendChild(retry);
+            showToast('Could not load attendance: ' + error.message, true);
         }
-
-        const existingByStudent = {};
-        (existingRes.data || []).forEach(r => { existingByStudent[r.student_id] = r.status; });
-
-        attRoster = (enrollments || [])
-            .filter(e => e.profiles)
-            .map(e => ({ student: e.profiles, status: existingByStudent[e.student_id] || 'present' }))
-            .sort((a, b) => (a.student.full_name || '').localeCompare(b.student.full_name || ''));
-
-        renderAttendanceRoster();
     }
 
     function renderAttendanceRoster() {
         const table = getEl('attTable');
         const body = getEl('attBody');
         const msg = getEl('noAttMsg');
-        getEl('saveAttendanceBtn').disabled = attRoster.length === 0;
+        getEl('saveAttendanceBtn').disabled = !attLoadedKey || attRoster.length === 0;
 
         if (!attRoster.length) { table.style.display = 'none'; msg.style.display = 'block'; msg.textContent = 'No students enrolled in this class.'; return; }
         msg.style.display = 'none';
@@ -518,9 +471,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     getEl('saveAttendanceBtn').addEventListener('click', async () => {
         const offeringId = getEl('attClassSelect').value;
         const date = getEl('attDateInput').value;
-        if (!offeringId || !date || !attRoster.length) return;
+        if (!offeringId || !date || !attRoster.length || attSaving || attLoadedKey !== `${offeringId}|${date}`) return;
 
         const btn = getEl('saveAttendanceBtn');
+        attSaving = true;
+        getEl('attClassSelect').disabled = getEl('attDateInput').disabled = true;
         btn.disabled = true;
         btn.textContent = 'Saving…';
 
@@ -532,51 +487,39 @@ document.addEventListener('DOMContentLoaded', async () => {
             marked_by: currentUser.id,
         }));
 
-        const { error } = await supabaseClient.from('attendance').upsert(rows, { onConflict: 'student_id,offering_id,date' });
-
-        btn.disabled = false;
-        btn.textContent = 'Save Attendance';
-
-        if (error) {
+        try {
+            const { error } = await supabaseClient.from('attendance').upsert(rows, { onConflict: 'student_id,offering_id,date' });
+            if (error) throw error;
+            showToast('Attendance saved.');
+            loadAttendanceHistory();
+        } catch (error) {
             showToast('Failed to save attendance: ' + error.message, true);
-            return;
+        } finally {
+            attSaving = false;
+            getEl('attClassSelect').disabled = getEl('attDateInput').disabled = false;
+            btn.disabled = attLoadedKey !== `${getEl('attClassSelect').value}|${getEl('attDateInput').value}` || !attRoster.length;
+            btn.textContent = 'Save Attendance';
         }
-        showToast('Attendance saved.');
-        loadAttendanceHistory();
     });
 
     async function loadAttendanceHistory() {
         if (!offerings.length) return;
         const offeringIds = offerings.map(o => o.id);
-        const { data, error } = await supabaseClient
-            .from('attendance')
-            .select('date, status, offering_id')
-            .in('offering_id', offeringIds)
-            .order('date', { ascending: false })
-            .limit(300);
+        const { data, error } = await supabaseClient.rpc('get_attendance_history', { p_offering_ids: offeringIds });
 
         const body = getEl('attHistoryBody');
         const msg = getEl('noAttHistoryMsg');
 
-        if (isMissingTableError(error) || !data || !data.length) {
+        if (error) { showToast('Could not load attendance history: ' + error.message, true); return; }
+        if (!data || !data.length) {
             body.innerHTML = '';
             msg.style.display = 'block';
             return;
         }
         msg.style.display = 'none';
 
-        const grouped = {};
-        data.forEach(r => {
-            const key = `${r.date}|${r.offering_id}`;
-            if (!grouped[key]) grouped[key] = { date: r.date, offeringId: r.offering_id, present: 0, absent: 0, late: 0 };
-            if (r.status === 'present') grouped[key].present++;
-            else if (r.status === 'absent') grouped[key].absent++;
-            else if (r.status === 'late') grouped[key].late++;
-        });
-
-        const rows = Object.values(grouped).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20);
-        body.innerHTML = rows.map(g => {
-            const offering = offerings.find(o => String(o.id) === String(g.offeringId));
+        body.innerHTML = data.map(g => {
+            const offering = offerings.find(o => String(o.id) === String(g.offering_id));
             return `
         <tr>
           <td>${fmtDate(g.date)}</td>
@@ -770,4 +713,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     await FC.loadEnrollmentNotifications(supabaseClient);
 
     if (window.imccHidePreloader) window.imccHidePreloader();
-});
+})();

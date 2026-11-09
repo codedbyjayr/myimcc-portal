@@ -15,7 +15,7 @@
 (function () {
   'use strict';
 
-  const { html, raw, escapeHtml, toast, getEl, qsa, on, setText, withBusy, openDialog, pluralize } = window.UIM;
+  const { html, raw, escapeHtml, toast, getEl, qsa, on, setText, withBusy, pluralize } = window.UIM;
 
   // ── Configuration ───────────────────────────────────────────────────
   // Table names verified against database/supabase-schema.sql.
@@ -37,11 +37,13 @@
   let allOffers = [];
   let category = 'ALL';
   let selectedStudent = null;
-  let closeOfferDialog = null;
+  let offerLoadVersion = 0;
   let selectedTerm = null;
   let currentRole = null;
   let registrarClearances = [];
   let registrarClearancesLoaded = false;
+  let clearanceLoadVersion = 0;
+  const savingClearances = new Set();
   let selectedRegistrarStudentId = null;
 
   // ── Messaging state ────────────────────────────────────────────────
@@ -185,7 +187,7 @@
     const { data, error } = await IMCC.fetchAll(() => supabaseClient
       .from(TABLES.students)
       .select('id, full_name, student_no, program, year_level, section, status, is_active')
-      // Only approved, active students can be given subjects.
+      // Keep inactive students in the roster so existing offers can be reviewed.
       .eq('role', 'student')
       .eq('status', 'approved')
       .order('full_name'));
@@ -202,16 +204,30 @@
 
     if (error) throw new Error('Could not load the prospectus: ' + error.message);
     allSubjects = data || [];
-    getEl('summerSubject').innerHTML = '<option value="">Select a subject</option>' + allSubjects.map(s => html`<option value="${s.id}">${s.code} — ${s.title} · Year ${s.year || 'not set'} · ${categoryOf(s)} · ${s.semester} ${s.school_year}</option>`).join('');
   }
 
   async function loadOffers() {
+    const version = ++offerLoadVersion;
     const { data, error } = await IMCC.fetchAll(() => supabaseClient
       .from(TABLES.offers)
       .select('id, student_id, offering_id, status, course_offerings(id, code, title, units, is_major, year, semester, school_year)'));
 
+    if (version !== offerLoadVersion) return;
     if (error) throw new Error('Could not load subject offers: ' + error.message);
     allOffers = data || [];
+    setText(getEl('offerRefreshError'), '');
+  }
+
+  async function refreshStudentOffers(saved = false) {
+    try {
+      await loadOffers();
+    } catch (error) {
+      console.warn('[registrar] offer refresh failed:', error);
+      setText(getEl('offerRefreshError'), (saved ? 'Change saved. ' : '') + 'Could not refresh the list. Use Refresh offers to retry.');
+      return;
+    }
+    renderStudentOffers();
+    renderDashboardStats();
   }
 
   async function loadAll() {
@@ -226,6 +242,17 @@
       announce('Some data could not be loaded: ' + message);
     }
 
+    if (results[1].status === 'rejected') setText(getEl('prospectusRefreshError'), 'Could not load the prospectus. Use Refresh prospectus to retry.');
+    renderStudents();
+    renderCatalog();
+  }
+
+  function renderCatalog() {
+    const sourceSelect = getEl('summerSubject');
+    const sourceId = sourceSelect.value;
+    sourceSelect.innerHTML = window.renderRegistrarSummerOptions({ subjects: allSubjects });
+    if (allSubjects.some(subject => String(subject.id) === sourceId)) sourceSelect.value = sourceId;
+
     const termSelect = getEl('registrarTerm');
     const terms = IMCC.termKeys(allSubjects);
     if (selectedTerm === null || (selectedTerm && !terms.includes(selectedTerm))) selectedTerm = terms[0] || '';
@@ -236,21 +263,31 @@
       closeOfferModal();
       renderProspectus(); renderStudentOffers(); renderDashboardStats();
     };
-    renderStudents();
     renderProspectus();
     renderStudentOffers();
     renderDashboardStats();
   }
 
+  async function refreshProspectus() {
+    const button = getEl('refreshProspectus');
+    if (button.disabled) return;
+    await withBusy(button, 'Refreshing…', async () => {
+      const status = getEl('prospectusRefreshError');
+      try {
+        await loadSubjects();
+      } catch (error) {
+        console.warn('[registrar] prospectus refresh failed:', error);
+        setText(status, 'Could not refresh the prospectus. Use Refresh prospectus to retry.');
+        return;
+      }
+      setText(status, '');
+      renderCatalog();
+    });
+  }
+
   // ── Rendering ───────────────────────────────────────────────────────
   function categoryOf(subject) {
     return subject && subject.is_major ? 'MAJOR' : 'GE';
-  }
-
-  function categoryBadge(subject) {
-    const label = categoryOf(subject) === 'MAJOR' ? 'Major' : 'GE';
-    const cls = categoryOf(subject) === 'MAJOR' ? 'major' : 'ge';
-    return html`<span class="badge ${raw(cls)}">${label}</span>`;
   }
 
   function renderDashboardStats() {
@@ -277,18 +314,7 @@
     });
 
     const body = getEl('prospectusBody');
-    if (body) {
-      body.innerHTML = rows.length
-        ? rows.map(subject => html`
-            <tr>
-              <th scope="row">${subject.code}</th>
-              <td>${subject.title}</td>
-              <td>${subject.units}</td>
-              <td>${categoryBadge(subject)}</td>
-              <td>${subject.year ? 'Yr ' + subject.year : ''}${subject.semester ? ' · Sem ' + subject.semester : ''}</td>
-            </tr>`)
-        : '';
-    }
+    if (body) body.innerHTML = window.renderRegistrarProspectusRows({ rows });
 
     const empty = getEl('prospectusEmpty');
     if (empty) {
@@ -296,7 +322,9 @@
       empty.hidden = rows.length > 0;
       setText(empty, allSubjects.length
         ? 'No subjects match this filter.'
-        : 'The prospectus is empty. No course offerings have been published yet.');
+        : getEl('prospectusRefreshError').textContent
+          ? 'Course offerings are currently unavailable.'
+          : 'The prospectus is empty. No course offerings have been published yet.');
     }
 
     announce(pluralize(rows.length, 'subject') + ' shown.');
@@ -307,8 +335,9 @@
     const q = (input && input.value ? input.value : '').trim().toLowerCase();
     const searchField = getEl('studentSearchField')?.value || 'name';
 
-    const rows = allStudents.filter(student => {
-      const year = getEl('registrarYear').value;
+    const year = getEl('registrarYear').value;
+    const students = allStudents.filter(student => student.status === 'approved');
+    const rows = students.filter(student => {
       if (year && String(parseInt(student.year_level, 10)) !== year) return false;
       if (!q) return true;
       const value = searchField === 'studentNo' ? student.student_no : student.full_name;
@@ -316,29 +345,20 @@
     });
 
     const body = getEl('studentBody');
-    if (body) {
-      body.innerHTML = rows.map(student => html`
-        <tr class="student-row" tabindex="0" role="button"
-            data-student-id="${student.id}"
-            aria-label="Manage subjects for ${student.full_name}">
-          <td>${student.student_no || '—'}</td>
-          <th scope="row"><b>${student.full_name}</b></th>
-          <td>${student.program || '—'}</td>
-          <td>${student.year_level || '—'}</td>
-        </tr>`);
-    }
+    if (body) body.innerHTML = window.renderRegistrarStudentRows({ rows });
 
     const empty = getEl('studentEmpty');
     if (empty) {
       empty.classList.toggle('hidden', rows.length > 0);
       empty.hidden = rows.length > 0;
-      setText(empty, allStudents.length
+      setText(empty, students.length
         ? 'No students match this search.'
         : 'No approved students yet.');
     }
   }
 
   function renderRegistrarClearanceStudents() {
+    if (!registrarClearancesLoaded) return;
     const query = (getEl('registrarClearanceSearch')?.value || '').trim().toLowerCase();
     const year = getEl('registrarClearanceYear')?.value || '';
     const rows = registrarClearances.filter(row => {
@@ -347,92 +367,106 @@
       return (!query || haystack.includes(query))
         && (!year || String(parseInt(student.year_level, 10)) === year);
     });
-    const target = getEl('registrarClearanceStudents');
-    if (target) target.innerHTML = rows.length ? rows.map(row => {
-      const student = row.profiles || {};
-      const status = row.status || 'pending';
-      return html`<button type="button" data-registrar-student="${row.student_id}"
-        aria-pressed="${String(row.student_id) === String(selectedRegistrarStudentId)}">
-        <b>${student.full_name || 'Unnamed student'}</b>
-        <small>${student.student_no || 'No student number'} · ${student.program || 'No program'} · ${status.replace('_', ' ')}</small>
-      </button>`;
-    }) : '<p>No students match this filter.</p>';
+    getEl('registrarClearanceStudents').innerHTML = window.renderRegistrarClearanceQueue({
+      rows, selectedId: selectedRegistrarStudentId, hasStudents: registrarClearances.length > 0,
+    });
   }
 
   function renderRegistrarClearanceDetails() {
-    const target = getEl('registrarClearanceDetails');
-    if (!target) return;
     const row = registrarClearances.find(item => String(item.student_id) === String(selectedRegistrarStudentId));
-    if (!row) {
-      target.innerHTML = '<div class="panel-head"><h3>Select a student</h3></div><p>Choose a student to review their Registrar clearance.</p>';
-      return;
-    }
-    const student = row.profiles || {};
-    const clearances = row.clearances || [];
-    const clearanceRows = clearances.map(item => {
-      const status = item.status || 'pending';
-      const cleared = status === 'cleared';
-      const action = item.department_code === 'registrar'
-        ? (cleared ? '✓ Registrar clearance approved' : raw('<button class="btn btn-primary" type="button" data-clearance-id="' + escapeHtml(row.id) + '">Approve Registrar clearance</button>'))
-        : (cleared ? '✓ Cleared' : 'Awaiting office approval');
-      return html`<tr><td>${item.department_name || item.department_code}</td>
-        <td><span class="badge ${cleared ? 'badge-green' : 'badge-amber'}">${status.replace('_', ' ')}</span></td>
-        <td>${action}</td><td>${item.note || '—'}</td>
-        <td>${item.cleared_at ? new Date(item.cleared_at).toLocaleDateString() : '—'}</td></tr>`;
+    getEl('registrarClearanceDetails').innerHTML = window.renderRegistrarClearanceDetails({
+      row, approvalDisabled: window.IMCC_DEVELOPER_VIEW === true || (row && savingClearances.has(row.id)),
+      readOnly: window.IMCC_DEVELOPER_VIEW === true || !['registrar', 'admin'].includes(currentRole),
     });
-    target.innerHTML = html`<div class="panel-head"><h3>${student.full_name || 'Student'} — Registrar Clearance</h3></div>
-      <p>${student.student_no || 'No student number'} · ${student.program || 'No program'} · ${student.year_level || 'Year level not set'}</p>
-      <div class="table-responsive"><table><thead><tr><th>Office / Department</th><th>Status</th><th>Approval / Action</th><th>Note</th><th>Cleared Date</th></tr></thead>
-      <tbody>${clearanceRows}</tbody></table></div>`;
   }
 
   async function loadRegistrarClearances() {
+    const version = ++clearanceLoadVersion;
     const target = getEl('registrarClearanceStudents');
     if (target && !registrarClearancesLoaded) target.textContent = 'Loading Registrar clearances…';
-    const { data, error } = await supabaseClient.rpc('get_registrar_clearance_workspace');
-    if (error) {
-      if (target && !registrarClearancesLoaded) target.textContent = 'Could not load Registrar clearances.';
-      throw new Error(error.message);
+    let result;
+    try {
+      result = await IMCC.fetchAll(() => supabaseClient.rpc('get_registrar_clearance_workspace', {}, { get: true }));
+    } catch (error) {
+      result = { error };
     }
-    registrarClearances = data || [];
+    if (version !== clearanceLoadVersion) return;
+    if (result.error) {
+      if (!registrarClearancesLoaded) target.textContent = 'Could not load Registrar clearances.';
+      throw new Error(result.error.message);
+    }
+    registrarClearances = result.data.sort((a, b) =>
+      (a.profiles?.full_name || '').localeCompare(b.profiles?.full_name || '')
+      || (a.profiles?.student_no || '').localeCompare(b.profiles?.student_no || ''));
     registrarClearancesLoaded = true;
+    getEl('registrarClearanceLoadError').textContent = '';
     renderRegistrarClearanceStudents();
     renderRegistrarClearanceDetails();
     announce(pluralize(registrarClearances.length, 'Registrar clearance'));
   }
 
   async function approveRegistrarClearance(button) {
+    const registrarCode = window.IMCC_DEVELOPER_VIEW === false ? 'REG' : 'registrar';
     const row = registrarClearances.find(item => String(item.id) === String(button.dataset.clearanceId)
       && String(item.student_id) === String(selectedRegistrarStudentId)
-      && item.department_code === 'registrar');
-    if (!row || (row.status || 'pending') === 'cleared' || !['registrar', 'admin'].includes(currentRole)) return;
+      && item.department_code === registrarCode);
+    if (window.IMCC_DEVELOPER_VIEW === true || !row || savingClearances.has(row.id)
+        || (row.status || 'pending') === 'cleared' || !['registrar', 'admin'].includes(currentRole)) return;
     const studentName = row.profiles?.full_name || 'this student';
-    if (!window.confirm('Do you want to clear the Registrar requirement for ' + studentName + '?')) return;
+    savingClearances.add(row.id);
     button.disabled = true;
+    let clearedAt;
     try {
+      if (!await confirmRegistrarClearance(studentName)) return;
+      clearedAt = new Date().toISOString();
       const { data, error } = await supabaseClient.from('clearances')
-        .update({ status: 'cleared', cleared_at: new Date().toISOString() })
-        .eq('id', row.id).eq('student_id', row.student_id).eq('department_code', 'registrar')
+        .update({ status: 'cleared', cleared_at: clearedAt })
+        .eq('id', row.id).eq('student_id', row.student_id).eq('department_code', registrarCode)
         .eq('status', row.status).select('id').single();
       if (error) throw error;
       if (!data?.id) throw new Error('No clearance was changed. Refresh and retry.');
-      toast('Registrar clearance approved.', { type: 'success' });
-      await loadRegistrarClearances();
     } catch (error) {
       toast('Could not approve clearance: ' + error.message, { type: 'error' });
+      return;
     } finally {
+      savingClearances.delete(row.id);
       button.disabled = false;
+      renderRegistrarClearanceDetails();
     }
+    const saved = registrarClearances.find(item => item.id === row.id);
+    if (saved) {
+      const clearance = { status: 'cleared', cleared_at: clearedAt };
+      Object.assign(saved, clearance);
+      const office = saved.clearances?.find(item => item.department_code === row.department_code);
+      if (office) Object.assign(office, clearance);
+    }
+    renderRegistrarClearanceStudents();
+    renderRegistrarClearanceDetails();
+    toast('Registrar clearance approved.', { type: 'success' });
+    await loadRegistrarClearances().catch(() => {
+      getEl('registrarClearanceLoadError').textContent = 'Clearance saved. Could not refresh the queue. Use Refresh clearances to retry.';
+    });
+  }
+
+  function confirmRegistrarClearance(studentName) {
+    const dialog = getEl('registrarClearanceConfirm');
+    if (dialog.open) return false;
+    getEl('registrarClearanceConfirmMessage').textContent = 'Do you want to clear the Registrar requirement for ' + studentName + '?';
+    dialog.returnValue = '';
+    return new Promise(resolve => {
+      dialog.addEventListener('close', () => resolve(dialog.returnValue === 'approve'), { once: true });
+      dialog.showModal();
+    });
   }
 
   function selectStudent(id) {
-    selectedStudent = allStudents.find(s => String(s.id) === String(id));
-    if (!selectedStudent) return;
+    const student = allStudents.find(s => String(s.id) === String(id) && s.status === 'approved');
+    if (!student) return;
+    selectedStudent = student;
 
     const panel = getEl('studentDetailPanel');
     if (panel) {
       panel.hidden = false;
-      panel.style.display = 'block';
     }
     setText(getEl('studentDetailName'),
       selectedStudent.full_name + ' — ' + (selectedStudent.program || 'Unassigned program'));
@@ -454,19 +488,10 @@
     if (!selectedStudent) { body.innerHTML = ''; return; }
 
     const rows = offersForStudent();
-
-    body.innerHTML = rows.map(offer => html`
-      <tr>
-        <th scope="row">${offer.subject.code}</th>
-        <td>${offer.subject.title}<small> · ${offer.subject.semester} ${offer.subject.school_year}</small></td>
-        <td>${offer.subject.units}</td>
-        <td>${categoryBadge(offer.subject)}</td>
-        <td><span class="badge ${raw(offer.status === 'enrolled' ? 'enrolled' : 'offered')}">${offer.status || 'enrolled'}</span></td>
-        <td>
-          <button class="btn btn-danger" type="button" data-remove-offer="${offer.id}"
-                  aria-label="Remove ${offer.subject.code} from ${selectedStudent.full_name}">Remove</button>
-        </td>
-      </tr>`);
+    body.innerHTML = window.renderRegistrarOfferRows({ rows, studentName: selectedStudent.full_name });
+    const eligible = selectedStudent.status === 'approved' && selectedStudent.is_active === true;
+    getEl('btnAddOffer').disabled = !eligible;
+    setText(getEl('offerEligibility'), eligible ? '' : 'New offers require an approved, active student.');
 
     const empty = getEl('offersEmpty');
     if (empty) {
@@ -479,99 +504,127 @@
 
   // ── Offer dialog ────────────────────────────────────────────────────
   function openOfferModal() {
-    if (!selectedStudent) return;
+    if (selectedStudent?.status !== 'approved' || selectedStudent.is_active !== true) return;
+    if (getEl('btnConfirmOffer').disabled) return;
     if (!selectedTerm) { toast('Choose a semester before assigning a subject.', { type: 'error' }); return; }
     setText(getEl('offerModalSub'),
       'Assign a subject to ' + selectedStudent.full_name + ' · ' + selectedTerm.split('|').reverse().join(' ') + '.');
-    setText(getEl('offerCategory'), 'ALL');
-    category = 'ALL';
+    getEl('offerCategory').value = 'ALL';
+    setText(getEl('offerSaveError'), '');
     populateOfferSubjects();
 
-    const modal = getEl('offerModal');
-    if (!modal) return;
-    closeOfferDialog = openDialog(modal, {
-      closeOnBackdrop: true,
-      onClose: () => { closeOfferDialog = null; }
-    });
+    getEl('offerModal').showModal();
   }
 
   function closeOfferModal() {
-    if (closeOfferDialog) closeOfferDialog();
-    else {
-      const modal = getEl('offerModal');
-      if (modal) { modal.hidden = true; modal.classList.add('hidden'); }
-    }
+    getEl('offerModal').close();
   }
 
-  function populateOfferSubjects() {
-    const select = getEl('offerSubject');
-    if (!select) return;
-
-    const chosen = (getEl('offerCategory') || {}).value || 'ALL';
+  function availableOfferSubjects() {
+    const chosen = getEl('offerCategory').value;
+    const year = getEl('registrarYear').value;
     const taken = new Set(
       offersForStudent().map(offer => String(offer.offering_id))
     );
 
-    const options = allSubjects.filter(subject => {
+    return allSubjects.filter(subject => {
       if (!selectedTerm || IMCC.termKey(subject) !== selectedTerm) return false;
-      if (getEl('registrarYear').value && String(subject.year) !== getEl('registrarYear').value) return false;
+      if (year && String(subject.year) !== year) return false;
       if (taken.has(String(subject.id))) return false;
       return chosen === 'ALL' || categoryOf(subject) === chosen;
     });
 
-    select.innerHTML = options.length
-      ? options.map(subject => html`<option value="${subject.id}">${subject.code} — ${subject.title}</option>`)
-      : '<option value="">No subjects available</option>';
+  }
+
+  function populateOfferSubjects() {
+    const subjects = availableOfferSubjects();
+    getEl('offerSubject').innerHTML = window.renderRegistrarOfferOptions({ subjects });
   }
 
   async function confirmOffer(button) {
-    const select = getEl('offerSubject');
-    const subjectId = select && select.value;
-    if (!subjectId || !selectedStudent) return;
-    if (!selectedTerm || !allSubjects.some(s => String(s.id) === String(subjectId) && IMCC.termKey(s) === selectedTerm && (!getEl('registrarYear').value || String(s.year) === getEl('registrarYear').value))) return;
+    const student = selectedStudent;
+    if (student?.status !== 'approved' || student.is_active !== true) return;
+    const subject = availableOfferSubjects().find(s => String(s.id) === getEl('offerSubject').value);
+    if (!subject) return;
 
+    setText(getEl('offerSaveError'), '');
     await withBusy(button, 'Saving…', async () => {
-      const { error } = await supabaseClient
+      const { data: eligible, error: eligibilityError } = await supabaseClient
+        .from(TABLES.students).select('id').eq('id', student.id)
+        .eq('role', 'student').eq('status', 'approved').eq('is_active', true).maybeSingle();
+      if (eligibilityError) {
+        setText(getEl('offerSaveError'), 'Could not verify student eligibility. Please try again.');
+        return;
+      }
+      if (!eligible) {
+        student.is_active = false;
+        renderStudents();
+        renderStudentOffers();
+        closeOfferModal();
+        toast('New offers require an approved, active student.', { type: 'error' });
+        return;
+      }
+
+      const { data, error } = await supabaseClient
         .from(TABLES.offers)
-        .insert({ student_id: selectedStudent.id, offering_id: subjectId, status: 'enrolled' });
+        .insert({ student_id: student.id, offering_id: subject.id, status: 'enrolled' })
+        .select('id, student_id, offering_id, status')
+        .single();
 
       if (error) {
         // Report the operation, not the raw driver message, which can
         // expose schema details.
-        toast('Could not offer this subject. Please try again.', { type: 'error' });
+        setText(getEl('offerSaveError'), 'Could not offer this subject. Please try again.');
         console.error('[registrar] offer insert failed:', error);
         return;
       }
 
-      toast('Subject offered to ' + selectedStudent.full_name + '.', { type: 'success' });
+      allOffers = allOffers.filter(offer => offer.id !== data.id);
+      allOffers.push({ ...data, course_offerings: subject });
+      toast('Subject offered to ' + student.full_name + '.', { type: 'success' });
       closeOfferModal();
-      await loadOffers();
       renderStudentOffers();
       renderDashboardStats();
+      await refreshStudentOffers(true);
     });
   }
 
   async function publishSummerOffering(event) {
     event.preventDefault();
     const form = getEl('summerOfferingForm');
+    const button = getEl('publishSummer');
+    const status = getEl('summerPublishStatus');
+    if (button.disabled || getEl('refreshProspectus').disabled) return;
     if (!form.reportValidity()) return;
-    await withBusy(form.querySelector('button[type="submit"]'), 'Publishing…', async () => {
+    const schoolYear = getEl('summerSchoolYear');
+    const [first, last] = schoolYear.value.split(/[-–—]/).map(Number);
+    if (last !== first + 1) {
+      setText(status, 'Enter consecutive years, such as 2026-2027.');
+      schoolYear.focus();
+      return;
+    }
+    setText(status, '');
+    await withBusy(button, 'Publishing…', async () => {
       const { data, error } = await supabaseClient.rpc('publish_summer_offering', {
         p_source_offering_id: Number(getEl('summerSubject').value),
-        p_school_year: getEl('summerSchoolYear').value.trim(),
+        p_school_year: schoolYear.value,
         p_schedule: getEl('summerSchedule').value.trim() || null,
       });
-      if (error) { getEl('summerPublishStatus').textContent = 'Could not publish: ' + error.message; return; }
+      if (error) { setText(status, 'Could not publish: ' + error.message); return; }
+      allSubjects = allSubjects.filter(subject => subject.id !== data.id).concat(data);
       selectedTerm = IMCC.termKey(data);
       getEl('registrarYear').value = '';
-      await loadAll();
-      getEl('summerPublishStatus').textContent = 'Summer offering published. The dean can assign its instructor; check the term enrollment status before accepting students.';
+      getEl('summerSubject').value = '';
+      setText(status, 'Summer offering published. The dean can assign its instructor; check the term enrollment status before accepting students.');
+      renderStudents();
+      renderCatalog();
+      await refreshProspectus();
     });
   }
 
-  async function removeOffer(offeringId, button) {
+  async function removeOffer(enrollmentId, button) {
     if (!selectedStudent) return;
-    const offer = offersForStudent().find(o => String(o.id) === String(offeringId));
+    const offer = offersForStudent().find(o => String(o.id) === String(enrollmentId));
     if (!offer) return;
     const ok = window.confirm('Remove ' + offer.subject.code + ' from ' + selectedStudent.full_name + "'s load for " + offer.subject.semester + ' ' + offer.subject.school_year + '?');
     if (!ok) return;
@@ -580,7 +633,7 @@
       const { error } = await supabaseClient
         .from(TABLES.offers)
         .update({ status: 'dropped' })
-        .eq('id', offeringId)
+        .eq('id', offer.id)
         .select('id')
         .single();
 
@@ -590,10 +643,11 @@
         return;
       }
 
+      allOffers = allOffers.filter(row => row.id !== offer.id);
       toast('Subject removed.', { type: 'success' });
-      await loadOffers();
       renderStudentOffers();
       renderDashboardStats();
+      await refreshStudentOffers(true);
     });
   }
 
@@ -1111,18 +1165,17 @@
     on(document, 'click', '#sidebarCloseBtn', closeMobileNav);
     on(document, 'click', '#sidebarOverlay', closeMobileNav);
     on(document, 'click', '#btnCancelOffer', closeOfferModal);
+    on(document, 'click', '#offerModal', (event, modal) => {
+      if (event.target !== modal) return;
+      const { left, right, top, bottom } = modal.getBoundingClientRect();
+      if (event.clientX < left || event.clientX > right || event.clientY < top || event.clientY > bottom) closeOfferModal();
+    });
     on(document, 'click', '#btnAddOffer', openOfferModal);
     on(document, 'click', '[data-remove-offer]', (event, button) => removeOffer(button.dataset.removeOffer, button));
     on(document, 'click', '#btnConfirmOffer', (event, button) => confirmOffer(button));
+    on(document, 'click', '#refreshOffers', (event, button) => withBusy(button, 'Refreshing…', () => refreshStudentOffers()));
 
-    // Student rows are buttons in behaviour, not markup.
-    on(document, 'click', '[data-student-id]', (event, row) => selectStudent(row.dataset.studentId));
-    on(document, 'keydown', '[data-student-id]', (event, row) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        selectStudent(row.dataset.studentId);
-      }
-    });
+    on(document, 'click', '#studentBody [data-student-id]', (event, button) => selectStudent(button.dataset.studentId));
 
     const search = getEl('prospectusSearch');
     if (search) search.addEventListener('input', renderProspectus);
@@ -1140,11 +1193,46 @@
       renderRegistrarClearanceDetails();
     });
     on(document, 'click', '#registrarClearanceDetails [data-clearance-id]', (event, button) => approveRegistrarClearance(button));
+    on(document, 'submit', '#registrarClearanceDetails [data-clearance-note]', async (event, form) => {
+      event.preventDefault();
+      const registrarCode = window.IMCC_DEVELOPER_VIEW === false ? 'REG' : 'registrar';
+      const row = registrarClearances.find(item => String(item.id) === form.dataset.clearanceNote
+        && String(item.student_id) === String(selectedRegistrarStudentId) && item.department_code === registrarCode);
+      if (window.IMCC_DEVELOPER_VIEW === true || !['registrar', 'admin'].includes(currentRole)
+          || !row || row.status === 'cleared' || savingClearances.has(row.id)) return;
+      const fields = form.querySelector('fieldset');
+      savingClearances.add(row.id);
+      fields.disabled = true;
+      let saved = false;
+      try {
+        const note = await window.saveClearanceNote(supabaseClient, row, form.elements.note.value);
+        const current = registrarClearances.find(item => item.id === row.id);
+        if (current) {
+          current.note = note;
+          const office = current.clearances?.find(item => item.department_code === row.department_code);
+          if (office) office.note = note;
+        }
+        saved = true;
+        toast('Clearance note saved.', { type: 'success' });
+      } catch (error) {
+        toast('Could not save clearance note: ' + error.message, { type: 'error' });
+      } finally {
+        savingClearances.delete(row.id);
+        fields.disabled = false;
+        if ((saved || !form.isConnected) && String(row.student_id) === String(selectedRegistrarStudentId)) renderRegistrarClearanceDetails();
+      }
+    });
+    getEl('registrarClearanceCancel').addEventListener('click', () => getEl('registrarClearanceConfirm').close());
+    getEl('registrarClearanceApprove').addEventListener('click', () => getEl('registrarClearanceConfirm').close('approve'));
     on(document, 'click', '#registrarClearanceRefresh', () => loadRegistrarClearances().catch(err => {
       console.warn('[clearance] refresh failed:', err);
       toast('Could not refresh Registrar clearances', { type: 'error' });
+      getEl('registrarClearanceLoadError').textContent = 'Could not refresh the queue. Use Refresh clearances to retry.';
     }));
     getEl('summerOfferingForm').addEventListener('submit', publishSummerOffering);
+    getEl('refreshProspectus').addEventListener('click', () => {
+      if (!getEl('publishSummer').disabled) refreshProspectus();
+    });
     getEl('registrarYear').addEventListener('change', () => {
       closeOfferModal();
       renderStudents(); renderProspectus(); renderStudentOffers(); renderDashboardStats();

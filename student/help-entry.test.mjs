@@ -1,9 +1,10 @@
+import { dashboardMarkup } from '../scripts/dashboard-markup.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
 const dashboard = readFileSync(new URL('./dashboard.js', import.meta.url), 'utf8');
-const html = readFileSync(new URL('./dashboard.html', import.meta.url), 'utf8');
+const html = await dashboardMarkup(new URL('./dashboard.html', import.meta.url));
 const start = dashboard.indexOf('function toggleChat(force)'), end = dashboard.indexOf('// ── MFA Configuration Module', start);
 let focused = false, open = false, expanded;
 const listeners = {};
@@ -45,7 +46,7 @@ assert(scrolled);
 assert(!dashboard.includes('getLocalFaqAnswer'));
 assert.match(html, /id="chatPanel" popover="auto" role="dialog"/);
 assert.match(html, /aria-controls="chatPanel" aria-expanded="false"/);
-assert.match(html, /<label for="enrollmentTerm">Enrollment term<\/label>/);
+assert.match(html, /<label\b[^>]*\bfor="enrollmentTerm"[^>]*>Enrollment term</);
 assert.match(html, /id="helpLog" role="log" aria-live="polite"/);
 assert.match(html, /for="helpInput"/);
 assert.match(dashboard, /response\.data\?\.resolved === true/);

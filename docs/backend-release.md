@@ -1,26 +1,5 @@
 # Backend release
 
-## Curriculum publication when enrollment opens
-
-`20261029221247_publish_curriculum_on_term_open.sql` is applied to Supabase.
-Opening an enrollment term publishes missing catalog subjects for that semester,
-using each subject's program, year, lecture plus lab units, and prerequisites.
-The supplied 51-subject curriculum is mapped to BSIT. New catalog rows must have
-`courses.program` set before automatic publication; unmapped rows are skipped.
-Summer publishes only catalog rows explicitly marked semester 3, or offerings
-staff publish separately. It does not copy regular-semester subjects automatically.
-
-Existing offerings, schedules, and instructors are preserved. New offerings have
-no assigned teacher or schedule. Students submit requests; the existing dean
-review and instructor-assignment actions complete enrollment and teaching loads.
-Opening, publication, and notices commit together; repeated opens add no duplicate
-subjects. Publication also repaired the already-open 2026–2027 first semester:
-27 BSIT subjects across four years, including four subjects / 12 units in year 4.
-
-`npm run test:db` covers publication by semester and program, requests, dean approval,
-teacher assignment, closing/reopening, existing-offering preservation, access checks,
-and rollback on notification failure. Signed-in production screens were not checked.
-
 ## Enrollment opening notifications
 
 `20261029114553_enrollment_open_notifications.sql` is applied to Supabase.
@@ -141,7 +120,7 @@ Database archives exclude hosted service settings and Storage file contents.
 1. Verify production backup restoration and preserve a pre-change data checksum.
 2. Reconcile live migration history; recovered migrations are history, not new work.
 3. From the backend release branch, run `supabase db push --linked --dry-run`.
-   This completed release should now list no pending migrations. Stop if any
+   Expect only the reviewed pending migrations for the release. Stop if any
    recorded or unrelated migration appears. Check that the
    linked project is `dusiokpfmkhutptomrqg` before proceeding. If CLI login is
    unavailable, use the connected Supabase tools instead: compare the recorded
@@ -167,7 +146,12 @@ Database archives exclude hosted service settings and Storage file contents.
    Run the service-only reindexer in batches until no articles remain unindexed;
    never put its credential in a browser. Confirm the old frontend's core reads
    still work before ending backend maintenance.
-7. Release matching frontend assets separately and verify real approved accounts through
+7. For the frontend release, reconcile the target migration history and verify
+   `20261106065351_registrar_summer_publishing.sql` and
+   `20261108140909_frontend_release_readiness.sql` are applied. Run
+   `npm run check:release` against that target and publish a fictional Summer
+   offering with an approved Registrar account in the isolated preview.
+   Release matching frontend assets separately and verify real approved accounts through
    onboarding, account approval/suspension, enrollment, grade save/lock, evaluations,
    and failed-read/retry flows. Check separate first/second/Summer terms, closed-term
    subject visibility, cancelled term switches with unsaved grades, and registrar

@@ -22,7 +22,7 @@
 
   function fmtDate(iso) {
     if (!iso) return '—';
-    return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    return (global.IMCC && global.IMCC.formatDate) ? (global.IMCC.formatDate(iso) || '—') : new Date(iso).toLocaleDateString();
   }
 
   var toastTimer;
