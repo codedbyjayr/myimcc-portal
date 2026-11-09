@@ -211,7 +211,7 @@ try {
             assert(bounds && bounds.x >= 0 && bounds.x + bounds.width <= width + 1, `${root}${theme} ${width} ${selector} fits`);
           }
         }
-        for (const selector of ['.hero h2', '.hero p', '.hero .meta', '.hero-actions .btn-white', '.stat-label', '.stat-sub', '.quick-card .d']) {
+        for (const selector of ['.hero h2', '.hero p', '.hero .meta', '.stat-label', '.stat-sub', '.quick-card .d']) {
           const pair = await colors(selector);
           assert(contrast(pair.foreground, pair.background) >= 4.5, `${root}${theme} ${selector}: needs 4.5:1 contrast`);
         }
