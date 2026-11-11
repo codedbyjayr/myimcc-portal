@@ -106,6 +106,8 @@ DO $$ DECLARE published jsonb; BEGIN
  BEGIN UPDATE public.course_offerings SET instructor_id=(SELECT id FROM adviser_ids WHERE role='teacher') WHERE id=(published->>'id')::integer; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  IF EXISTS(SELECT 1 FROM public.course_offerings WHERE id=(published->>'id')::integer AND instructor_id IS NOT NULL) THEN RAISE EXCEPTION 'Registrar assigned an instructor'; END IF;
  BEGIN PERFORM public.publish_summer_offering((published->>'id')::integer,'invalid',NULL); RAISE EXCEPTION 'Invalid school year accepted'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN PERFORM public.publish_summer_offering((published->>'id')::integer,'2100-2099',NULL); RAISE EXCEPTION 'Reversed school year accepted'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN PERFORM public.publish_summer_offering((published->>'id')::integer,'2099-2101',NULL); RAISE EXCEPTION 'Nonconsecutive school year accepted'; EXCEPTION WHEN check_violation THEN NULL; END;
  BEGIN PERFORM public.publish_summer_offering(-1,'2099-2100',NULL); RAISE EXCEPTION 'Missing source accepted'; EXCEPTION WHEN no_data_found THEN NULL; END;
  published:=public.publish_summer_offering((SELECT id FROM adviser_offerings WHERE kind='summer'),'2099-2100',NULL);
  IF published->>'is_major'<>'false' OR EXISTS(SELECT 1 FROM public.grades WHERE offering_id=(published->>'id')::integer) OR EXISTS(SELECT 1 FROM public.enrollments WHERE offering_id=(published->>'id')::integer) THEN RAISE EXCEPTION 'GE offering copied old student records or changed category'; END IF;

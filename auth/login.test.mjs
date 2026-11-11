@@ -2,9 +2,9 @@
 // Run: node auth/login.test.mjs
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert';
+import { dashboardMarkup } from '../scripts/dashboard-markup.mjs';
 
-const html = readFileSync(new URL('./login.html', import.meta.url), 'utf8');
-const css = readFileSync(new URL('./login.css', import.meta.url), 'utf8');
+const html = await dashboardMarkup(new URL('./login.html', import.meta.url));
 const js = readFileSync(new URL('./login.js', import.meta.url), 'utf8');
 
 // 1. Required DOM IDs exist in HTML
@@ -20,12 +20,9 @@ for (const id of requiredIds) {
   assert(html.includes(`id="${id}"`), `Missing ID #${id} in login.html`);
 }
 
-// 2. Dead AI-slop / zombie rules purged from CSS
-const deadSelectors = ['.password-wrap', '.eye-btn', '.remember', '.card-stack', '.mini-card', '.mc-bar', '.right-support', '.portal-info-panel'];
-for (const selector of deadSelectors) {
-  assert(!css.includes(selector), `Dead selector ${selector} should not exist in login.css`);
-}
-assert(!css.includes('.login-right { display: none; }'), 'login-right should not be hidden on mobile');
+assert.match(html, /<script src="login\.js" type="text\/imcc-controller" data-dashboard-controller>/);
+assert.match(html, /src="\.\.\/shared\/dist\/login\.js"/);
+assert.match(html, /href="\.\.\/shared\/dist\/portal\.css"/);
 
 // 3. Google OAuth hd constraint present in login.js
 assert(js.includes("hd: 'imcc.edu.ph'"), "Missing hd: 'imcc.edu.ph' constraint in login.js");

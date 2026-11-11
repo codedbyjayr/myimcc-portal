@@ -1,49 +1,72 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-const html=readFileSync(new URL('./staff-dashboard.html',import.meta.url),'utf8');
-const source=readFileSync(new URL('./staff-dashboard.js',import.meta.url),'utf8');
-assert(html.includes('registrar-dashboard.css'),'Use the same layout as Registrar');
-assert(!html.includes('enrollment-requests.html'),'Staff navigation is clearance-only');
-assert.equal((html.match(/class="nav-item/g)||[]).length,1);
-assert.equal(readFileSync(new URL('../review-assets/staff/staff-dashboard.html',import.meta.url),'utf8'),html);
-assert.equal(readFileSync(new URL('../review-assets/staff/staff-dashboard.js',import.meta.url),'utf8'),source);
-const elements=new Map();
-const get=id=>{if(!elements.has(id))elements.set(id,{value:'',set innerHTML(value){this.content=String(value);},get innerHTML(){return this.content||'';},textContent:'',style:{},handlers:{},addEventListener(name,fn){this.handlers[name]=fn;}});return elements.get(id);};
-const payload='<img src=x onerror="alert(1)">';
-let rows=[{id:'guidance-1',student_id:'student',department_code:'guidance',department_name:'Guidance',note:payload,status:'pending',profiles:{full_name:payload,student_no:'S-1',program:'BSIT',year_level:'4th Year'}},
- {id:'library-1',student_id:'student',department_code:'library',department_name:'Library',status:'pending',profiles:{full_name:payload,year_level:'4th Year'}}];
-let error=null,saveError=null,saveRow={id:'guidance-1'},reads=0,filters=[],writes=0,cap=500,failAt=null,confirm=true;
-const toasts=[];
-const context=vm.createContext({document:{currentScript:null,getElementById:get},window:{confirm:()=>confirm},console,
- client:{rpc:name=>{assert.equal(name,'get_clearance_workspace');return {order(){return this;},async range(from,to){reads++;return {data:rows.slice(from,Math.min(to+1,from+cap)),error:error||(failAt!==null&&from>=failAt?{message:'Later page denied'}:null)};}};},
-  from:name=>{assert.equal(name,'clearances');return {update(value){writes++;assert.equal(value.status,'cleared');return this;},eq(key,value){filters.push([key,value]);return this;},select(){return this;},async single(){return {data:saveRow,error:saveError};}};}}
-});
-context.window=context;
-context.confirm=()=>confirm;
-vm.runInContext(readFileSync(new URL('../shared/identity.js',import.meta.url),'utf8'),context);
-vm.runInContext(readFileSync(new URL('../shared/ui.js',import.meta.url),'utf8'),context);
-context.UIM.toast=(...args)=>toasts.push(args);
-vm.runInContext(source.replace(/init\(\);\s*$/,''),context);
-vm.runInContext("supabaseClient=client; staffProfile={role:'staff',role_department:'Guidance'}; clearanceOffice='guidance'; selectedStudentId='student';",context);
-await context.loadClearances();
-assert.equal((get('clearanceStudents').innerHTML.match(/data-student-id=/g)||[]).length,1,'One entry per student');
-assert(!get('clearanceStudents').innerHTML.includes('<img'));
-assert(!get('clearanceDetails').innerHTML.includes('<img'));
-assert.match(get('clearanceDetails').innerHTML,/Library/,'Other offices remain visible');
-assert.equal((get('clearanceDetails').innerHTML.match(/data-clearance-id=/g)||[]).length,1,'Only Guidance has an action');
-get('filterYear').value='1';context.renderStudents();assert(!get('clearanceStudents').innerHTML.includes('data-student-id='));
-get('filterYear').value='4';context.renderStudents();assert(get('clearanceStudents').innerHTML.includes('data-student-id='));
-const button={disabled:false,dataset:{clearanceId:'guidance-1'}};
-confirm=false;await context.approveClearance(button);assert.equal(writes,0);
-confirm=true;const saving=context.approveClearance(button);await context.approveClearance(button);await saving;
-assert.equal(writes,1,'Double click writes once');
-assert.deepEqual(filters,[['id','guidance-1'],['student_id','student'],['department_code','guidance'],['status','pending']]);
-await context.approveClearance({disabled:false,dataset:{clearanceId:'library-1'}});assert.equal(writes,1,'Forged Library action is blocked');
-saveError={message:'write denied'};const before=reads;await context.approveClearance(button);assert.equal(reads,before);assert.equal(button.disabled,false);
-saveError=null;saveRow=null;await context.approveClearance(button);assert.match(toasts.at(-1)[0],/No clearance was changed/);
-rows=Array.from({length:1206},(_,id)=>({...rows[0],id:String(id),student_id:String(id)}));cap=137;get('filterYear').value='';
-await context.loadClearances();assert.equal((get('clearanceStudents').innerHTML.match(/data-student-id=/g)||[]).length,1206);
-failAt=500;await assert.rejects(context.loadClearances(),/Later page denied/);
-assert.equal(vm.runInContext('allClearances.length',context),1206,'Partial reload preserves the complete list');
-console.log('Staff clearance: clearance-only layout, office actions, safe rendering, year filters, verified saves, double-click protection and pagination passed.');
+import { clearStudent, loadClearances } from './clearance-workspace.ts';
+import { loadDashboardView } from '../scripts/dashboard-markup.mjs';
+
+const { saveClearanceNote } = await loadDashboardView(new URL('../shared/clearance-note.tsx', import.meta.url));
+
+const context = vm.createContext({ document: { currentScript: null } });
+vm.runInContext(readFileSync(new URL('../shared/identity.js', import.meta.url), 'utf8'), context);
+globalThis.window = { IMCC: context.IMCC };
+
+const row = { id: 'clearance-id', student_id: 'student-id', department_code: 'LIB', status: 'pending' };
+let rows = [row], readError = null, saveError = null, saveRow = { id: row.id }, failAt = null;
+let reads = 0;
+const filters = [], updates = [];
+const client = {
+  rpc(name) {
+    assert.equal(name, 'get_clearance_workspace');
+    return {
+      order(column) { assert.equal(column, 'id'); return this; },
+      async range(from, to) {
+        reads++;
+        assert.equal(to, from + 499);
+        return { data: rows.slice(from, Math.min(to + 1, from + 137)), error: readError || (failAt !== null && from >= failAt ? { message: 'Later page denied' } : null) };
+      },
+    };
+  },
+  from(name) {
+    assert.equal(name, 'clearances');
+    return {
+      update(value) { updates.push(value); return this; },
+      eq(key, value) { filters.push([key, value]); return this; },
+      is(key, value) { filters.push([key, value]); return this; },
+      select(columns) { assert(['id', 'note'].includes(columns)); return this; },
+      async single() { return { data: saveRow, error: saveError }; },
+      async maybeSingle() { return { data: saveRow, error: saveError }; },
+    };
+  },
+};
+
+assert.deepEqual(Array.from(await loadClearances(client)), [row]);
+await clearStudent(client, row);
+assert.deepEqual(filters, [['id', row.id], ['student_id', row.student_id], ['department_code', row.department_code], ['status', row.status]]);
+assert.equal(updates[0].status, 'cleared');
+assert(Number.isFinite(Date.parse(updates[0].cleared_at)));
+saveError = { message: 'Write denied' };
+await assert.rejects(clearStudent(client, row), /Write denied/);
+saveError = null;
+saveRow = null;
+await assert.rejects(clearStudent(client, row), /No clearance was changed/);
+await assert.rejects(saveClearanceNote(client, { ...row, note: 'Old note' }, 'Changed'), /Refresh the record/);
+assert.deepEqual(filters.slice(-2), [['status', 'pending'], ['note', 'Old note']]);
+saveRow = { note: null };
+assert.equal(await saveClearanceNote(client, { ...row, note: 'Old note' }, '   '), null);
+assert.deepEqual(updates.at(-1), { note: null });
+const updateCount = updates.length;
+await assert.rejects(saveClearanceNote(client, row, 'a'.repeat(1001)), /at most 1000/);
+await assert.rejects(saveClearanceNote(client, { ...row, status: 'cleared' }, 'New note'), /already cleared/);
+assert.equal(updates.length, updateCount);
+rows = Array.from({ length: 1206 }, (_, id) => ({ ...row, id }));
+assert.equal((await loadClearances(client)).length, 1206, 'All pages load even with a lower API cap');
+assert(reads > 2);
+failAt = 500;
+await assert.rejects(loadClearances(client), /Later page denied/, 'A partial result must never replace the complete workspace');
+failAt = null;
+readError = { message: 'Read denied' };
+await assert.rejects(loadClearances(client), /Read denied/);
+readError = null;
+rows = [];
+assert.equal((await loadClearances(client)).length, 0);
+console.log('Clearance data: scoped verified saves, failed/zero-row writes, complete pagination, partial-read rejection, and empty results passed.');

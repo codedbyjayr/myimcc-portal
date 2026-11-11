@@ -1,0 +1,14 @@
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css" source(none);
+@source "../auth/**/*.tsx";
+@source "../admin/**/*.tsx";
+@source "../faculty/**/*.tsx";
+@source "../staff/**/*.tsx";
+@source "../student/**/*.tsx";
+@source "../shared/**/*.tsx";
+@source "../onboarding/**/*.tsx";
+
+@theme {
+  --font-sans: 'Inter', sans-serif;
+  --font-heading: 'Plus Jakarta Sans', sans-serif;
+}

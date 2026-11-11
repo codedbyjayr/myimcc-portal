@@ -49,6 +49,10 @@ try {
         }
         if (table === 'course_offerings') data = empty ? [] : request.headers().accept?.includes('object+json') ? { ...courses.find(c => String(c.id) === url.searchParams.get('id')?.replace('eq.', '')), grades_locked: false } : courses;
         if (table === 'get_class_roster') data = emptyRoster ? [] : students;
+        if (table === 'v_grade_history') data = [{
+          id: 'test-revision', student_id: students[0].student_id,
+          created_at: '2026-10-27T00:00:00Z', final: 2.75, equivalent: 2.5, remark: 'Passed',
+        }];
         if (Array.isArray(data) && url.searchParams.has('offset')) data = data.slice(Number(url.searchParams.get('offset')), Number(url.searchParams.get('offset')) + Number(url.searchParams.get('limit')));
         return route.fulfill({ json: data });
       }
@@ -64,7 +68,10 @@ try {
       await page.waitForFunction(() => document.querySelector('.grading-card tbody input'));
     };
     await openClasses();
-    if(role==='teacher') await page.waitForFunction(()=>document.querySelector('#stat-classes').textContent==='2');
+    if (role === 'teacher') {
+      await page.waitForFunction(() => document.querySelector('#stat-classes').textContent === '2');
+      assert.equal(await page.locator('#courseList [data-id="1"]').getAttribute('aria-pressed'), 'true');
+    }
     const card = page.locator('.grading-card'), picker = page.locator('.class-picker');
     assert((await card.boundingBox()).width > (await picker.boundingBox()).width * 2, 'Desktop prioritizes grading');
     assert.equal(await picker.evaluate(el => Math.round(el.getBoundingClientRect().width)), 280);
@@ -84,6 +91,10 @@ try {
     page.once('dialog', dialog => dialog.dismiss());
     await page.locator('.grading-course-list [data-id="2"]').click();
     assert.match(await card.locator('h3').textContent(), /TEST1/);
+    if (role === 'teacher') {
+      assert.equal(await page.locator('#courseList [data-id="1"]').getAttribute('aria-pressed'), 'true');
+      assert.equal(await page.locator('#courseList [data-id="2"]').getAttribute('aria-pressed'), 'false');
+    }
     page.once('dialog', dialog => dialog.dismiss());
     await page.locator('[data-page="dashboard"]').click();
     assert(await page.locator('#page-classes').isVisible(), 'Cancel navigation retains edits');
@@ -215,6 +226,12 @@ try {
       assert(await save.isDisabled());
       assert(await page.locator('.lock-grades-btn').isDisabled());
       assert.match(await page.locator('.grading-save-status').textContent(), /Read-only oversight/);
+      await history.click();
+      const revert = page.locator('#gradeHistoryModal .revert-btn');
+      await revert.waitFor();
+      assert(await revert.isDisabled(), 'Read-only oversight cannot revert history');
+      await page.keyboard.press('Escape');
+      assert(await page.locator('#gradeHistoryModal').isHidden());
       deanAssigned = true;
       await openClasses();
       assert(!(await score.evaluate(el => el.readOnly)), 'Verified active assignment restores editing');

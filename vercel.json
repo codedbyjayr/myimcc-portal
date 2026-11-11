@@ -1,5 +1,13 @@
 {
   "version": 2,
+  "git": {
+    "deploymentEnabled": {
+      "codex/backend-semester-release": false
+    }
+  },
+  "installCommand": "npm ci",
+  "buildCommand": "npm run check:release && npm run build",
+  "outputDirectory": ".",
   "rewrites": [
     {
       "source": "/env-config.js",
@@ -7,6 +15,14 @@
     }
   ],
   "headers": [
+    {
+      "source": "/shared/dist/(.*)",
+      "headers": [{ "key": "Access-Control-Allow-Origin", "value": "*" }]
+    },
+    {
+      "source": "/review-assets/shared/dist/(.*)",
+      "headers": [{ "key": "Access-Control-Allow-Origin", "value": "*" }]
+    },
     {
       "source": "/(.*)",
       "headers": [
@@ -50,12 +66,5 @@
         }
       ]
     }
-  ],
-  "git": {
-    "deploymentEnabled": {
-      "codex/backend-semester-release": false
-    }
-  },
-  "buildCommand": "npm run check:release",
-  "outputDirectory": "."
+  ]
 }

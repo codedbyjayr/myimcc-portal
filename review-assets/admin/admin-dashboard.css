@@ -171,39 +171,6 @@ td {
   color: var(--amber);
 }
 
-.badge-approved {
-  background: rgba(27, 156, 99, 0.18);
-  color: var(--success);
-}
-
-/* ---- Action Buttons ---- */
-.btn-action {
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: none;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: opacity 0.18s ease, transform 0.12s ease;
-}
-
-.btn-action:hover {
-  opacity: 0.88;
-  transform: translateY(-1px);
-}
-
-.btn-approve {
-  background: var(--success);
-  color: #fff;
-  margin-right: 6px;
-}
-
-.btn-reject,
-.btn-revoke {
-  background: var(--danger);
-  color: #fff;
-}
-
 /* ---- Role Select ---- */
 .role-select {
   background: var(--bg-dark);

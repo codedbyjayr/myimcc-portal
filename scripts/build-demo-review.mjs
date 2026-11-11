@@ -6,11 +6,10 @@ export async function buildDemoReview() {
     'migrations/20261015164009_production_role_workflows.sql',
     'migrations/20261021035015_production_school_grading.sql',
     'migrations/20261021040134_exact_school_grade_scale.sql',
-    'migrations/20261027120911_grade_revert_mfa_guard.sql',
     'migrations/20261027131814_backend_semester_release.sql',
+    'migrations/20261027120911_grade_revert_mfa_guard.sql',
     'migrations/20261029063928_prevent_repeat_term_enrollment.sql',
     'migrations/20261029114553_enrollment_open_notifications.sql',
-    'migrations/20261029124809_independent_enrollment_terms.sql',
     'migrations/20261030031305_staff_clearance_offices.sql',
     'migrations/20261030033520_faq_guidance_refresh.sql'];
   const sources = await Promise.all(files.map(file => readFile(new URL('../supabase/' + file, import.meta.url), 'utf8')));

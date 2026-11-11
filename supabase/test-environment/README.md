@@ -3,6 +3,9 @@
 Run from the repository root:
 
 ```powershell
+npm ci
+npm run build
+$env:TEST_PORTAL_UNTIL = [DateTime]::UtcNow.AddHours(2).ToString('o')
 npm run test:portal
 ```
 

@@ -1,9 +1,10 @@
+import { dashboardMarkup } from '../scripts/dashboard-markup.mjs';
 // Verification test for Registrar Dashboard markup and dark mode styling integrity.
 // Run: node staff/registrar-dashboard.test.mjs
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 
-const html = readFileSync(new URL('./registrar-dashboard.html', import.meta.url), 'utf8');
+const html = await dashboardMarkup(new URL('./registrar-dashboard.html', import.meta.url));
 const css = readFileSync(new URL('./registrar-dashboard.css', import.meta.url), 'utf8');
 
 // 1. Anti-FOUC and Theme toggle presence
@@ -21,7 +22,7 @@ assert(css.includes('--white: #1C1623;'), 'Dark mode must map --white to dark su
 console.log('staff/registrar-dashboard: all verification checks passed.');
 
 for (const prefix of ['', 'review-assets/']) {
- const markup=readFileSync(prefix+'staff/registrar-dashboard.html','utf8');
+ const markup=await dashboardMarkup(new URL('../'+prefix+'staff/registrar-dashboard.html',import.meta.url));
  const styles=readFileSync(prefix+'staff/registrar-dashboard.css','utf8');
  assert(styles.includes('color-scheme: only light;'));
  assert(styles.includes('--bg: #ffffff;'));

@@ -1,26 +1,18 @@
 // auth/login.js
-document.addEventListener('DOMContentLoaded', async () => {
+(async () => {
+  const ssoBtn = document.getElementById('ssoBtn');
+  const ssoBtnText = document.getElementById('ssoBtnText');
+  const ssoError = document.getElementById('ssoError');
   let supabaseClient;
   try {
     supabaseClient = await getSupabaseClientAsync();
+    if (!window.IMCC) throw new Error('Login identity rules could not load.');
   } catch (e) {
     console.error("Failed to init Supabase", e);
-    const error = document.getElementById('ssoError');
-    if (error) {
-      error.textContent = 'Sign-in is temporarily unavailable. Please reload the page or contact support.';
-      error.hidden = false;
-    }
-    const button = document.getElementById('ssoBtn');
-    if (button) button.disabled = true;
+    showError(ssoError, 'Sign-in is temporarily unavailable. Please reload the page or contact support.');
     return;
   }
-
-  // shared/identity.js owns address parsing and role routing. If it did
-  // not load, stop rather than guess at roles.
-  if (!window.IMCC) {
-    console.error("shared/identity.js failed to load; refusing to route on role.");
-    return;
-  }
+  ssoBtn.disabled = false;
 
   // Domain Helper: only institutional school emails may sign in.
   const isAllowedDomain = window.IMCC.isAllowedDomain;
@@ -32,8 +24,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const ssoForm = document.getElementById('ssoForm');
   const emailInput = document.getElementById('emailInput');
-  const ssoBtn = document.getElementById('ssoBtn');
-  const ssoError = document.getElementById('ssoError');
 
   const enrollForm = document.getElementById('enrollForm');
   const enrollQrImg = document.getElementById('enrollQrImg');
@@ -56,9 +46,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function showStep(stepEl) {
     [stepSso, stepEnroll, stepChallenge, stepUnauthorized].forEach(el => {
-      if (el) el.style.display = 'none';
+      el.hidden = el !== stepEl;
     });
-    if (stepEl) stepEl.style.display = 'block';
+    if (stepEl === stepUnauthorized) stepEl.querySelector('h1')?.focus();
   }
 
   function showError(errorEl, message) {
@@ -135,7 +125,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Check if user is already fully authenticated (AAL2)
-    const { data: aalData } = await supabaseClient.auth.mfa.getAuthenticatorAssuranceLevel();
+    const { data: aalData, error: aalError } = await supabaseClient.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalError) throw aalError;
     if (aalData?.currentLevel === 'aal2') {
       await routeUserByProfile(session.user);
       return;
@@ -143,11 +134,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Check MFA Factors
     const { data: factorData, error: fErr } = await supabaseClient.auth.mfa.listFactors();
-    if (fErr) {
-      console.error("MFA listFactors error:", fErr);
-      showStep(stepSso);
-      return;
-    }
+    if (fErr) throw fErr;
 
     const verifiedTotpFactors = (factorData?.totp || []).filter(f => f.status === 'verified');
 
@@ -204,30 +191,41 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Step 2: Clean auth listener letting Supabase manage URL code exchange
   let authFlowInProgress = false;
+  let authFlowTimer;
 
-  supabaseClient.auth.onAuthStateChange(async (event, session) => {
-    console.log("Auth event:", event, session ? "Session active" : "No session");
+  function resetSsoButton() {
+    ssoBtn.disabled = false;
+    ssoBtnText.textContent = 'Sign In with Google Account';
+  }
 
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-      if (session && !authFlowInProgress) {
-        authFlowInProgress = true;
+  function queueAuthFlow(session) {
+    if (!session || authFlowInProgress) return;
+    authFlowInProgress = true;
+    ssoBtn.disabled = true;
+    ssoBtnText.textContent = 'Verifying School Account...';
+    // Supabase may hold its auth lock until the event callback returns.
+    authFlowTimer = setTimeout(async () => {
+      try {
         window.history.replaceState({}, document.title, window.location.pathname);
         await processAuthFlow(session);
+      } catch (error) {
+        authFlowInProgress = false;
+        console.error('Could not complete sign-in:', error);
+        showError(ssoError, 'Could not verify your sign-in. Please try again.');
+        showStep(stepSso);
+      } finally {
+        resetSsoButton();
       }
-    } else if (event === 'INITIAL_SESSION') {
-      if (session && !authFlowInProgress) {
-        authFlowInProgress = true;
-        window.history.replaceState({}, document.title, window.location.pathname);
-        await processAuthFlow(session);
-      } else if (!session) {
-        const hasAuthParams = window.location.search.includes('code=') || 
-                              window.location.hash.includes('access_token=');
-        if (!hasAuthParams) {
-          showStep(stepSso);
-        }
-      }
+    }, 0);
+  }
+
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (['SIGNED_IN', 'TOKEN_REFRESHED', 'INITIAL_SESSION'].includes(event)) {
+      queueAuthFlow(session);
     } else if (event === 'SIGNED_OUT') {
+      clearTimeout(authFlowTimer);
       authFlowInProgress = false;
+      resetSsoButton();
       showStep(stepSso);
     }
   });
@@ -254,16 +252,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Safety timeout: If Supabase does not resolve session within 4 seconds (e.g. stale/expired code)
       setTimeout(async () => {
         if (!authFlowInProgress) {
-          const { data: { session } } = await supabaseClient.auth.getSession();
+          const { data } = await supabaseClient.auth.getSession();
+          if (authFlowInProgress) return;
+          const session = data?.session;
           if (session) {
-            authFlowInProgress = true;
-            window.history.replaceState({}, document.title, window.location.pathname);
-            await processAuthFlow(session);
+            queueAuthFlow(session);
           } else {
             console.warn("OAuth callback timeout - no valid session established.");
             window.history.replaceState({}, document.title, window.location.pathname);
-            if (ssoBtn) ssoBtn.disabled = false;
-            if (ssoBtnText) ssoBtnText.textContent = 'Sign In with Google Account';
+            resetSsoButton();
             showError(ssoError, 'Sign-in session expired or invalid. Please click Sign In again.');
             showStep(stepSso);
           }
@@ -276,6 +273,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (ssoForm) {
     ssoForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (ssoBtn.disabled) return;
       hideError(ssoError);
       const email = emailInput ? emailInput.value.trim() : '';
 
@@ -314,8 +312,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (oauthError) throw oauthError;
       } catch (err) {
         showError(ssoError, err.message || 'Authentication failed.');
-        ssoBtn.disabled = false;
-        if (ssoBtnText) ssoBtnText.textContent = 'Sign In with Google Account';
+        resetSsoButton();
       }
     });
   }
@@ -353,7 +350,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // profile, rather than being hard-coded to the student portal.
       const { data: { session } } = await supabaseClient.auth.getSession();
       if (session) {
-        await processAuthFlow(session);
+        queueAuthFlow(session);
       } else {
         window.location.href = window.IMCC.siteUrl('/student/dashboard.html');
       }
@@ -373,7 +370,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // The demo card and its credentials are removed from the DOM unless
   // demo mode is explicitly enabled, so the password is not shipped to
   // end users in page source on a normal deployment.
-  const demoCard = document.querySelector('.demo-access-card');
+  const demoCard = document.getElementById('demoAccessCard');
   const demoModeOn = window.IMCC.demoModeEnabled();
 
   if (demoCard) {
@@ -544,4 +541,4 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   }
-});
+})();

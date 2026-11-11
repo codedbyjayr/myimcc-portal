@@ -66,7 +66,6 @@ h1.display { font-size: clamp(22px, 4.5vw, 32px); line-height: 1.15; }
 .grid-3 > *,
 .grid-4 > *,
 .stats-grid > *,
-.dept-grid > *,
 .filter-bar > .table-responsive {
   min-width: 0;
 }
@@ -124,7 +123,6 @@ h1.display { font-size: clamp(22px, 4.5vw, 32px); line-height: 1.15; }
     min-height: 26px !important;
   }
 
-  .prospectus-close,
   .chat-close {
     width: 44px !important;
     height: 44px !important;
@@ -360,6 +358,7 @@ body:has(#page-classes.active, #page-records.active, #page-compliance.active) .c
 #page-classes .grading-actions[hidden] { display: none; }
 @media (min-width: 1200px) {
     .record-layout { grid-template-columns: 280px minmax(0, 1fr); }
+    #page-compliance .record-layout { grid-template-columns: 360px minmax(0, 1fr); }
     .record-layout, #page-classes .grading-layout { grid-template-rows: minmax(0, 1fr); }
     #page-classes .grading-course-list { max-height: none; flex: 1; }
 }

@@ -1,0 +1,58 @@
+# MyIMCC TSX and Tailwind migration
+
+Local workspace snapshot as of 2026-11-09, through Dean class selection and Student Quick Links. Use this handoff to resume the frontend migration and update it after each completed workflow.
+
+## Objectives
+
+- Move the user interface for existing, deployed workflows from hand-written HTML templates and feature-specific CSS to TSX and Tailwind, one workflow at a time.
+- Preserve current URLs, role access, sign-in and MFA, and the rules for enrollment, grades, and clearance. Keep light and dark themes, mobile layouts, and print output working where they apply.
+- Keep features marked **Coming Soon** outside this migration. Confirm that a workflow is enabled on the deployed portal before adding it to the queue.
+
+## Completed in the local workspace
+
+| Area | Work completed | Main source files |
+| --- | --- | --- |
+| Build and dashboard shells | Vite builds the six role dashboards, Login, Select Role, Awaiting Approval, and Enrollment Requests. Tailwind scans frontend TSX files. The existing HTML routes load the compiled bundles. | [Vite config](../vite.config.ts), [Tailwind entry](../shared/tailwind.css), [dashboard mount](../shared/dashboard-workspace.tsx) |
+| Login and onboarding | TSX views cover login, MFA, Select Role, and Awaiting Approval. The existing controllers handle sign-in, profile submission, and routing. | [Login view](../auth/login-view.tsx), [Select Role](../onboarding/select-role.tsx), [Awaiting Approval](../onboarding/awaiting-approval.tsx) |
+| Admin accounts | Pending and approved user rows use TSX. For an approved account, the role dropdown stages a change and the **Save** button applies it. Dean choices include the department. | [Admin role controls](../admin/admin-dashboard.tsx), [Admin controller](../admin/admin-dashboard.js) |
+| Staff Clearance and Enrollment Requests | Both workspaces render with React and Tailwind. The existing clearance and enrollment calls handle office-scoped clearance, request decisions, finalization, and enrollment term settings. | [Staff Clearance](../staff/staff-dashboard.tsx), [clearance data](../staff/clearance-workspace.ts), [Enrollment Requests](../staff/enrollment-requests.tsx), [enrollment data](../staff/enrollment-workspace.ts) |
+| Student enrollment | The subject list uses TSX. Existing term selection, schedule conflict checks, pending and enrolled states, and the enrollment request flow remain in the Student controller. | [Student view](../student/dashboard-view.tsx), [Student controller](../student/dashboard.js) |
+| Student Grades | Grade rows, semester options, and estimate insights render in TSX with Tailwind. Semester and year filters, GWA calculations, and legacy grade formatting still work. A failed refresh keeps the last loaded grades visible. | [Student view](../student/dashboard-view.tsx), [Student controller](../student/dashboard.js), [Grades browser check](../scripts/student-grades-layout.browser.test.mjs) |
+| Student Clearance and office notes | Office cards, progress, status legend, and retry use TSX and Tailwind. Open clearances show requirements or **No requirements posted yet**. The Dean, Registrar, and assigned staff can edit notes for open clearances. Saving updates the note without approving the clearance. | [Student view](../student/dashboard-view.tsx), [Office note editor](../shared/clearance-note.tsx), [Student theme browser check](../scripts/student-theme.browser.test.mjs), [Adviser browser check](../scripts/adviser-workflows.browser.test.mjs) |
+| Student Prospectus | A single TSX and Tailwind dialog shows curriculum progress, course groups by semester, prerequisites, and grades. It supports keyboard dismissal and returns focus to the trigger. Catalog, grade, and enrollment reads still run through the Student controller. Background refresh only redraws an open dialog. | [Student view](../student/dashboard-view.tsx), [Student controller](../student/dashboard.js), [Adviser browser check](../scripts/adviser-workflows.browser.test.mjs) |
+| Student Certificate of Registration | TSX renders the certificate and Tailwind handles the screen layout. Failed reads show **Retry** and disable **Print Certificate** until the data loads. The A4 print stylesheet supports both the print button and browser printing. A 10-subject sample fit on one A4 page. | [Certificate view](../student/cor-view.tsx), [Student controller](../student/dashboard.js), [Student theme browser check](../scripts/student-theme.browser.test.mjs) |
+| Student Billing | The read-only TSX implementation is kept for a later release. The sidebar shows **Coming Soon**. The dashboard and Cashier clearance have no links to the Billing page. | [Billing view](../student/billing-view.tsx), [Student theme browser check](../scripts/student-theme.browser.test.mjs) |
+| Student Profile and Dashboard summary | TSX and Tailwind cover Profile, the summary cards, and the recent activity feed. Profile saves persist cleared contact fields. Profile, sidebar, and top bar share avatar rendering with an initials fallback. The Dashboard distinguishes a settled balance, no upcoming payment, and unavailable balance or schedule data. | [Profile view](../student/profile-view.tsx), [Summary view](../student/summary-view.tsx), [Student theme browser check](../scripts/student-theme.browser.test.mjs) |
+| Registrar | Clearance queue and details, student rows, subject offers, prospectus rows, and Summer subject options use TSX renderers. | [Registrar view](../staff/registrar-dashboard-view.tsx), [Registrar controller](../staff/registrar-dashboard.js) |
+| Teacher and Dean gradebooks | Both dashboards share TSX for grade rows and revision history. Their controllers still own grade entry, save, lock, and history actions. | [Shared gradebook](../faculty/gradebook-view.tsx), [Teacher controller](../faculty/teacher-dashboard.js), [Dean controller](../faculty/dean-dashboard.js) |
+| Teacher and Dean class selection | The desktop class lists share a TSX and Tailwind picker. Dean's All Classes scope shows the instructor. The shared filters and mobile picker still control selection, and class buttons expose the selected state. | [Shared picker](../faculty/gradebook-view.tsx), [Gradebook browser check](../scripts/grading-workspace.browser.test.mjs) |
+| Dean overview | TSX renders enrollment cards, enrollment and performance bars, and flagged course rows. The controller retains the counts, retention calculation, thresholds, and empty states. | [Dean view](../faculty/dean-dashboard-view.tsx), [Overview regression check](../faculty/dean-dashboard.test.mjs) |
+| Dean Faculty & Schedule and View Records | TSX covers faculty workloads, assignment rows, offering and instructor fields, the student picker, and record details. | [Schedule views](../faculty/dean-schedule-view.tsx), [records views](../faculty/dean-records-view.tsx) |
+| Dean Student Compliance | The clearance details reuse the student picker and render in TSX. Approval checks that the student's Dean clearance still has the status shown at review time. A pending save stays disabled through a redraw. | [Clearance view](../faculty/dean-records-view.tsx), [Dean controller](../faculty/dean-dashboard.js), [regression test](../faculty/dean-clearance.test.mjs) |
+
+Several TSX components render markup for existing JavaScript controllers. Those controllers still own their events, data reads, and saves. Shared CSS still supplies theme, responsive, and print rules. Keep those contracts when migrating the next view, including IDs and data attributes the controller uses.
+
+## Remaining frontend work
+
+Student announcements, upcoming deadlines, and notifications now render in the [Student summary view](../student/summary-view.tsx). Notification refresh failures retain the last loaded list and unread count.
+
+**Student Quick Links** renders “Links coming soon” when no eligible links are configured. When the URLs arrive, add them to the existing `sso_links` configuration with a `label`, an absolute HTTP or HTTPS `url`, `student` in the comma-separated `roles`, `is_active = true`, and a `sort_order`. Keep the existing Library and Email exclusions. Adding URLs requires no frontend edit.
+
+The next step is a release checkout and signed-in preview. Keep Registrar Appointments and Messages disabled as Coming Soon.
+
+## Release work
+
+1. **Prepare a release checkout.** The candidate is based on current `main`. It preserves the existing student program and year requirements, FAQ source grounding, and the Coming Soon state for Billing. Build from the candidate to regenerate demo assets.
+2. **Verify a signed-in preview.** Use a reachable test project and run `npm run check:release` against it. Follow the [backend release guide](backend-release.md#promotion-order) for Registrar Summer publishing and the frontend-readiness migration. With fictional accounts, check sign-in and role routing, student academic setup, Profile saves, FAQ and consultation handoff, Billing navigation, office-scoped clearance notes, Grades, Prospectus, and COR printing.
+3. **Verify production after promotion.** Confirm the hosted build and repeat the signed-in checks against the deployed version.
+
+## Verification and continuation
+
+- **Local results through Teacher and Dean.** The build, unit suite, Teacher and Dean grading browser check, and Student and Registrar theme browser checks passed. The minimum measured contrast for **Enroll Now** was 5.26:1. The Registrar check confirmed Appointments and Messages are disabled in both builds.
+- **Local results through Profile and Dashboard.** The build and unit suite passed. Edge checks passed for Select Role and Awaiting Approval, and for Student Profile, Dashboard, and Billing in the normal and demo builds using fictional data. Earlier focused checks covered Grades, Staff Clearance, Adviser Workflows, and COR. A 10-subject COR sample fit on one A4 page.
+- **Release status.** The wider TSX migration is local. Signed-in preview and production verification remain pending.
+- Run `npm ci` if dependencies are missing, then `npm run build` and `npm test`. The build type-checks the frontend, produces `shared/dist`, and refreshes `review-assets`. Edit the source files and regenerate the demo copies through the build.
+- After a full build, run `node scripts/student-grades-layout.browser.test.mjs` from the repo root. It checks loading, read failures, empty results, semester and year filters, and desktop and mobile layouts in both themes using the normal and demo builds.
+- After a full build, run `node scripts/student-theme.browser.test.mjs` for Dashboard layout and balance messages, Profile saves and avatar fallback, disabled Billing navigation, Student Clearance, and COR print paths in the normal and demo builds.
+- Run `node scripts/staff-clearance.browser.test.mjs` for assigned-office note editing and `node scripts/adviser-workflows.browser.test.mjs` for Dean and Registrar note saves, student visibility, and the Prospectus dialog. To generate the fictional COR print sample again, set `COR_PRINT_QA=1` before running the Student Theme check.
+- Run the relevant browser suite from [package.json](../package.json), such as `npm run test:dashboards`, `npm run test:login`, or `npm run test:approval`. Browser scripts require Playwright and Microsoft Edge. Set `PLAYWRIGHT_MODULE` if Playwright is installed outside the repo.

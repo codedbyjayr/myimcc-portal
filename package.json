@@ -1,8 +1,15 @@
 {
   "type": "module",
   "scripts": {
+    "test:login": "npm run build && node scripts/login.browser.test.mjs",
+    "build": "tsc -p tsconfig.frontend.json && vite build && node scripts/build-demo-assets.mjs",
+    "build:watch": "vite build --watch",
+    "test:approval": "npm run build && node scripts/awaiting-approval.browser.test.mjs && node scripts/select-role.browser.test.mjs",
+    "test:staff": "npm run build && node scripts/staff-clearance.browser.test.mjs && node scripts/role-preview-browser.test.mjs",
+    "test:enrollment": "npm run build && node scripts/enrollment-ui.browser.test.mjs && node scripts/adviser-workflows.browser.test.mjs && node scripts/role-preview-browser.test.mjs",
+    "test:dashboards": "npm run build && node scripts/dashboard-workspace.browser.test.mjs && node scripts/staff-clearance.browser.test.mjs && node scripts/grading-workspace.browser.test.mjs && node scripts/adviser-workflows.browser.test.mjs && node scripts/enrollment-ui.browser.test.mjs && node scripts/role-preview-browser.test.mjs",
     "test": "node scripts/test.mjs",
-    "test:backend": "node scripts/backup-supabase.test.mjs && node scripts/check-release.test.mjs && node scripts/deploy-backend-functions.test.mjs && node scripts/faq-assistant.test.mjs",
+    "test:backend": "node scripts/backup-supabase.test.mjs && node scripts/check-release.test.mjs && node scripts/deploy-backend-functions.test.mjs && node scripts/faq-assistant.test.mjs && node scripts/faq-auth-hotfix.test.mjs && node scripts/faq-reindex.test.mjs",
     "test:db": "node scripts/test-adviser-db.mjs",
     "test:portal": "node scripts/test-portal.mjs",
     "backup": "node scripts/backup-supabase.js",
@@ -11,9 +18,16 @@
     "check:edge": "tsc -p supabase/functions --noEmit"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.112.3"
+    "@supabase/supabase-js": "^2.112.3",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "typescript": "^7.0.2"
+    "@tailwindcss/vite": "4.3.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "tailwindcss": "4.3.4",
+    "typescript": "^7.0.2",
+    "vite": "8.3.5"
   }
 }

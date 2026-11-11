@@ -9,17 +9,15 @@ for(const role of ['student','faculty']) {
  node('requestedRole').value=role;
  node('fullName').value='Test Student';
  node('idNumber').value='TEST-001';
- let ready;
  const client={auth:{getUser:async()=>({data:{user:{id:'student',email:'test@example.invalid'}}})},from(table){
   return {select(){return this;},eq(){return this;},single:async()=>({data:{status:'onboarding',role:'student',is_active:true,program:'BSIT'}}),
    update(payload){writes.push(payload);return this;},then(resolve){resolve({data:[],error:null});}};
  }};
  const context=vm.createContext({window:{IMCC:{resolveRoute:()=>({kind:'redirect',url:'/onboarding/select-role.html'}),isCurrentPage:()=>true,
   fetchAll:async()=>({data:[{program:'BSIT',year_level:4}],error:null})},location:{}},
-  document:{getElementById:node,addEventListener(event,fn){ready=fn;}},getSupabaseClientAsync:async()=>client,
+  document:{getElementById:node},getSupabaseClientAsync:async()=>client,
   Option:function(text,value){this.text=text;this.value=value;},console,Date});
- vm.runInContext(source,context);
- await ready();
+ await vm.runInContext(source,context);
  assert.equal(node('studentAcademicFields').hidden,role!=='student');
  assert.equal(node('studentYear').required,role==='student');
  if(role==='student') {

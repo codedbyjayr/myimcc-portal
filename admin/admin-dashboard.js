@@ -1,5 +1,5 @@
 // admin/admin-dashboard.js
-document.addEventListener('DOMContentLoaded', async () => {
+(async () => {
     let supabaseClient;
     try {
         supabaseClient = await getSupabaseClientAsync();
@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const adminEmailEl = document.getElementById('adminEmail');
     const pendingTableBody = document.getElementById('pendingTableBody');
     const approvedTableBody = document.getElementById('approvedTableBody');
+    const roleSaveStatus = document.getElementById('roleSaveStatus');
     const pendingCountEl = document.getElementById('pendingCount');
     const noPendingMsg = document.getElementById('noPendingMsg');
     const noApprovedMsg = document.getElementById('noApprovedMsg');
@@ -29,8 +30,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let previewHome = null;
     let demoSession = null, demoTimer = null, demoGeneration = 0;
     if (window.imccTableSkeleton) {
-        if (pendingTableBody) pendingTableBody.innerHTML = window.imccTableSkeleton(5, 2);
-        if (approvedTableBody) approvedTableBody.innerHTML = window.imccTableSkeleton(5, 4);
+        if (pendingTableBody) pendingTableBody.innerHTML = window.imccTableSkeleton(6, 2);
+        if (approvedTableBody) approvedTableBody.innerHTML = window.imccTableSkeleton(7, 4);
     }
 
     let currentAdminId = null;
@@ -38,6 +39,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Full unfiltered datasets — filters are applied client-side against these.
     let allPendingUsers = [];
     let allApprovedUsers = [];
+    const pendingRoleDrafts = new Map();
+    const decidingRequests = new Set();
+    const roleDrafts = new Map();
+    const savingRoles = new Set();
+    const changingAccess = new Set();
 
     // Role labels/synonyms so searching "faculty" also matches role "teacher", etc.
     const roleLabels = {
@@ -57,8 +63,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             'Medical Clinic/Dental', 'Property Custodian', 'ROTC/CWTS'].map(office => ['staff:' + office, 'Staff – ' + office]),
         ...['CCS', 'CBA', 'CAS', 'CNM', 'CED', 'CCSJE', 'CHTM', 'CMT', 'CRT'].map(department => ['dean:' + department, 'Dean – ' + department]),
     ];
+    function roleValue(role, department) {
+        return (role === 'faculty' ? 'teacher' : role || 'student') + (department ? ':' + department : '');
+    }
     function roleOptions(role, department) {
-        const selected = (role === 'faculty' ? 'teacher' : role || 'student') + (department ? ':' + department : '');
+        const selected = roleValue(role, department);
         return roleChoices.map(([value, label]) => `<option value="${escapeHtml(value)}" ${value === selected ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
     }
     previewRole.innerHTML = roleOptions('admin').replace('value="teacher"', 'value="faculty"');
@@ -248,7 +257,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const csp = doc.createElement('meta');
             csp.httpEquiv = 'Content-Security-Policy';
             const imageOrigin = new URL(window.__ENV__?.SUPABASE_URL || location.origin).origin;
-            csp.content = `default-src 'none'; script-src ${[...hashes, ...sources].join(' ')}; connect-src 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; style-src ${location.origin} https://fonts.googleapis.com 'unsafe-inline'; font-src ${location.origin} https://fonts.gstatic.com; img-src ${location.origin} ${imageOrigin} https://lh3.googleusercontent.com data:; base-uri ${location.origin}`;
+            csp.content = `default-src 'none'; script-src ${[...hashes, ...sources].join(' ')} ${location.origin}/shared/dist/ ${location.origin}/review-assets/shared/dist/; connect-src 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; style-src ${location.origin} https://fonts.googleapis.com 'unsafe-inline'; font-src ${location.origin} https://fonts.gstatic.com; img-src ${location.origin} ${imageOrigin} https://lh3.googleusercontent.com data:; base-uri ${location.origin}`;
             doc.head.prepend(csp);
             if (previewChannel !== channel) return;
             previewFrame.srcdoc = '<!doctype html>' + doc.documentElement.outerHTML;
@@ -308,114 +317,95 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 2. Fetch Pending Requests
-    async function loadPendingUsers() {
-        const { data: users, error } = await IMCC.fetchAll(() => supabaseClient
-            .from('profiles')
-            .select('*')
-            .eq('status', 'pending')
-            .order('created_at', { ascending: true }));
+    const listLoads = {
+        pending: { version: 0, loaded: false, body: pendingTableBody, notice: document.getElementById('pendingLoadError') },
+        approved: { version: 0, loaded: false, body: approvedTableBody, notice: document.getElementById('approvedLoadError') },
+    };
 
-        if (error) return;
-
-        allPendingUsers = users || [];
-        pendingCountEl.textContent = `${allPendingUsers.length} Pending`;
-
-        populateCourseFilter();
-        renderPendingTable(filterUsers(allPendingUsers, { roleField: 'requested_role' }));
+    async function loadAccountList(status, order, applyUsers) {
+        const list = listLoads[status];
+        const version = ++list.version;
+        const retry = list.notice.querySelector('button');
+        retry.disabled = true;
+        let result;
+        try {
+            result = await IMCC.fetchAll(() => supabaseClient
+                .from('profiles')
+                .select('*')
+                .eq('status', status)
+                .order(order, { ascending: true }));
+        } catch (error) {
+            result = { error };
+        }
+        if (version !== list.version) return;
+        retry.disabled = false;
+        if (result.error) {
+            if (!list.loaded) {
+                list.body.replaceChildren();
+                if (status === 'pending') pendingCountEl.textContent = 'Unavailable';
+            }
+            const message = list.loaded ? ' The last loaded results are still shown.' : '';
+            list.notice.querySelector('[role="alert"]').textContent = `Could not load ${status} users.${message}`;
+            list.notice.hidden = false;
+            return;
+        }
+        list.loaded = true;
+        list.notice.hidden = true;
+        applyUsers(result.data);
     }
 
-    // 3. Fetch Approved Users & Render Interactive Select Dropdowns
-    async function loadApprovedUsers() {
-        const { data: users, error } = await IMCC.fetchAll(() => supabaseClient
-            .from('profiles')
-            .select('*')
-            .eq('status', 'approved')
-            .order('full_name', { ascending: true }));
-
-        if (error) return;
-
-        allApprovedUsers = users || [];
-
+    function showPendingUsers(users) {
+        allPendingUsers = users;
+        pendingCountEl.textContent = `${users.length} Pending`;
         populateCourseFilter();
-        renderApprovedTable(filterUsers(allApprovedUsers, { roleField: 'role' }));
+        renderPendingTable(filterUsers(users, { roleField: 'requested_role' }));
     }
 
-    // ── Render: Pending table (from a given, already-filtered, array) ──────
+    function loadPendingUsers() {
+        return loadAccountList('pending', 'created_at', showPendingUsers);
+    }
+
+    function loadApprovedUsers() {
+        return loadAccountList('approved', 'full_name', users => {
+            allApprovedUsers = users;
+            populateCourseFilter();
+            renderApprovedTable(filterUsers(users, { roleField: 'role' }));
+        });
+    }
+
     function renderPendingTable(users) {
-        pendingTableBody.innerHTML = '';
-
-        if (users.length === 0) {
-            noPendingMsg.style.display = 'block';
-            noPendingMsg.textContent = allPendingUsers.length === 0
-                ? 'No pending registration requests found.'
-                : 'No pending requests match your search or filter.';
-            attachPendingListeners();
-            return;
-        }
-        noPendingMsg.style.display = 'none';
-
-        const term = (searchInput?.value || '').trim();
-
-        users.forEach(user => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-        <td><b>${highlight(user.full_name || 'N/A', term)}</b></td>
-        <td>${highlight(user.email, term)}</td>
-        <td><code>${highlight(user.student_no || 'N/A', term)}</code></td>
-        <td>${highlight(user.program || '—', term)}</td>
-        <td>
-          <select class="role-select pending-role-select" data-id="${user.id}">
-            ${roleOptions(user.requested_role)}
-          </select>
-        </td>
-        <td>
-          <button class="btn-action btn-approve" data-id="${user.id}">Approve</button>
-          <button class="btn-action btn-reject" data-id="${user.id}">Reject</button>
-        </td>
-      `;
-            pendingTableBody.appendChild(tr);
+        if (!listLoads.pending.loaded) return;
+        noPendingMsg.style.display = users.length ? 'none' : 'block';
+        noPendingMsg.textContent = allPendingUsers.length === 0
+            ? 'No pending registration requests found.'
+            : 'No pending requests match your search or filter.';
+        pendingTableBody.innerHTML = window.renderAdminPendingRows({
+            users: users.map(user => ({
+                ...user,
+                roleValue: pendingRoleDrafts.get(user.id) ?? roleValue(user.requested_role),
+                busy: decidingRequests.has(user.id),
+            })),
+            choices: roleChoices,
+            term: (searchInput?.value || '').trim(),
         });
-
-        attachPendingListeners();
     }
 
-    // ── Render: Approved table (from a given, already-filtered, array) ─────
     function renderApprovedTable(users) {
-        approvedTableBody.innerHTML = '';
-
-        if (users.length === 0) {
-            if (noApprovedMsg) noApprovedMsg.style.display = 'block';
-            attachApprovedListeners();
-            return;
-        }
-        if (noApprovedMsg) noApprovedMsg.style.display = 'none';
-
-        const term = (searchInput?.value || '').trim();
-
-        users.forEach(user => {
-            const isSelf = user.id === currentAdminId;
-            const currentRole = user.role || 'student';
-
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-        <td><b>${highlight(user.full_name || 'N/A', term)}</b> ${isSelf ? '<small style="color:var(--primary);">(You)</small>' : ''}</td>
-        <td>${highlight(user.email, term)}</td>
-        <td><code>${highlight(user.student_no || 'N/A', term)}</code></td>
-        <td>${highlight(user.program || '—', term)}</td>
-        <td>
-          <select class="role-select" data-id="${user.id}" ${isSelf ? 'disabled' : ''}>
-            ${roleOptions(currentRole, user.role_department)}
-          </select>
-        </td>
-        <td><span class="badge badge-approved">Approved</span></td>
-        <td>
-          ${!isSelf ? `<button class="btn-action btn-revoke" data-id="${user.id}">Revoke Access</button>` : '<span style="color:var(--text-muted); font-size:12px;">Active Session</span>'}
-        </td>
-      `;
-            approvedTableBody.appendChild(tr);
+        if (!listLoads.approved.loaded) return;
+        noApprovedMsg.style.display = users.length ? 'none' : 'block';
+        approvedTableBody.innerHTML = window.renderAdminApprovedRows({
+            users: users.map(user => ({
+                ...user,
+                roleValue: roleDrafts.get(user.id) ?? roleValue(user.role, user.role_department),
+                isSelf: user.id === currentAdminId,
+                suspended: user.is_active === false,
+                hasDraft: roleDrafts.has(user.id),
+                saving: savingRoles.has(user.id),
+                accessBusy: changingAccess.has(user.id),
+            })),
+            choices: roleChoices,
+            term: (searchInput?.value || '').trim(),
         });
-
         attachApprovedListeners();
     }
 
@@ -473,17 +463,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (sorted.includes(previous)) courseFilter.value = previous;
     }
 
-    function highlight(text, term) {
-        const safe = escapeHtml(String(text ?? ''));
-        if (!term) return safe;
-        const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        try {
-            return safe.replace(new RegExp(`(${escapedTerm})`, 'ig'), '<span class="highlight">$1</span>');
-        } catch {
-            return safe;
-        }
-    }
-
     // 4. Attach Listeners for Pending Approvals / Rejections
     //
     // These used to write { status, role } straight to the profiles table.
@@ -497,110 +476,133 @@ document.addEventListener('DOMContentLoaded', async () => {
         return error;
     }
 
-    function attachPendingListeners() {
-        pendingTableBody.querySelectorAll('.btn-approve').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const userId = e.target.getAttribute('data-id');
-                const roleSelect = pendingTableBody.querySelector(`.pending-role-select[data-id="${userId}"]`);
-                const targetRole = roleSelect ? roleSelect.value : 'student';
+    pendingTableBody.addEventListener('change', event => {
+        const userId = event.target.dataset.roleUserId;
+        if (userId) pendingRoleDrafts.set(userId, event.target.value);
+    });
 
-                btn.disabled = true;
-                const error = await callRpc('set_user_approval', {
-                    target_id: userId,
-                    approved: true,
-                    approved_role: targetRole,
-                });
+    pendingTableBody.addEventListener('click', async event => {
+        const button = event.target.closest('[data-pending-action]');
+        if (!button) return;
+        const row = button.closest('tr');
+        const select = row.querySelector('[data-role-user-id]');
+        const userId = select.dataset.roleUserId;
+        if (decidingRequests.has(userId)) return;
+        const approved = button.dataset.pendingAction === 'approve';
+        if (!approved && !confirm('Reject this registration request?')) return;
+        const args = { target_id: userId, approved };
+        if (approved) args.approved_role = select.value;
 
-                if (error) {
-                    alert('Failed to approve user: ' + error.message);
-                } else {
-                    loadPendingUsers();
-                    loadApprovedUsers();
-                }
-                btn.disabled = false;
-            });
-        });
-
-        pendingTableBody.querySelectorAll('.btn-reject').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                if (!confirm('Reject this registration request?')) return;
-                const userId = e.target.getAttribute('data-id');
-
-                btn.disabled = true;
-                const error = await callRpc('set_user_approval', {
-                    target_id: userId,
-                    approved: false,
-                });
-
-                if (error) {
-                    alert('Failed to reject user: ' + error.message);
-                } else {
-                    loadPendingUsers();
-                }
-                btn.disabled = false;
-            });
-        });
-    }
+        decidingRequests.add(userId);
+        row.querySelectorAll('select, button').forEach(control => { control.disabled = true; });
+        try {
+            const error = await callRpc('set_user_approval', args);
+            if (error) throw error;
+            pendingRoleDrafts.delete(userId);
+            showPendingUsers(allPendingUsers.filter(user => user.id !== userId));
+            void loadPendingUsers();
+            if (approved) void loadApprovedUsers();
+        } catch (error) {
+            alert(`Failed to ${approved ? 'approve' : 'reject'} user: ${error.message}`);
+        } finally {
+            decidingRequests.delete(userId);
+            renderPendingTable(filterUsers(allPendingUsers, { roleField: 'requested_role' }));
+        }
+    });
 
     // 5. Attach Listeners for Dynamic Role Updates and Access Revocation
     function attachApprovedListeners() {
-        // Live Role Changing Dropdown Listener — scoped to approvedTableBody only
-        approvedTableBody.querySelectorAll('.role-select[data-id]').forEach(select => {
-            select.addEventListener('change', async (e) => {
-                const userId = e.target.getAttribute('data-id');
-                const newRole = e.target.value;
+        approvedTableBody.querySelectorAll('[data-role-user-id]').forEach(select => {
+            const userId = select.dataset.roleUserId;
+            const save = select.closest('td').querySelector('[data-save-role]');
+            if (!save) return;
 
-                const error = await callRpc('set_user_role', {
-                    target_id: userId,
-                    new_role: newRole,
-                });
+            select.addEventListener('change', () => {
+                const user = allApprovedUsers.find(u => u.id === userId);
+                if (!user || savingRoles.has(userId) || changingAccess.has(userId)) return;
+                if (select.value === roleValue(user.role, user.role_department)) roleDrafts.delete(userId);
+                else roleDrafts.set(userId, select.value);
+                save.disabled = !roleDrafts.has(userId);
+            });
 
-                if (error) {
-                    alert('Failed to update role: ' + error.message);
-                    loadApprovedUsers(); // Revert back on error
-                } else {
-                    // Subtle highlight to confirm save
-                    e.target.style.borderColor = 'var(--success)';
-                    setTimeout(() => { e.target.style.borderColor = 'var(--surface-border)'; }, 1500);
-                    // Update local cache so re-renders keep the new value
+            save.addEventListener('click', async () => {
+                const newRole = roleDrafts.get(userId);
+                if (!newRole || userId === currentAdminId || savingRoles.has(userId) || changingAccess.has(userId)) return;
+                savingRoles.add(userId);
+                select.disabled = save.disabled = true;
+                select.closest('tr').querySelector('[data-account-access]').disabled = true;
+                save.textContent = 'Saving…';
+                roleSaveStatus.textContent = '';
+                try {
+                    const error = await callRpc('set_user_role', { target_id: userId, new_role: newRole });
+                    if (error) throw error;
                     const cached = allApprovedUsers.find(u => u.id === userId);
                     if (cached) {
                         const [role, department] = newRole.split(':');
                         cached.role = role;
                         cached.role_department = department || null;
                     }
+                    roleDrafts.delete(userId);
+                    roleSaveStatus.textContent = 'Role saved.';
+                } catch (error) {
+                    roleSaveStatus.textContent = 'Failed to update role: ' + error.message;
+                } finally {
+                    savingRoles.delete(userId);
+                    renderApprovedTable(filterUsers(allApprovedUsers, { roleField: 'role' }));
                 }
             });
         });
 
-        // Revoke Access Listener — scoped to approvedTableBody only
-        //
-        // This previously wrote { status: 'pending', role: 'student' }, which
-        // did two wrong things at once: it silently demoted the person to a
-        // student, and it dropped them back into the approval queue as if
-        // they had just registered. Revoking access should lock the account
-        // and preserve the role it had, so set_user_active() is the correct
-        // call; a deliberate demotion is a separate, explicit action.
-        approvedTableBody.querySelectorAll('.btn-revoke').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                if (!confirm('Revoke access for this user? Their portal access will be suspended. They keep their role and can be reactivated without re-approval.')) return;
-                const userId = e.target.getAttribute('data-id');
-
-                btn.disabled = true;
-                const error = await callRpc('set_user_active', {
-                    target_id: userId,
-                    active: false,
-                });
-
-                if (error) {
-                    alert('Failed to revoke access: ' + error.message);
-                } else {
-                    loadApprovedUsers();
-                }
-                btn.disabled = false;
-            });
-        });
     }
+
+    const accessDialog = document.getElementById('accessDialog');
+    const confirmAccess = document.getElementById('confirmAccess');
+    const accessSaveStatus = document.getElementById('accessSaveStatus');
+    let accessTarget = null;
+
+    approvedTableBody.addEventListener('click', event => {
+        const button = event.target.closest('[data-account-access]');
+        if (!button || accessDialog.open) return;
+        const userId = button.dataset.accountAccess;
+        const user = allApprovedUsers.find(user => user.id === userId);
+        if (!user || userId === currentAdminId || changingAccess.has(userId) || savingRoles.has(userId)) return;
+        const active = user.is_active === false;
+        const action = active ? 'Restore access' : 'Revoke access';
+        accessTarget = { userId, active };
+        document.getElementById('accessTitle').textContent = action;
+        document.getElementById('accessMessage').textContent = `${action} for ${user.full_name || user.email}? Their assigned role will stay the same.`;
+        confirmAccess.textContent = action;
+        accessDialog.returnValue = '';
+        accessDialog.showModal();
+    });
+
+    document.getElementById('cancelAccess').addEventListener('click', () => accessDialog.close());
+    confirmAccess.addEventListener('click', () => accessDialog.close('confirm'));
+    accessDialog.addEventListener('close', async () => {
+        const target = accessTarget;
+        accessTarget = null;
+        if (accessDialog.returnValue !== 'confirm' || !target) return;
+        const { userId, active } = target;
+        const user = allApprovedUsers.find(user => user.id === userId);
+        if (!user || userId === currentAdminId || changingAccess.has(userId) || savingRoles.has(userId) || active !== (user.is_active === false)) return;
+
+        changingAccess.add(userId);
+        accessSaveStatus.textContent = '';
+        renderApprovedTable(filterUsers(allApprovedUsers, { roleField: 'role' }));
+        try {
+            const error = await callRpc('set_user_active', { target_id: userId, active });
+            if (error) throw error;
+            const cached = allApprovedUsers.find(user => user.id === userId);
+            if (cached) cached.is_active = active;
+            accessSaveStatus.textContent = active ? 'Access restored.' : 'Access revoked.';
+            void loadApprovedUsers();
+        } catch (error) {
+            accessSaveStatus.textContent = 'Failed to update access: ' + error.message;
+        } finally {
+            changingAccess.delete(userId);
+            renderApprovedTable(filterUsers(allApprovedUsers, { roleField: 'role' }));
+        }
+    });
 
     function escapeHtml(str) {
         return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -624,8 +626,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (!await checkAdminAuth()) return;
-    await loadPendingUsers();
-    await loadApprovedUsers();
+    listLoads.pending.notice.querySelector('button').addEventListener('click', loadPendingUsers);
+    listLoads.approved.notice.querySelector('button').addEventListener('click', loadApprovedUsers);
+    await Promise.all([loadPendingUsers(), loadApprovedUsers()]);
 
     if (window.imccHidePreloader) window.imccHidePreloader();
-});
+})();
