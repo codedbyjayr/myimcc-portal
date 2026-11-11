@@ -60,37 +60,6 @@
     el.classList.add(slow ? 'imcc-fade-in-slow' : 'imcc-fade-in');
   };
 
-  /* Expose: skeleton placeholders builder */
-  window.imccSkeleton = function (opts) {
-    opts = opts || {};
-    var html = '';
-    if (opts.card) {
-      html += '<div class="imcc-skel-card imcc-skel"></div>';
-    }
-    if (opts.avatar) {
-      html += '<div class="imcc-skel-row" style="display:flex;gap:10px;align-items:center;">';
-      html += '<div class="imcc-skel-avatar imcc-skel"></div>';
-      html += '<div style="flex:1">';
-      html += '<div class="imcc-skel-line imcc-skel" style="width:60%;"></div>';
-      html += '<div class="imcc-skel-line imcc-skel" style="width:35%;"></div>';
-      html += '</div></div>';
-    }
-    if (opts.title) {
-      html += '<div class="imcc-skel-title imcc-skel"></div>';
-    }
-    for (var i = 0; i < (opts.lines || 0); i++) {
-      var w = 100 - ((i % 3) * 14);
-      html += '<div class="imcc-skel-line imcc-skel" style="width:' + w + '%;"></div>';
-    }
-    for (var j = 0; j < (opts.rows || 0); j++) {
-      html += '<div class="imcc-skel-row imcc-skel"></div>';
-    }
-    if (opts.chip) {
-      html += '<div class="imcc-skel-chip imcc-skel"></div>';
-    }
-    return html;
-  };
-
   /* Expose: table rows skeleton builder */
   window.imccTableSkeleton = function (cols, rows) {
     cols = cols || 4;
@@ -105,12 +74,6 @@
       out += '</tr>';
     }
     return out;
-  };
-
-  /* Expose: empty a container and stamp skeleton into it */
-  window.imccWithSkeleton = function (container, opts) {
-    if (!container) return;
-    container.innerHTML = imccSkeleton(opts || { lines: 3, rows: 2 });
   };
 
   /* Auto-create top progress bar */

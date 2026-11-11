@@ -1,3 +1,4 @@
+import { dashboardMarkup } from './dashboard-markup.mjs';
 import assert from 'node:assert/strict';
 import { readFile, mkdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -11,7 +12,7 @@ await mkdir(output, { recursive: true });
 try {
   for (const root of ['../', '../review-assets/']) {
     const source = new URL(root + 'faculty/dean-dashboard.html', import.meta.url);
-    const html = await readFile(source, 'utf8');
+    const html = await dashboardMarkup(source);
     const js = await readFile(new URL('dean-dashboard.js', source), 'utf8');
     assert(!html.includes('Choose a student to view clearance.'));
     assert(!html.includes('Appeals &amp; Approvals'));

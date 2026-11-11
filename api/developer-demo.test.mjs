@@ -54,6 +54,10 @@ try {
   expired=true;assert.equal((await send('/rest/v1/profiles')).code,403);expired=false;
   available=false;assert.equal((await send('/rest/v1/profiles')).code,503);available=true;
   assert.equal(forwarded.length,1,'Denied requests must never reach data tables');
+  assert.equal((await send('/rest/v1/rpc/get_clearance_workspace','GET')).code,200);
+  assert.equal((await send('/rest/v1/rpc/get_registrar_clearance_workspace','GET')).code,200);
+  assert.equal((await send('/rest/v1/rpc/publish_summer_offering','POST')).code,200);
+  assert.equal((await send('/rest/v1/rpc/get_attendance_history?p_offering_ids=%7B42%7D','GET')).code,200);
   assert.equal((await request({action:'start',role:'owner'})).code,400);
   console.log('Demo API: verified admin/MFA, opaque sessions, fixed review schema, path restrictions and revocation passed.');
 } finally {

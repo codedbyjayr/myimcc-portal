@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { loadDashboardView } from '../scripts/dashboard-markup.mjs';
 const source = readFileSync(new URL('./dashboard.js', import.meta.url), 'utf8');
+const { EnrollmentCourses } = await loadDashboardView(new URL('./dashboard-view.tsx', import.meta.url));
 const loader = source.slice(source.indexOf('let enrollmentLoadVersion'), source.indexOf('// Schedule parser'));
-for (const failed of ['student_semesters','course_offerings','enrollments','enrollment_requests','enrollment_locks','enrollment_terms',null]) {
+for (const failed of ['student_semesters','course_offerings','enrollments','enrollment_requests','enrollment_terms','enrollment_locks',null]) {
   const alerts = [], nodes = {};
   const current = {school_year:'2026-2027',semester:'1st Semester'};
   const subject = {id:1,code:'ENROLLED',...current,program:'BSIT',year:1,units:3,fee:100,enrollment_open:false};
@@ -11,14 +15,15 @@ for (const failed of ['student_semesters','course_offerings','enrollments','enro
   const client = {from(table) {
     assert.notEqual(table, 'misc_fees', 'Enrollment must not depend on billing');
     let offset = 0;
-    const data = table==='student_semesters' ? current : table==='course_offerings' ? [subject,{...subject,id:3,code:'EXTRA',year:2,enrollment_open:true},{...subject,id:2,code:'OTHER',semester:'2nd Semester',year:2,enrollment_open:true}] : table==='enrollments' ? [{offering_id:1}] : table==='misc_fees' ? [{amount:500}] : [];
+    const data = table==='student_semesters' ? current : table==='course_offerings' ? [subject,{...subject,id:3,code:'EXTRA',year:2,enrollment_open:true},{...subject,id:2,code:'OTHER',semester:'2nd Semester',year:2,enrollment_open:true}] : table==='enrollments' ? [{offering_id:1}] : table==='enrollment_terms' ? [{...current,semester:'Summer'}] : [];
     const query = new Proxy({}, {get:(_,key) => key==='then' ? resolve => Promise.resolve({data:offset ? [] : data,error:table===failed ? {message:'Unavailable'} : null}).then(resolve) : (...args) => {if(key==='range') offset=args[0];return query;}});
     return query;
   }};
   const context=vm.createContext({document:{},state,supabaseClient:client,Set,escapeHtml:String,peso:String,
-    getEl:id=>nodes[id]??={style:{},parentElement:{style:{}},querySelectorAll:()=>[],addEventListener(){}},
-    showToast:text=>alerts.push(text),setText(){},renderCourseList(){},renderEnrollmentSummary(){},setEnrollStep(){}});
+    getEl:id=>nodes[id]??={style:{},parentElement:{style:{}},querySelector:()=>null,addEventListener(){}},
+    showToast:text=>alerts.push(text),setText(id,text){(nodes[id]??={}).textContent=text;},renderCourseList(){},renderEnrollmentSummary(){},setEnrollStep(){}});
   vm.runInContext(readFileSync(new URL('../shared/identity.js',import.meta.url),'utf8'),context);
+  context.window = { renderEnrollmentCourses: props => renderToStaticMarkup(createElement(EnrollmentCourses, props)) };
   vm.runInContext(loader,context);
   await vm.runInContext('loadEnrollment()',context);
   if(failed) {
@@ -42,6 +47,10 @@ for (const failed of ['student_semesters','course_offerings','enrollments','enro
     assert.equal(state.courses[0].code,'OTHER');
     assert.equal(state.enrollmentComplete,false,'A later semester remains open');
     assert.equal(state.courses.length,1,'Switching semesters excludes historical enrollment');
+    await vm.runInContext("loadEnrollment(false,'2026-2027|Summer')",context);
+    assert.equal(nodes.enrollmentTerm.value,'2026-2027|Summer','An open term is selectable before offerings are available');
+    assert.equal(state.courses.length,0);
+    assert.match(nodes.enrollmentLockStatus.textContent,/Enrollment is open/);
   }
 }
 console.log('Enrollment terms: closed enrollment, year progression, term switching and all failed reads passed.');

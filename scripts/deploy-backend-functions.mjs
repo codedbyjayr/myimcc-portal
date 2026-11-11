@@ -6,7 +6,7 @@ import {checkRelease} from './check-release.mjs';
 export async function deployBackendFunctions(env = process.env, run = spawnSync, request = fetch) {
   const projectRef = new URL(env.SUPABASE_URL || 'https://invalid').hostname.match(/^([a-z0-9]{20})\.supabase\.co$/)?.[1];
   if (!projectRef) throw new Error('Set SUPABASE_URL to the intended hosted Supabase project.');
-  await checkRelease(env, request);
+  await checkRelease(env, request, { frontend: false });
   for (const name of ['faq-assistant', 'faq-reindex']) {
     // Both handlers validate their own caller; the indexer accepts only the service credential.
     const result = run('supabase', ['functions', 'deploy', name, '--project-ref', projectRef, '--no-verify-jwt'], {env,stdio:'inherit',windowsHide:true});

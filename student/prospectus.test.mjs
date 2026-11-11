@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { loadDashboardView } from '../scripts/dashboard-markup.mjs';
+
+const { ProspectusContent } = await loadDashboardView(new URL('./dashboard-view.tsx', import.meta.url));
 
 for (const prefix of ['', '../review-assets/student/']) {
   const source = readFileSync(new URL(prefix + 'dashboard.js', import.meta.url), 'utf8');
@@ -10,7 +15,7 @@ for (const prefix of ['', '../review-assets/student/']) {
     const button = { disabled: false, textContent: 'View Degree Prospectus' };
     const courses = [
       { code: 'CC 101', title: 'Introduction to Computing', year_level: 1, semester: 1, lec_units: 2, lab_units: 1 },
-      { code: 'PRAC 101', title: 'IT Practicum', year_level: 4, semester: 2, lec_units: 0, lab_units: 6 },
+      { code: 'PRAC 101', title: 'IT Practicum <img src=x>', year_level: 4, semester: 2, lec_units: 0, lab_units: 6 },
     ];
     const context = vm.createContext({
       window: {},
@@ -45,6 +50,10 @@ for (const prefix of ['', '../review-assets/student/']) {
     }
     assert.equal(displayed.totalUnits, 9, 'Keep lecture and lab units, including practicum');
     assert.equal(displayed.bySemester.flatMap(term => term.courses).length, 2);
+    const markup = renderToStaticMarkup(createElement(ProspectusContent, displayed));
+    assert.match(markup, /IT Practicum &lt;img src=x&gt;/);
+    assert.match(markup, /0 Lec · 6 Lab/);
+    assert.match(markup, /aria-valuenow="0"/);
     assert.equal(button.disabled, false, 'Allow retry after a failure');
     assert.equal(button.textContent, 'View Degree Prospectus');
   }

@@ -19,8 +19,7 @@ const state = {
   selectedOfferingIds: new Set(),
   enrollmentComplete: false,
   billing: { totalPaid: 0, installments: [], transactions: [] },
-        grades: [],
-        departments: [],
+        grades: null,
   activity: [],
   currentUser: null,
   studentProfile: null,
@@ -55,6 +54,25 @@ function getInitials(name) {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function renderStudentAvatar(container, name, url) {
+  if (!container) return;
+  const initials = getInitials(name);
+  container.textContent = initials;
+  if (!url) return;
+
+  let source;
+  try { source = new URL(url, window.location.href); } catch { return; }
+  if (source.protocol !== 'https:' && source.protocol !== 'http:') return;
+
+  const image = document.createElement('img');
+  image.alt = '';
+  image.addEventListener('error', () => {
+    if (image.parentNode === container) container.textContent = initials;
+  }, { once: true });
+  container.replaceChildren(image);
+  image.src = source.href;
 }
 
 function escapeHtml(str) {
@@ -170,6 +188,7 @@ setupMobileNav();
 
 // ── Navigation ────────────────────────────────────────────────────────
 function goto(page) {
+  if (page === 'billing') return;
   state.page = page;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const pageEl = getEl('page-' + page);
@@ -223,7 +242,6 @@ function goto(page) {
 window.goto = goto;
 
 document.querySelectorAll('[data-page]').forEach(el => el.addEventListener('click', () => goto(el.dataset.page)));
-document.querySelectorAll('[data-goto]').forEach(el => el.addEventListener('click', () => goto(el.dataset.goto)));
 
 // ── Toast Notification ────────────────────────────────────────────────
 let toastTimer;
@@ -305,7 +323,7 @@ async function loadDashboard() {
   const clearedCount = (clearances || []).filter(c => c.status === 'cleared').length;
   const totalClear = (clearances || []).length || 1;
 
-  const { data: nextDue } = await supabaseClient
+  const { data: nextDue, error: nextDueError } = await supabaseClient
     .from('installments')
     .select('*')
     .eq('student_id', profile.id)
@@ -314,7 +332,7 @@ async function loadDashboard() {
     .limit(1)
     .maybeSingle();
 
-  const { data: activities } = await supabaseClient
+  const { data: activities, error: activityError } = await supabaseClient
     .from('activities')
     .select('*')
     .eq('student_id', profile.id)
@@ -329,16 +347,16 @@ async function loadDashboard() {
       program: profile.program,
       yearLevel: profile.year_level,
       email: profile.email,
-      avatarUrl: profile.avatar_url,
       schoolYear: sem?.school_year ? sem.school_year.replace(/[\u2013\u2014]/g, '-') : '2026-2027',
       semester: sem?.semester || '1st Semester',
     },
     unitsEnrolled: sem?.units_enrolled ?? 0,
     subjectsEnrolled: sem?.subjects_enrolled ?? 0,
-    balance: sem?.balance ?? 0,
-    nextDue: nextDue ? { due_date: nextDue.due_date, name: nextDue.name } : null,
+    balance: semErr || sem?.balance == null ? null : Number(sem.balance),
+    nextDue: nextDueError ? null : nextDue,
+    nextDueUnavailable: !!nextDueError,
     clearance: { cleared: clearedCount, total: totalClear },
-    activity: activities || [],
+    activity: activityError ? null : activities || [],
   };
 
   renderDashboard();
@@ -351,7 +369,6 @@ function renderDashboard() {
   const greeting = getTimeGreeting();
   const studentName = d.student.name || '—';
   const studentNo = d.student.studentNo || '—';
-  const initials = getInitials(studentName);
   const firstName = studentName.split(' ')[0];
 
   setText('heroGreeting', `${greeting}, ${firstName}!`);
@@ -374,33 +391,33 @@ function renderDashboard() {
   const topAvatar = getEl('topAvatar');
   const topName = getEl('topName');
 
-  const avatarContent = d.student.avatarUrl
-    ? `<img src="${d.student.avatarUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
-    : initials;
-
-  if (sidebarAvatar) sidebarAvatar.innerHTML = avatarContent;
+  renderStudentAvatar(sidebarAvatar, studentName, state.studentProfile?.avatar_url);
   if (sidebarName) sidebarName.textContent = studentName;
   if (sidebarStudentNo) sidebarStudentNo.textContent = studentNo;
-  if (topAvatar) topAvatar.innerHTML = avatarContent;
+  renderStudentAvatar(topAvatar, studentName, state.studentProfile?.avatar_url);
   if (topName) topName.textContent = firstName;
 
   const currentGrades = (state.grades || []).filter(g => g.school_year.replace(/[\u2013\u2014]/g, '-') === d.student.schoolYear && g.semester === d.student.semester);
-  setText('stat-gwa', Grading.weightedGwa(currentGrades)?.toFixed(2) ?? '—');
-  setText('stat-units', d.unitsEnrolled);
-  setText('stat-subjects', `${d.subjectsEnrolled} subject${d.subjectsEnrolled === 1 ? '' : 's'}`);
-  setText('stat-balance', peso(d.balance));
-  setText('stat-due', d.balance > 0 && d.nextDue ? `Due ${fmtDate(d.nextDue.due_date)}` : 'All settled ✓');
-  setText('stat-clearance', `${d.clearance.cleared}/${d.clearance.total}`);
+  const summary = getEl('dashboardSummary');
+  if (summary) {
+    let due = 'No upcoming payment scheduled';
+    if (d.balance === null) due = 'Balance unavailable';
+    else if (d.balance <= 0) due = 'All settled ✓';
+    else if (d.nextDueUnavailable) due = 'Payment schedule unavailable';
+    else if (d.nextDue) due = d.nextDue.due_date ? `Due ${fmtDate(d.nextDue.due_date)}` : 'Due date not set';
+    summary.innerHTML = window.renderStudentSummary({ summary: {
+      gwa: Grading.weightedGwa(currentGrades)?.toFixed(2) ?? '—',
+      units: d.unitsEnrolled,
+      subjects: `${d.subjectsEnrolled} subject${d.subjectsEnrolled === 1 ? '' : 's'}`,
+      balance: d.balance === null ? '—' : peso(d.balance),
+      due,
+      clearance: `${d.clearance.cleared}/${d.clearance.total}`,
+    } });
+  }
 
   const actList = getEl('activityList');
   if (actList) {
-    actList.innerHTML = d.activity.length
-      ? d.activity.map(a => `
-        <div class="activity-row" style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-          <div class="adot" style="width:8px;height:8px;border-radius:50%;background:${a.color || '#E7338A'};"></div>
-          <div><div class="t" style="font-size:13px;font-weight:600;">${escapeHtml(a.description)}</div><div class="d" style="font-size:11px;color:var(--ink-500);">${fmtDate(a.created_at)}</div></div>
-        </div>`).join('')
-      : `<div class="empty-state-muted"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5;"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> No recent activity yet.</div>`;
+    actList.innerHTML = window.renderStudentActivity({ rows: d.activity, date: fmtDate });
   }
 
   const sf = getEl('sidebarFoot');
@@ -409,7 +426,7 @@ function renderDashboard() {
     const sem = d.student.semester || '1st Semester';
     const prog = d.student.program || '—';
     const yr = d.student.yearLevel || '—';
-    sf.innerHTML = `${sy} · ${sem}<br>${prog} — ${yr}`;
+    sf.replaceChildren(`${sy} · ${sem}`, document.createElement('br'), `${prog} — ${yr}`);
   }
 }
 
@@ -432,8 +449,9 @@ async function loadAnnouncements() {
         return;
       }
     } catch (_) {}
-    const deadline = a.deadline ? ` Deadline: <b>${fmtDate(a.deadline)}</b>.` : '';
-    banner.innerHTML = `<span class="banner-text">🔔 ${escapeHtml(a.content)}${deadline}</span><button class="banner-close" id="bannerCloseBtn" aria-label="Dismiss announcement" type="button">&times;</button>`;
+    banner.innerHTML = window.renderStudentAnnouncement({
+      content: a.content, deadline: a.deadline ? fmtDate(a.deadline) : undefined,
+    });
     banner.style.display = '';
     getEl('bannerCloseBtn')?.addEventListener('click', () => {
       banner.style.display = 'none';
@@ -458,54 +476,36 @@ async function loadDeadlines() {
   const container = getEl('deadlinesCard');
   if (!container) return;
 
-  const urgencyClass = (type) => type === 'urgent' ? 'urgent' : '';
-  const pillClass = (type) => type === 'urgent' ? 'pill-urgent' : 'pill-soft';
-  const pillText = (type) => type === 'urgent' ? 'URGENT' : (type === 'schedule' ? 'SCHEDULE' : 'OPTIONAL');
-  const dateColor = (type) => type === 'urgent' ? 'color:var(--pink-600);font-weight:700;' : 'color:var(--ink-500);';
-
-  container.innerHTML = `<div class="card-head"><h3>Upcoming Deadlines</h3></div>` +
-    ((rows && rows.length) ? rows.map(d => `
-      <div class="deadline ${urgencyClass(d.type)}" style="padding:10px 0;border-bottom:1px solid var(--line);">
-        <div class="deadline-top" style="display:flex;justify-space-between;align-items:center;">
-          <span class="t" style="font-size:13px;font-weight:600;">${escapeHtml(d.title)}</span>
-          <span class="pill ${pillClass(d.type)}">${pillText(d.type)}</span>
-        </div>
-        <div class="d" style="${dateColor(d.type)}font-size:12px;margin-top:2px;">${fmtDate(d.due_date)}</div>
-      </div>
-    `).join('') : `<div style="font-size:13px;color:var(--ink-500);padding:10px 0;">No upcoming deadlines.</div>`);
+  container.innerHTML = window.renderStudentDeadlines({ rows, date: fmtDate });
 }
 
 async function loadNotifications() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  const { data: rows } = await supabaseClient
+  const { data: rows, error } = await supabaseClient
     .from('activities')
     .select('*')
     .eq('student_id', profile.id)
     .order('created_at', { ascending: false })
     .limit(3);
 
-  if (Array.isArray(rows)) {
-    pendingNotifIds = rows.map(r => r.id);
-  } else {
-    pendingNotifIds = [];
-  }
-  refreshBellDot();
-
   const target = getEl('notifList');
+  if (error) {
+    if (pendingNotifIds === null && target) {
+      target.innerHTML = window.renderStudentNotifications({ rows: null, date: fmtDate });
+    }
+    return;
+  }
+  pendingNotifIds = (rows ?? []).map(row => row.id);
+  refreshBellDot();
   if (target) {
-    target.innerHTML = (rows && rows.length) ? rows.map(n => `
-      <div class="notif-item" style="padding:10px 14px;border-bottom:1px solid var(--line);">
-        <div class="t" style="font-size:12px;font-weight:600;">${escapeHtml(n.description)}</div>
-        <div class="d" style="font-size:10px;color:var(--ink-500);">${fmtDate(n.created_at)}</div>
-      </div>
-    `).join('') : `<div class="notif-item"><div class="t">No new notifications</div></div>`;
+    target.innerHTML = window.renderStudentNotifications({ rows: rows ?? [], date: fmtDate });
   }
 }
 
 // ── Notification unread badge (client-side "seen" tracking) ───────────
-let pendingNotifIds = [];
+let pendingNotifIds = null;
 function notifSeenKey() {
   return `imcc_notif_seen_${state.studentProfile?.id || 'anon'}`;
 }
@@ -525,13 +525,13 @@ function refreshBellDot() {
   const dot = getEl('notifDot');
   if (!dot) return;
   const seen = getNotifSeen();
-  const unseen = pendingNotifIds.filter(id => !seen.has(id)).length;
+  const unseen = pendingNotifIds?.filter(id => !seen.has(id)).length ?? 0;
   dot.textContent = unseen > 9 ? '9+' : unseen;
   dot.classList.toggle('show', unseen > 0);
 }
 function markBellSeen() {
   const seen = getNotifSeen();
-  pendingNotifIds.forEach(id => seen.add(id));
+  pendingNotifIds?.forEach(id => seen.add(id));
   saveNotifSeen(seen);
   refreshBellDot();
 }
@@ -546,6 +546,7 @@ async function loadEnrollment(background = false, requestedTerm = state.enrollme
     if (version !== enrollmentLoadVersion) return;
     showToast(message, true);
     setText('enrollmentLockStatus', message + ' Displayed subjects have been kept. Refresh enrollment to retry.');
+    renderCourseList();
   };
   state.enrollmentReadFailed = true;
   renderEnrollmentSummary();
@@ -632,9 +633,6 @@ async function loadEnrollment(background = false, requestedTerm = state.enrollme
 
   renderCourseList();
   renderEnrollmentSummary();
-  if (state.enrollmentLocked || state.enrollmentComplete) {
-    getEl('page-enrollment').querySelectorAll('input[type="checkbox"], #proceedBtn').forEach(el => { el.disabled = true; });
-  }
 }
 
 getEl('refreshEnrollment')?.addEventListener('click', () => loadEnrollment(true));
@@ -664,59 +662,49 @@ function renderCourseList() {
   if (!container) return;
 
   const courses = state.enrollmentComplete ? state.courses.filter(c => ['enrolled', 'approved', 'pending'].includes(c.enrollmentStatus)) : state.courses;
-  container.innerHTML = courses.map(c => {
-    const checked = state.selectedOfferingIds.has(c.offering_id);
-    return `
-    <div class="course-row ${checked ? 'checked' : ''}" data-id="${c.offering_id}">
-      <div class="chk">${checked ? '✓' : ''}</div>
-      <div>
-        <div class="code">${escapeHtml(c.code)}</div>
-        <div class="title">${escapeHtml(c.title)}</div>
-        <div class="meta">${escapeHtml(c.enrollmentStatus === 'pending' ? 'Awaiting staff/dean approval' : c.enrollmentStatus === 'enrolled' ? 'Enrolled' : c.enrollmentStatus === 'rejected' ? `Request rejected — you may submit again${c.reviewNote ? `: ${c.reviewNote}` : ''}` : '')}</div>
-        <div class="meta">${escapeHtml(c.instructor_name || 'TBA')} · ${escapeHtml(c.schedule || 'Schedule TBA')}</div>
-      </div>
-      <div class="fee">
-        <div class="units">${c.units} units</div>
-      </div>
-    </div>`;
-  }).join('');
+  const focused = container.querySelector('input:focus')?.value;
+  container.innerHTML = window.renderEnrollmentCourses({
+    courses, selected: state.selectedOfferingIds, disabled: enrollmentSelectionBlocked(),
+  });
+  if (focused) {
+    const checkbox = [...container.querySelectorAll('input:not(:disabled)')].find(input => input.value === focused);
+    (checkbox || getEl('refreshEnrollment'))?.focus();
+  }
+}
 
-  if (!state.courses.length) {
-    container.innerHTML = '<p class="muted-note">No subjects are available for your program and year in this term. Please check with your dean or registrar.</p>';
+function enrollmentSelectionBlocked() {
+  return state.enrollmentLocked || state.enrollmentComplete || state.enrollmentReadFailed || state.enrollmentSubmitting;
+}
+
+getEl('courseList')?.addEventListener('change', event => {
+  const input = event.target;
+  if (!input.matches('input[type="checkbox"]')) return;
+  const id = input.value;
+  if (enrollmentSelectionBlocked()) {
+    input.checked = state.selectedOfferingIds.has(id);
     return;
   }
-
-  container.querySelectorAll('.course-row').forEach(row => {
-    row.addEventListener('click', () => {
-      if (state.enrollmentLocked || state.enrollmentComplete || state.enrollmentReadFailed) return;
-      const id = String(row.dataset.id);
+  if (input.checked) {
+    const conflict = checkScheduleConflict(id);
+    if (conflict) {
       const course = state.courses.find(c => c.offering_id === id);
-      if (!course?.enrollment_open || ['pending', 'approved', 'enrolled', 'completed'].includes(course?.enrollmentStatus)) return;
-      if (state.selectedOfferingIds.has(id)) {
-        state.selectedOfferingIds.delete(id);
-        renderCourseList();
-        renderEnrollmentSummary();
-      } else {
-        const conflict = checkScheduleConflict(id);
-        if (conflict) {
-          const newCourse = state.courses.find(c => c.offering_id === id);
-          showToast(`⚠ Schedule conflict: ${newCourse.code} overlaps with ${conflict.code} (${conflict.schedule})`, true);
-          return;
-        }
-        state.selectedOfferingIds.add(id);
-        renderCourseList();
-        renderEnrollmentSummary();
-      }
-    });
-  });
-}
+      showToast(`⚠ Schedule conflict: ${course.code} overlaps with ${conflict.code} (${conflict.schedule})`, true);
+      input.checked = false;
+      return;
+    }
+    state.selectedOfferingIds.add(id);
+  } else {
+    state.selectedOfferingIds.delete(id);
+  }
+  renderEnrollmentSummary();
+});
 
 function renderEnrollmentSummary() {
   const selected = state.courses.filter(c => state.selectedOfferingIds.has(c.offering_id));
   const units = selected.reduce((s, c) => s + Number(c.units || 0), 0);
   setText('enrollmentSelectionCount', `${units} units · ${selected.length} subject${selected.length === 1 ? '' : 's'}`);
   const proceedBtn = getEl('proceedBtn');
-  if (proceedBtn) proceedBtn.disabled = selected.length === 0 || state.enrollmentReadFailed || state.enrollmentLocked || state.enrollmentComplete || state.enrollmentSubmitting;
+  if (proceedBtn) proceedBtn.disabled = selected.length === 0 || enrollmentSelectionBlocked();
 }
 
 function setEnrollStep(step) {
@@ -829,7 +817,6 @@ async function loadBilling() {
   // "Pay Now" buttons for a payment plan the school had never issued. An
   // empty schedule is now reported as "not published" instead.
   const installments = instRes.data || [];
-  const schedulePublished = installments.length > 0;
 
   state.billing = {
     totalPaid,
@@ -838,7 +825,6 @@ async function loadBilling() {
     miscTotal,
     balance,
     installments,
-    schedulePublished,
     transactions: txnsRes.data || [],
     enrolledCourses,
     miscFeesList: miscRes.data || [],
@@ -846,166 +832,12 @@ async function loadBilling() {
     activeSchoolYear,
   };
 
-  renderBillingStats();
-  renderBillingBreakdown();
-  renderInstallments();
-  renderUpay();
-  renderTxns();
+  renderBilling();
 }
 
-function renderBillingStats() {
-  const b = state.billing;
-  const pending = b.installments.filter(i => i.status === 'pending');
-  setText('bill-totalpaid', peso(b.totalPaid));
-  setText('bill-balance', peso(b.balance));
-  const next = pending[0];
-  setText('bill-nextdate', next?.due_date ? fmtDate(next.due_date).split(',')[0] : (next ? 'See schedule' : '—'));
-  setText('bill-nextlabel', next ? next.name.toLowerCase() : 'nothing due');
-}
-
-function renderBillingBreakdown() {
-  const b = state.billing;
-  const target = getEl('billingBreakdown');
-  if (!target) return;
-
-  const courseRows = (b.enrolledCourses || []).map(c =>
-    `<tr><td>${escapeHtml(c.code)}</td><td>${escapeHtml(c.title)}</td><td style="text-align:right">${Number(c.units||0).toFixed(1)} u</td><td style="text-align:right;font-weight:700;">${peso(c.fee)}</td></tr>`
-  ).join('');
-
-  const miscRows = (b.miscFeesList || []).map(f =>
-    `<tr><td colspan="3" style="color:var(--ink-500)">${escapeHtml(f.name)}</td><td style="text-align:right;">${peso(f.amount)}</td></tr>`
-  ).join('');
-
-  const installRows = (b.installments || []).map(i => {
-    const pct = b.totalAssessment > 0 ? Math.round((Number(i.amount)/b.totalAssessment)*100) : 0;
-    const paid = i.status === 'paid';
-    return `<tr>
-      <td><b>${escapeHtml(i.name)}</b></td>
-      <td>${i.due_date ? fmtDate(i.due_date) : '<span style="color:var(--ink-300)">TBA</span>'}</td>
-      <td style="text-align:right;font-weight:800;color:${paid ? 'var(--green)' : 'var(--pink-600)'};">${peso(i.amount)}</td>
-      <td><span style="font-size:10px;font-weight:800;color:${paid ? 'var(--green)' : 'var(--amber)'};">${paid ? '✓ PAID' : `${pct}%`}</span></td>
-    </tr>`;
-  }).join('');
-
-  target.innerHTML = `
-    <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:16px;">
-      <div style="background:var(--card);padding:12px 16px;font-weight:800;font-size:13px;border-bottom:1px solid var(--line);">
-        📚 Enrolled Subjects — ${escapeHtml(b.activeSemester)} ${escapeHtml(b.activeSchoolYear)}
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <thead><tr style="background:var(--bg);">
-          <th style="padding:8px 12px;text-align:left;color:var(--ink-500);font-size:11px;">CODE</th>
-          <th style="padding:8px 12px;text-align:left;color:var(--ink-500);font-size:11px;">SUBJECT</th>
-          <th style="padding:8px 12px;text-align:right;color:var(--ink-500);font-size:11px;">UNITS</th>
-          <th style="padding:8px 12px;text-align:right;color:var(--ink-500);font-size:11px;">FEE</th>
-        </tr></thead>
-        <tbody>${courseRows || '<tr><td colspan="4" style="padding:12px;text-align:center;color:var(--ink-400);">No enrolled subjects this term.</td></tr>'}</tbody>
-        ${miscRows ? `<tbody style="border-top:1px solid var(--line);">${miscRows}</tbody>` : ''}
-        <tfoot style="border-top:2px solid var(--line);background:var(--bg);">
-          <tr><td colspan="3" style="padding:10px 12px;font-weight:800;">Tuition Subtotal</td><td style="padding:10px 12px;text-align:right;font-weight:800;">${peso(b.tuitionTotal)}</td></tr>
-          ${b.miscTotal ? `<tr><td colspan="3" style="padding:4px 12px;color:var(--ink-500);">Miscellaneous Fees</td><td style="padding:4px 12px;text-align:right;">${peso(b.miscTotal)}</td></tr>` : ''}
-          <tr style="background:rgba(231,51,138,0.06);"><td colspan="3" style="padding:10px 12px;font-weight:800;color:var(--pink-600);">Total Assessment</td><td style="padding:10px 12px;text-align:right;font-weight:800;color:var(--pink-600);font-size:15px;">${peso(b.totalAssessment)}</td></tr>
-        </tfoot>
-      </table>
-    </div>
-    ${installRows ? `
-    <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;">
-      <div style="background:var(--card);padding:12px 16px;font-weight:800;font-size:13px;border-bottom:1px solid var(--line);">
-        💳 Per-Term Payment Schedule
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <thead><tr style="background:var(--bg);">
-          <th style="padding:8px 12px;text-align:left;color:var(--ink-500);font-size:11px;">TERM</th>
-          <th style="padding:8px 12px;text-align:left;color:var(--ink-500);font-size:11px;">DUE DATE</th>
-          <th style="padding:8px 12px;text-align:right;color:var(--ink-500);font-size:11px;">AMOUNT</th>
-          <th style="padding:8px 12px;text-align:center;color:var(--ink-500);font-size:11px;">STATUS</th>
-        </tr></thead>
-        <tbody>${installRows}</tbody>
-        <tfoot style="border-top:2px solid var(--line);background:var(--bg);">
-          <tr><td colspan="2" style="padding:10px 12px;font-weight:800;">Total Paid</td><td style="padding:10px 12px;text-align:right;color:var(--green);font-weight:800;">${peso(b.totalPaid)}</td><td></td></tr>
-          <tr><td colspan="2" style="padding:4px 12px;font-weight:800;color:var(--red);">Remaining Balance</td><td style="padding:4px 12px;text-align:right;color:var(--red);font-weight:800;font-size:15px;">${peso(b.balance)}</td><td></td></tr>
-        </tfoot>
-      </table>
-    </div>` : ''}`;
-}
-
-
-function renderTxns() {
-  const target = getEl('txnBody');
-  if (!target) return;
-  const { transactions } = state.billing;
-  target.innerHTML = transactions.length ? transactions.map(t => `
-    <tr>
-      <td class="or-num">${escapeHtml(t.or_number || '—')}</td>
-      <td>${fmtDate(t.txn_date)}</td>
-      <td>${escapeHtml(t.description)}</td>
-      <td><span class="chan">${escapeHtml(t.channel)}</span></td>
-      <td class="amt-green">${peso(t.amount)}</td>
-      <td><button class="mini-btn" type="button">View</button></td>
-    </tr>`).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--ink-300);padding:20px;">No transaction records found.</td></tr>`;
-  target.querySelectorAll('button').forEach((button, index) => {
-    button.addEventListener('click', () => showToast(`OR #${transactions[index].or_number || ''} recorded.`));
-  });
-}
-
-function renderInstallments() {
-  const target = getEl('instList');
-  if (!target) return;
-
-  const list = state.billing.installments || [];
-
-  // An empty schedule means the school has not published one. It does not
-  // mean the balance is settled, and it must not be rendered as if it did.
-  if (!list.length) {
-    target.innerHTML = `
-      <div class="inst-empty" style="text-align:center;padding:22px 12px;color:var(--ink-500);font-size:13px;line-height:1.5;">
-        No installment schedule has been published yet.<br>
-        <span style="font-size:12px;">Your assessed balance is shown above. Please confirm payment terms with the Cashier's Office.</span>
-      </div>`;
-    return;
-  }
-
-  target.innerHTML = list.map(i => `
-    <div class="inst-row" style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);">
-      <div><div class="n" style="font-size:13px;font-weight:600;">${escapeHtml(i.name)}</div><div class="dt" style="font-size:11px;color:var(--ink-500);">${i.due_date ? 'Due ' + escapeHtml(fmtDate(i.due_date)) : 'No due date set'}</div></div>
-      <div style="text-align:right;">
-        <div class="${i.status === 'paid' ? 'amt-strike' : 'amt-pink'}" style="font-weight:700;">${peso(i.amount)}</div>
-        <div style="font-size:10.5px;font-weight:800;color:${i.status === 'paid' ? 'var(--green)' : 'var(--red)'};">${i.status === 'paid' ? '✓ PAID' : 'PENDING'}</div>
-      </div>
-    </div>`).join('');
-}
-
-function renderUpay() {
-  const target = getEl('upayList');
-  if (!target) return;
-
-  const list = state.billing.installments || [];
-
-  if (!list.length) {
-    target.innerHTML = `
-      <div class="upay" style="text-align:center;padding:18px 14px;color:var(--ink-500);font-size:13px;line-height:1.5;">
-        <b style="display:block;margin-bottom:6px;color:var(--ink-900);font-size:14px;">No payment schedule published</b>
-        Pay at the Cashier's Office or through your designated payment channel.<br>
-        <span style="font-size:12px;">A schedule appears here once the Cashier's Office issues it.</span>
-      </div>`;
-    return;
-  }
-
-  const pending = list.filter(i => i.status === 'pending');
-
-  target.innerHTML = pending.length ? pending.map(i => `
-    <div class="upay due" style="padding:12px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;">
-      <div class="upay-top" style="display:flex;justify-content:space-between;align-items:center;">
-        <span class="t" style="font-weight:600;font-size:13px;">${escapeHtml(i.name)}</span>
-        <span class="pill pill-urgent">PENDING</span>
-      </div>
-      <div class="amt" style="color:var(--pink-600);font-size:18px;font-weight:800;margin:6px 0;">${peso(i.amount)}</div>
-      <div class="due-date" style="font-size:12px;color:var(--ink-500);">${i.due_date ? 'Due: ' + escapeHtml(fmtDate(i.due_date)) : 'Due date not set'}</div>
-      <div style="margin-top:10px;font-size:12px;color:var(--ink-500);line-height:1.5;">
-        Pay at the Cashier's Office. Payment status is recorded by cashier staff.
-      </div>
-    </div>`).join('') : `
-    <div class="upay" style="text-align:center;color:var(--green);font-weight:700;padding:15px;">✓ All installments recorded as paid</div>`;
+function renderBilling() {
+  const target = getEl('billingContent');
+  if (target) target.innerHTML = window.renderStudentBilling({ billing: state.billing, money: peso, date: fmtDate });
 }
 
 // payInstallment() was removed. It was not a payment flow: it wrote
@@ -1022,7 +854,17 @@ function csvField(value) {
   return '"' + text.replaceAll('"', '""') + '"';
 }
 
-getEl('exportBtn')?.addEventListener('click', () => {
+getEl('page-billing')?.addEventListener('click', event => {
+  if (!(event.target instanceof Element)) return;
+  const receipt = event.target.closest('button[data-receipt]');
+  if (receipt) {
+    showToast(`OR #${receipt.dataset.receipt} recorded.`);
+    return;
+  }
+  if (event.target.closest('#exportBtn')) exportBillingCsv();
+});
+
+function exportBillingCsv() {
   if (!state.billing.transactions.length) {
     showToast('No transactions to export.', true);
     return;
@@ -1039,9 +881,11 @@ getEl('exportBtn')?.addEventListener('click', () => {
   a.download = `MyIMCC_Transactions_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-});
+}
 
-getEl('gradeYearFilter')?.addEventListener('change', () => { renderGrades(); renderGradeStats(); renderGradesHeader(); });
+getEl('gradeYearFilter')?.addEventListener('change', () => {
+  if (state.grades) renderSelectedGrades();
+});
 getEl('evalYearFilter')?.addEventListener('change', loadFacultyEval);
 
 // ── Grades Module ────────────────────────────────────────────────────
@@ -1072,13 +916,10 @@ function buildGradesTermDropdown() {
   if (dd) {
     dd.onchange = () => {
       _gradesSelectedTerm = dd.value;
-      renderGrades();
-      renderGradeStats();
-      renderGradesHeader();
+      renderSelectedGrades();
     };
-    dd.innerHTML = terms.map(t =>
-      `<option value="${escapeHtml(t.key)}" ${t.key === _gradesSelectedTerm ? 'selected' : ''}>${escapeHtml(t.semester)} — ${escapeHtml(t.school_year)}</option>`
-    ).join('');
+    dd.innerHTML = window.renderStudentGradeTerms({ terms });
+    dd.value = _gradesSelectedTerm ?? '';
   }
 }
 
@@ -1091,7 +932,19 @@ async function loadGrades() {
     .select('*, course_offerings(code, title, units, year, instructor_name, semester, school_year)')
     .eq('student_id', profile.id);
 
-  if (error) { showToast('Could not load grades. Please try again.', true); return; }
+  if (error) {
+    const message = 'Could not load grades. Please try again.';
+    if (!state.grades) {
+      setText('gradesTitleText', 'Grades');
+      setText('gradesSubtitle', '');
+      setText('grade-gwa-sub', '—');
+      setText('grade-highest-course', '—');
+      setText('gradesLoadMessage', message);
+      setText('aiInsightText', 'Grade estimates are unavailable.');
+    }
+    showToast(message, true);
+    return;
+  }
 
   state.grades = (rows || []).map(g => ({
     code: g.course_offerings?.code || '—',
@@ -1115,10 +968,7 @@ async function loadGrades() {
   if (state.dashboard) renderDashboard();
 
   buildGradesTermDropdown();
-  renderGrades();
-  renderGradeStats();
-  renderGradesHeader();
-  setupProspectusButton();
+  renderSelectedGrades();
 }
 
 
@@ -1126,8 +976,7 @@ function predictedGwa(rows) {
   return Grading.weightedGwa(rows.filter(g => g.grade_scale === 'school').map(g => ({ ...g, final: g.final ?? Grading.estimate(g), equivalent: g.final != null ? g.equivalent : Grading.estimate(g) })));
 }
 
-function renderGradeStats() {
-  const termGrades = gradesForSelectedTerm();
+function renderGradeStats(termGrades, estimatedGwa) {
   const withFinal = termGrades.filter(g => g.final !== null && g.final !== undefined);
   const avg = Grading.weightedGwa(withFinal)?.toFixed(2) ?? '—';
   const eligible = withFinal.filter(g => g.remark !== 'Dropped' && Grading.isSchoolGrade(g.equivalent) && Number(g.equivalent) !== 4);
@@ -1141,104 +990,59 @@ function renderGradeStats() {
   setText('grade-highest', Grading.formatGrade(highest));
   setText('grade-highest-course', highestCourse ? `${highestCourse.code} — Final` : '—');
 
-  const aiAvg = predictedGwa(termGrades)?.toFixed(2) ?? '—';
-  setText('grade-ai', aiAvg);
+  setText('grade-ai', estimatedGwa?.toFixed(2) ?? '—');
   setText('grade-completed', `${completed}/${total}`);
 }
 
-function renderGrades() {
+function renderGrades(termGrades) {
   const target = getEl('gradesBody');
   if (!target) return;
-  const periodCell = (val) => val !== null && val !== undefined
-    ? `<span style="color:var(--blue);font-weight:700;">${Grading.formatGrade(val)}</span>`
-    : `<span style="font-style:italic;color:var(--ink-300);">—</span>`;
-
-  const termGrades = gradesForSelectedTerm();
-  if (!termGrades || termGrades.length === 0) {
-    target.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--ink-400);padding:36px;font-size:13px;">No grades recorded for this term yet. Once faculty encodes your grades, they will appear here.</td></tr>`;
-    return;
-  }
-
-  target.innerHTML = termGrades.map(g => `
-    <tr>
-      <td class="or-num">${escapeHtml(g.code)}</td>
-      <td>${escapeHtml(g.title)}</td>
-      <td style="color:var(--ink-500);">${escapeHtml(g.instructor_name || 'TBA')}</td>
-      <td>${g.units || '—'}</td>
-      <td>${periodCell(g.grade_scale === 'school' ? g.prelim : null)}</td>
-      <td>${periodCell(g.grade_scale === 'school' ? g.midterm : null)}</td>
-      <td>${periodCell(g.grade_scale === 'school' ? g.semifinal : null)}</td>
-      <td style="${g.final !== null && g.final !== undefined ? 'color:var(--green);font-weight:700;' : 'font-style:italic;color:var(--ink-300);'}">${g.final != null ? Grading.formatGrade(g.grade_scale === 'school' ? g.final : g.equivalent) : 'Pending'}</td>
-      <td style="font-weight:800;">${Grading.formatGrade(g.equivalent)}<small style="display:block;font-weight:400;">${g.grade_scale === 'school' ? Grading.gradeDescription(g.equivalent) : 'Legacy · under review'}</small></td>
-      <td><span class="pred-chip" style="background:var(--pink-50, #fdf2f8);color:var(--pink-600, #db2777);padding:2px 8px;border-radius:12px;font-weight:600;font-size:12px;">${Grading.estimate(g) != null ? '~ ' + Grading.formatGrade(Grading.estimate(g)) : '—'}</span></td>
-      <td><span class="badge ${g.remark === 'Passed' ? 'badge-green' : 'badge-blue'}">${escapeHtml(g.remark)}</span></td>
-    </tr>`).join('');
+  const rows = termGrades.map(g => {
+    const school = g.grade_scale === 'school';
+    const estimate = Grading.estimate(g);
+    return {
+      code: g.code,
+      title: g.title,
+      instructor: g.instructor_name || 'TBA',
+      units: g.units || '—',
+      periods: [g.prelim, g.midterm, g.semifinal].map(value => school && value != null ? Grading.formatGrade(value) : null),
+      final: g.final != null ? Grading.formatGrade(school ? g.final : g.equivalent) : null,
+      equivalent: Grading.formatGrade(g.equivalent),
+      description: school ? Grading.gradeDescription(g.equivalent) : 'Legacy · under review',
+      estimate: estimate != null ? '~ ' + Grading.formatGrade(estimate) : '—',
+      remark: g.remark,
+    };
+  });
+  target.innerHTML = window.renderStudentGradeRows({ rows });
 }
 
-function renderGradesHeader() {
-  const profile = state.studentProfile;
-  const program = profile?.program || 'BSIT';
-  const yearLevel = profile?.year_level || '';
-  const section = profile?.section || '';
-
-  // Use selected term from dropdown, fall back to current semester
-  let semester = '1st Semester', schoolYear = '2026-2027';
-  if (_gradesSelectedTerm) {
-    const [sy, sem] = _gradesSelectedTerm.split('|');
-    schoolYear = sy;
-    semester = sem;
-  }
-
-  const setTitle = getEl('gradesTitle');
-  if (setTitle) {
-    setTitle.innerHTML = `Grades — ${escapeHtml(semester)}, ${escapeHtml(schoolYear)}<br><span style="font-weight:500;font-size:12px;color:var(--ink-500);" id="gradesSubtitle">${escapeHtml(program)} ${escapeHtml(yearLevel)}${section ? ' · Section ' + escapeHtml(section) : ''}</span>`;
-  }
-
+function renderSelectedGrades() {
   const termGrades = gradesForSelectedTerm();
+  const estimatedGwa = predictedGwa(termGrades);
+  renderGrades(termGrades);
+  renderGradeStats(termGrades, estimatedGwa);
+
+  const { program, year_level, section } = state.studentProfile || {};
+  const [schoolYear, semester] = (_gradesSelectedTerm || '2026-2027|1st Semester').split('|');
+  setText('gradesTitleText', `Grades — ${semester}, ${schoolYear}`);
+  setText('gradesSubtitle', `${program || 'BSIT'} ${year_level || ''}${section ? ' · Section ' + section : ''}`);
   const aiEl = getEl('aiInsightText');
   if (aiEl) {
     const withAi = termGrades.filter(g => Grading.estimate(g) != null);
-    const aiAvg = withAi.length ? predictedGwa(termGrades) : null;
-
-    if (aiAvg !== null) {
-      const track = aiAvg <= 3 ? 'Estimated passing average' : 'Estimated average below passing';
-      const weakest = withAi.reduce((min, g) => Grading.estimate(g) > Grading.estimate(min) ? g : min, withAi[0]);
-      const weakTxt = weakest ? ` Focus on ${escapeHtml(weakest.code)} (${escapeHtml(weakest.title)}) for improvement.` : '';
-      aiEl.innerHTML = `Estimated unit-weighted GWA of <b>${aiAvg.toFixed(2)}</b> — <b>${track}</b>.${weakTxt}`;
-    } else {
-      aiEl.textContent = 'Estimates need school grades from completed periods and valid subject units. Legacy records require review.';
-    }
+    const weakest = withAi.reduce((min, g) => Grading.estimate(g) > Grading.estimate(min) ? g : min, withAi[0]);
+    aiEl.innerHTML = window.renderStudentGradeInsight({ average: withAi.length ? estimatedGwa : null, weakest });
   }
 }
 
 
 // ── Degree Prospectus Modal ──────────────────────────────────────────
-function setupProspectusButton() {
-  const prospectusBtn = getEl('prospectusBtn');
-  if (prospectusBtn) {
-    prospectusBtn.removeEventListener('click', viewProspectus);
-    prospectusBtn.addEventListener('click', viewProspectus);
-  }
-
-  const closeBtn = getEl('prospectusClose');
-  const overlay = getEl('prospectusOverlay');
-  const modal = getEl('prospectusModal');
-
-  const closeModal = () => {
-    if (modal) modal.style.display = 'none';
-    const dyn = document.querySelector('.prospectus-modal-dynamic');
-    if (dyn) dyn.remove();
-  };
-
-  closeBtn?.removeEventListener('click', closeModal);
-  closeBtn?.addEventListener('click', closeModal);
-  overlay?.removeEventListener('click', closeModal);
-  overlay?.addEventListener('click', closeModal);
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeModal();
-  });
-}
+const prospectusDialog = getEl('prospectusModal');
+getEl('prospectusBtn')?.addEventListener('click', () => viewProspectus());
+getEl('prospectusClose')?.addEventListener('click', () => prospectusDialog.close());
+prospectusDialog?.addEventListener('click', event => {
+  if (event.target === prospectusDialog) prospectusDialog.close();
+});
+prospectusDialog?.addEventListener('close', () => getEl('prospectusBtn')?.focus());
 
 function getOrdinalSuffix(n) {
   const num = Number(n) || 1;
@@ -1359,7 +1163,7 @@ async function viewProspectus(background = false) {
 
     const completionPercentage = totalUnits > 0 ? Math.round((unitsCompleted / totalUnits) * 100) : 0;
 
-    if (background === true && getEl('prospectusModal')?.style.display !== 'flex' && !document.querySelector('.prospectus-modal-dynamic')) return;
+    if (background === true && !getEl('prospectusModal')?.open) return;
     showProspectusModal({
       program: programName,
       totalUnits,
@@ -1380,161 +1184,86 @@ window.viewProspectus = viewProspectus;
 function showProspectusModal(data) {
   const modal = getEl('prospectusModal');
   const container = getEl('prospectusContainer');
-  const subtitle = getEl('prospectusSubtitle');
-  const fill = getEl('prospectusProgressFill');
-  const text = getEl('prospectusProgressText');
-
-  if (modal && container) {
-    if (subtitle) subtitle.textContent = `${data.program || 'BSIT'} — Bachelor of Science in Information Technology`;
-    if (fill) fill.style.width = `${data.completionPercentage || 0}%`;
-    if (text) text.textContent = `Overall Curriculum Completion: ${data.completionPercentage || 0}% (${data.unitsCompleted || 0} / ${data.totalUnits || 0} units)`;
-
-    container.innerHTML = (data.bySemester || []).map(sem => `
-      <div class="semester-block">
-        <div class="semester-title">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:middle;margin-right:4px;">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-          </svg>
-          ${sem.semesterLabel}
-        </div>
-        <div class="course-list">
-          ${(sem.courses || []).map(c => `
-            <div class="prospectus-course ${c.isMajor ? 'is-major' : ''}" data-status="${c.completed ? 'completed' : 'pending'}">
-              <span class="course-status">${c.completed ? '✓' : (c.enrolled ? '⏳' : '○')}</span>
-              <div class="course-info">
-                <div class="code-line">
-                  <span class="code">${escapeHtml(c.code)}</span>
-                  ${c.isMajor ? '<span class="major-badge">⭐ MAJOR</span>' : ''}
-                  ${c.prerequisites && c.prerequisites !== 'None' ? `<span style="font-size:10px;color:var(--ink-400);background:var(--bg);padding:1px 6px;border-radius:4px;border:1px solid var(--line);margin-left:4px;">Prereq: ${escapeHtml(c.prerequisites)}</span>` : ''}
-                </div>
-                <div class="title">${escapeHtml(c.title)}</div>
-                <div class="meta">${c.lecUnits !== undefined ? `${c.lecUnits} Lec` : ''}${c.labUnits ? ` · ${c.labUnits} Lab` : ''}${c.completed && c.grade ? ` · Final Grade: <strong>${c.grade}</strong>` : (c.enrolled ? ' · Currently Enrolled' : '')}</div>
-              </div>
-              <div class="units">${c.units} Units</div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `).join('');
-
-    modal.style.display = 'flex';
-  } else {
-    // Dynamic fallback modal
-    const existing = document.querySelector('.prospectus-modal-dynamic');
-    if (existing) existing.remove();
-
-    const dynModal = document.createElement('div');
-    dynModal.className = 'prospectus-modal prospectus-modal-dynamic';
-    dynModal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px;';
-
-    dynModal.innerHTML = `
-      <div class="prospectus-content" style="background:var(--bg-card, #ffffff);border:1px solid var(--line, #cbd5e1);border-radius:14px;padding:24px;max-width:760px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 40px rgba(0,0,0,0.3);">
-        <div class="prospectus-header" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
-          <div>
-            <h2 style="margin:0;font-size:20px;color:var(--ink-900);">Degree Prospectus</h2>
-            <p style="margin:4px 0 0;font-size:13px;color:var(--ink-500);">${escapeHtml(data.program || 'BSIT')} — Total ${data.totalUnits || 0} Units</p>
-          </div>
-          <button class="prospectus-close" onclick="this.closest('.prospectus-modal-dynamic').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--ink-500);">&times;</button>
-        </div>
-        <div class="prospectus-body">
-          <div class="prospectus-progress" style="margin-bottom:20px;">
-            <div class="progress-bar" style="height:10px;background:var(--line);border-radius:5px;overflow:hidden;"><div class="progress-fill" style="width:${data.completionPercentage || 0}%;height:100%;background:var(--pink-500, #ec4899);"></div></div>
-            <div class="progress-text" style="font-size:12px;color:var(--ink-600);margin-top:6px;font-weight:600;">Overall Curriculum Completion: ${data.completionPercentage || 0}% (${data.unitsCompleted || 0} / ${data.totalUnits || 0} units)</div>
-          </div>
-          <div class="prospectus-courses">
-            ${(data.bySemester || []).length > 0 ? data.bySemester.map(sem => `
-              <div class="semester-block" style="margin-bottom:18px;">
-                <div class="semester-title" style="font-weight:700;font-size:14px;color:var(--ink-800);margin-bottom:8px;border-bottom:1px solid var(--line);padding-bottom:4px;">${sem.semesterLabel}</div>
-                <div class="course-list">
-                  ${(sem.courses || []).map(c => `
-                    <div class="prospectus-course" style="display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:8px;margin-bottom:6px;background:var(--bg, #f8fafc);border:1px solid var(--line);">
-                      <div style="display:flex;align-items:center;gap:10px;">
-                        <span class="course-status" style="font-weight:800;color:${c.completed ? 'var(--green, #10b981)' : 'var(--ink-300)'};">${c.completed ? '✓' : (c.enrolled ? '⏳' : '○')}</span>
-                        <div>
-                          <div class="code-line">
-                            <span class="code" style="font-weight:700;font-size:13px;color:var(--pink-600);">${escapeHtml(c.code)}</span>
-                            ${c.isMajor ? '<span style="font-size:10px;background:var(--pink-50);color:var(--pink-600);padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:700;">⭐ MAJOR</span>' : ''}
-                            ${c.prerequisites && c.prerequisites !== 'None' ? `<span style="font-size:10px;color:var(--ink-400);background:var(--bg);padding:1px 6px;border-radius:4px;margin-left:4px;">Prereq: ${escapeHtml(c.prerequisites)}</span>` : ''}
-                          </div>
-                          <div class="title" style="font-size:12px;color:var(--ink-700);">${escapeHtml(c.title)}</div>
-                        </div>
-                      </div>
-                      <div class="meta" style="font-size:12px;font-weight:600;color:var(--ink-700);">${c.units} units${c.completed && c.grade ? ` · Grade: <strong>${c.grade}</strong>` : (c.enrolled ? ' · Enrolled' : '')}</div>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-            `).join('') : '<div style="text-align:center;padding:30px;color:var(--ink-500);">No curriculum data available.</div>'}
-          </div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(dynModal);
+  if (!modal || !container) return;
+  setText('prospectusSubtitle', data.program);
+  container.innerHTML = window.renderStudentProspectus(data);
+  if (!modal.open) {
+    container.scrollTop = 0;
+    modal.showModal();
   }
 }
 
 // ── Certificate of Registration (COR) Page ───────────────────────────
+getEl('corPrintBtn')?.addEventListener('click', printCorPage);
+getEl('corDocContainer')?.addEventListener('click', event => {
+  if (event.target.closest('#corRetryBtn')) loadCor();
+});
+
 async function loadCor() {
   const container = getEl('corDocContainer');
+  if (!container) return;
   const printBtn = getEl('corPrintBtn');
-  if (printBtn) {
-    printBtn.removeEventListener('click', printCorPage);
-    printBtn.addEventListener('click', printCorPage);
-  }
+  if (printBtn) printBtn.disabled = true;
+  container.innerHTML = window.renderStudentCorStatus(false);
 
   try {
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) return;
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError) throw authError;
 
     const profile = state.studentProfile;
-    if (!profile) throw new Error('Profile not found');
+    if (!user || !profile) throw new Error('Student session is unavailable');
 
-    const { data: sem } = await supabaseClient
+    const { data: sem, error: termError } = await supabaseClient
       .from('student_semesters')
       .select('*')
       .eq('student_id', profile.id)
       .eq('is_current', true)
       .maybeSingle();
+    if (termError) throw termError;
 
     const activeSchoolYear = sem?.school_year || '2026-2027';
     const activeSemester = sem?.semester || '1st Semester';
 
-    const { data: enrollments } = await supabaseClient
+    const { data: enrollments, error: enrollmentsError } = await supabaseClient
       .from('enrollments')
       .select('offering_id, course_offerings(*)')
       .eq('student_id', profile.id)
       .eq('status', 'enrolled');
+    if (enrollmentsError) throw enrollmentsError;
 
     const courses = (enrollments || [])
       .map(e => e.course_offerings)
       .filter(c => c && c.school_year === activeSchoolYear && c.semester === activeSemester);
 
-    const { data: miscFees } = await supabaseClient
+    const { data: miscFees, error: feesError } = await supabaseClient
       .from('misc_fees')
       .select('*')
       .eq('school_year', activeSchoolYear)
       .eq('semester', activeSemester);
+    if (feesError) throw feesError;
 
-    const { data: billing } = await supabaseClient
+    const { data: billing, error: billingError } = await supabaseClient
       .from('billing_summary')
       .select('*')
       .eq('student_id', profile.id)
-      .single();
+      .maybeSingle();
+    if (billingError) throw billingError;
 
     // ponytail: cor_signatories table consolidated into system_settings
-    const { data: sigRows } = await supabaseClient
+    const { data: sigRows, error: signatoriesError } = await supabaseClient
       .from('system_settings')
       .select('key, value')
       .in('key', ['cor_cashier_name', 'cor_registrar_name']);
+    if (signatoriesError) throw signatoriesError;
     const sigs = {
       cashier_name: sigRows?.find(r => r.key === 'cor_cashier_name')?.value || '—',
       registrar_name: sigRows?.find(r => r.key === 'cor_registrar_name')?.value || '—'
     };
 
     renderCorPage({ profile, user, activeSchoolYear, activeSemester, courses, miscFees, billing, sigs });
+    if (printBtn) printBtn.disabled = false;
   } catch (err) {
-    if (container) container.innerHTML = `<div class="cor-loading">Could not load your COR: ${escapeHtml(err.message)}</div>`;
+    container.innerHTML = window.renderStudentCorStatus(true);
     console.error(err);
   }
 }
@@ -1551,116 +1280,45 @@ function renderCorPage(d) {
   const totalPaid = billing?.total_paid || 0;
   const balance = studentBillingBalance(billing, totalAssessment, totalPaid);
 
-  let statusLabel = 'OFFICIALLY ENROLLED';
-  let statusColor = 'var(--green)';
-  if (courses.length === 0) { statusLabel = 'NOT ENROLLED'; statusColor = 'var(--red)'; }
-  else if (balance > 0) { statusLabel = 'PARTIAL PAYMENT'; statusColor = 'var(--amber)'; }
-
-  const rowsHtml = courses.length ? courses.map(c => `
-        <tr>
-          <td class="cor-font-mono">${escapeHtml(c.code || '—')}</td>
-          <td>${escapeHtml(c.title || '—')}</td>
-          <td class="cor-text-right">${Number(c.units || 0).toFixed(1)}</td>
-          <td>${escapeHtml(c.schedule || 'TBA')}</td>
-          <td>${escapeHtml(c.instructor_name || 'TBA')}</td>
-        </tr>`).join('') : `
-        <tr>
-          <td class="cor-font-mono">—</td>
-          <td>No enrolled subjects found for this term.</td>
-          <td class="cor-text-right">—</td>
-          <td>—</td>
-          <td>—</td>
-        </tr>`;
-
-  container.innerHTML = `
-    <div class="cor-doc">
-      <div class="cor-doc-head">
-        <div class="cor-brand">
-          <img src="logo.png" alt="Iligan Medical Center College Official Logo" class="cor-logo-img" onerror="this.style.display='none';">
-          <div class="cor-school-info">
-            <h1>Iligan Medical Center College</h1>
-            <p>San Miguel, Iligan City, Lanao del Norte, Philippines</p>
-            <div class="cor-registrar-label">Office of the College Registrar</div>
-          </div>
-        </div>
-        <div class="cor-doc-title">
-          <h2>Certificate of<br>Registration</h2>
-          <span>AY ${escapeHtml(activeSchoolYear)} · ${escapeHtml(activeSemester)}</span>
-        </div>
-      </div>
-
-      <div class="cor-info-grid">
-        <div class="cor-info-item"><span>Student No:</span> <strong>${escapeHtml(profile.student_no || '—')}</strong></div>
-        <div class="cor-info-item"><span>Program:</span> <strong>${escapeHtml(profile.program || '—')}</strong></div>
-        <div class="cor-info-item"><span>Student Name:</span> <strong>${escapeHtml(profile.full_name || '—')}</strong></div>
-        <div class="cor-info-item"><span>Year / Section:</span> <strong>${escapeHtml(`${profile.year_level || '—'}${profile.section ? ' — Section ' + profile.section : ''}`)}</strong></div>
-        <div class="cor-info-item"><span>Email:</span> <strong>${escapeHtml(profile.email || user.email || '—')}</strong></div>
-        <div class="cor-info-item"><span>Date Issued:</span> <strong>${escapeHtml(fmtDate(new Date().toISOString()))}</strong></div>
-      </div>
-
-      <div class="cor-section-heading">Enrolled Subjects &amp; Schedule</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Course Code</th>
-            <th>Course Title</th>
-            <th class="cor-text-right">Units</th>
-            <th>Schedule</th>
-            <th>Instructor</th>
-          </tr>
-        </thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-
-      <div class="cor-section-heading">Assessment &amp; Payment Summary</div>
-      <div class="cor-financial-grid">
-        <div class="cor-summary-card">
-          <div class="cor-summary-card-header">Tuition &amp; Fees Breakdown</div>
-          <div class="cor-summary-row"><span>Total Enrolled Units:</span> <strong>${totalUnits.toFixed(1)} Units</strong></div>
-          <div class="cor-summary-row"><span>Tuition Assessment:</span> <span>${peso(tuition)}</span></div>
-          <div class="cor-summary-row"><span>Miscellaneous Fees:</span> <span>${peso(misc)}</span></div>
-          <div class="cor-summary-row cor-total"><span>Total Assessment:</span> <span>${peso(totalAssessment)}</span></div>
-        </div>
-        <div class="cor-summary-card">
-          <div class="cor-summary-card-header">Account Standing</div>
-          <div class="cor-summary-row"><span>Total Amount Paid:</span> <span style="color:var(--green);font-weight:700;">${peso(totalPaid)}</span></div>
-          <div class="cor-summary-row"><span>Balance Remaining:</span> <span style="color:var(--red);font-weight:700;">${peso(balance)}</span></div>
-          <div class="cor-summary-row"><span>Status:</span> <span class="cor-watermark-stamp" style="border-color:${statusColor};color:${statusColor};">${statusLabel}</span></div>
-        </div>
-      </div>
-
-      <div class="cor-signatures">
-        <div class="cor-sig-block">
-          <div class="cor-sig-line">${escapeHtml(profile.full_name || '—')}</div>
-          <div class="cor-sig-title">Student Signature</div>
-        </div>
-        <div class="cor-sig-block">
-          <div class="cor-sig-line">${escapeHtml(sigs?.cashier_name || '—')}</div>
-          <div class="cor-sig-title">Cashier / Accounting Officer</div>
-        </div>
-        <div class="cor-sig-block">
-          <div class="cor-sig-line">${escapeHtml(sigs?.registrar_name || '—')}</div>
-          <div class="cor-sig-title">College Registrar</div>
-        </div>
-      </div>
-
-      <div class="cor-doc-footer">
-        <strong>Iligan Medical Center College</strong> · San Miguel, Iligan City, Lanao del Norte 9200<br>
-        Tel: (063) 221-4050 · Email: registrar@imcc.edu.ph · This document is electronically generated.
-      </div>
-    </div>`;
+  container.innerHTML = window.renderStudentCor({
+    schoolYear: activeSchoolYear,
+    semester: activeSemester,
+    student: [
+      ['Student No:', profile.student_no || '—'],
+      ['Program:', profile.program || '—'],
+      ['Student Name:', profile.full_name || '—'],
+      ['Year / Section:', (profile.year_level || '—') + (profile.section ? ' — Section ' + profile.section : '')],
+      ['Email:', profile.email || user.email || '—'],
+      ['Date Issued:', fmtDate(new Date().toISOString())],
+    ],
+    courses: courses.map(course => ({
+      code: course.code || '—', title: course.title || '—', units: Number(course.units || 0).toFixed(1),
+      schedule: course.schedule || 'TBA', instructor: course.instructor_name || 'TBA',
+    })),
+    assessment: [
+      ['Total Enrolled Units:', totalUnits.toFixed(1) + ' Units'],
+      ['Tuition Assessment:', peso(tuition)],
+      ['Miscellaneous Fees:', peso(misc)],
+      ['Total Assessment:', peso(totalAssessment)],
+    ],
+    standing: [['Total Amount Paid:', peso(totalPaid)], ['Balance Remaining:', peso(balance)]],
+    status: courses.length === 0 ? 'unenrolled' : balance > 0 ? 'partial' : 'enrolled',
+    signatures: [
+      ['Student Signature', profile.full_name || '—'],
+      ['Cashier / Accounting Officer', sigs?.cashier_name || '—'],
+      ['College Registrar', sigs?.registrar_name || '—'],
+    ],
+  });
 }
 
 function printCorPage() {
+  if (!document.querySelector('#corDocContainer .cor-doc')) return;
   document.body.classList.add('is-printing-cor');
   window.print();
 }
 
 window.addEventListener('beforeprint', () => {
-  // Ctrl+P and File > Print never went through printCorPage(), so
-  // is-printing-cor was absent and every COR-specific print rule was
-  // skipped. Set the class here when the student is already on the COR
-  // page, so both entry points produce the same document.
+  // Apply the COR print layout to Ctrl+P and File > Print too.
   if (state.page === 'cor' && !document.body.classList.contains('is-printing-cor')) {
     document.body.classList.add('is-printing-cor');
   }
@@ -1685,31 +1343,23 @@ window.addEventListener('afterprint', () => {
 });
 
 // ── Clearance Module ─────────────────────────────────────────────────
-const statusMeta = {
-  cleared: { label: 'Cleared', badge: 'badge-green', dotColor: 'var(--green)', card: 'st-cleared' },
-  pending: { label: 'Pending', badge: 'badge-amber', dotColor: 'var(--amber)', card: 'st-pending' },
-  action_required: { label: 'Action Required', badge: 'badge-red', dotColor: 'var(--red)', card: 'st-action' },
-};
+getEl('retryClearance')?.addEventListener('click', loadClearance);
 
 async function loadClearance() {
   const profile = state.studentProfile;
   if (!profile) return;
 
-  let { data: rows, error } = await supabaseClient
+  const { data: rows, error } = await supabaseClient
     .from('clearances')
     .select('*')
     .eq('student_id', profile.id)
     .order('department_name', { ascending: true });
 
+  const notice = getEl('clearanceLoadError');
+  const grid = getEl('deptGrid');
+  if (notice) notice.hidden = !error;
   if (error) {
-    const grid = getEl('deptGrid');
-    if (grid) {
-      grid.textContent = 'Clearance records are unavailable. ';
-      const retry = document.createElement('button');
-      retry.type = 'button'; retry.textContent = 'Retry';
-      retry.addEventListener('click', loadClearance);
-      grid.append(retry);
-    }
+    if (grid) grid.replaceChildren();
     setText('clearFrac', 'Unavailable');
     setText('clearRemaining', 'Could not verify clearance requirements.');
     const fill = getEl('clearFill');
@@ -1718,62 +1368,21 @@ async function loadClearance() {
     return;
   }
 
-  state.departments = rows || [];
-  renderClearance();
+  renderClearance(rows || []);
 }
 
-function renderClearance() {
+function renderClearance(departments) {
   const grid = getEl('deptGrid');
   if (!grid) return;
 
-  if (!state.departments || state.departments.length === 0) {
-    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--ink-400);padding:30px;background:var(--card);border-radius:12px;border:1px dashed var(--line);">No clearance records found for this term.</div>';
-    setText('clearFrac', '0/0 Cleared');
-    const fill = getEl('clearFill');
-    if (fill) fill.style.width = '0%';
-    setText('clearRemaining', 'Clearance requirements have not been confirmed. Contact the registrar.');
-    return;
-  }
-
-  const cleared = state.departments.filter(d => d.status === 'cleared').length;
-  const totalDepts = state.departments.length || 1;
-  setText('clearFrac', `${cleared}/${totalDepts} Cleared`);
-
+  const cleared = departments.filter(department => department.status === 'cleared').length;
+  const remaining = departments.length - cleared;
+  setText('clearFrac', cleared + '/' + departments.length + ' Cleared');
   const fill = getEl('clearFill');
-  if (fill) fill.style.width = (cleared / totalDepts * 100) + '%';
-
-  const remaining = totalDepts - cleared;
-  setText('clearRemaining', remaining === 0 ? '✓ All departments cleared. You are in good standing!' : `${remaining} department(s) remaining.`);
-
-  grid.innerHTML = state.departments.map(d => {
-    const m = statusMeta[d.status] || statusMeta.pending;
-    // A student may only nudge themselves to the billing page. Marking a
-    // department cleared is a staff action; the previous "Toggle Admin
-    // View" control in this page let any student do it, and the database
-    // policy allowed the underlying UPDATE as well.
-    const actionBtn = (d.department_code === 'cashier' && d.status === 'action_required')
-      ? `<button class="mini-btn" type="button" data-goto="billing">Pay Balance →</button>`
-      : '';
-    return `
-    <div class="dept-card ${m.card}" style="padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:var(--shadow-sm);transition:all 0.2s;">
-      <div class="dept-top" style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="display:flex;gap:12px;align-items:center;">
-          <div class="dept-icon" style="font-size:24px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:10px;">${d.icon || '📄'}</div>
-          <div>
-            <div class="dept-name" style="font-weight:700;font-size:15px;color:var(--ink-900);">${escapeHtml(d.department_name)}</div>
-            <div class="dept-officer" style="font-size:12px;color:var(--ink-500);">${escapeHtml(d.officer_name || '')}</div>
-          </div>
-        </div>
-        <span class="badge ${m.badge}">${m.label}</span>
-      </div>
-      <div class="dept-note" style="font-size:13px;color:var(--ink-600);margin:12px 0 8px;">${escapeHtml(d.note || '')}</div>
-      <div class="dept-status" style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;color:var(--ink-500);">
-        <span class="sdot" style="width:8px;height:8px;border-radius:50%;background:${m.dotColor};"></span>
-        ${d.status === 'cleared' ? 'Digitally Signed & Cleared' : (d.status === 'action_required' ? 'Student Action Required' : 'Awaiting Department Review')}
-      </div>
-      ${actionBtn ? `<div style="margin-top:6px;">${actionBtn}</div>` : ''}
-    </div>`;
-  }).join('');
+  if (fill) fill.style.width = (departments.length ? cleared / departments.length * 100 : 0) + '%';
+  setText('clearRemaining', !departments.length ? 'Clearance requirements have not been confirmed. Contact the registrar.'
+    : remaining ? remaining + ' department(s) remaining.' : '✓ All departments cleared. You are in good standing!');
+  grid.innerHTML = window.renderStudentClearanceCards({ departments });
 }
 
 // NOTE: adminClear() and the #adminToggle "Admin View" control were
@@ -1781,8 +1390,7 @@ function renderClearance() {
 // clearances RLS policy permitted the underlying UPDATE. Clearance is now
 // a staff action; see database/security-hardening-phase0b.sql.
 
-// The "Pay Balance" button in the clearance grid routes rather than
-// calling a global, so it works without an inline handler.
+// Clearance shortcuts are rendered after startup, so delegate navigation.
 document.addEventListener('click', event => {
   const target = event.target instanceof Element
     ? event.target.closest('[data-goto]')
@@ -1910,11 +1518,7 @@ async function loadSSOLinks() {
   const role = state.studentProfile?.role || 'student';
   const visible = (links || []).filter(l => (l.roles || '').split(',').map(r => r.trim()).includes(role))
     .filter(l => !['library', 'email'].includes((l.label || '').trim().toLowerCase()));
-  nav.innerHTML = visible.map(l => `
-    <a href="${l.url}" target="_blank" class="nav-item" style="text-decoration:none;">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-      ${escapeHtml(l.label)}
-    </a>`).join('') || '<div class="nav-item soon" style="opacity:.4;">No links configured</div>';
+  nav.innerHTML = window.renderStudentQuickLinks({ links: visible });
 }
 
 // ── Attendance Module ────────────────────────────────────────────────
@@ -2156,14 +1760,7 @@ async function loadProfile() {
   setText('profilePhone', p.phone);
   setText('profileAddress', p.address);
 
-  const avatar = getEl('profileAvatar');
-  if (avatar) {
-    if (p.avatar_url) {
-      avatar.innerHTML = `<img src="${p.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
-    } else {
-      avatar.textContent = getInitials(p.full_name);
-    }
-  }
+  renderStudentAvatar(getEl('profileAvatar'), p.full_name, p.avatar_url);
 
   const editPhone = getEl('editPhone');
   const editAddress = getEl('editAddress');
@@ -2173,34 +1770,33 @@ async function loadProfile() {
   if (editAvatar) editAvatar.value = p.avatar_url || '';
 }
 
-getEl('saveProfileBtn')?.addEventListener('click', async () => {
+getEl('saveProfileBtn')?.addEventListener('click', async event => {
   const profile = state.studentProfile;
   if (!profile) return;
+  const button = event.currentTarget;
+  if (button.disabled) return;
 
-  const phone = getEl('editPhone')?.value.trim() || null;
-  const address = getEl('editAddress')?.value.trim() || null;
-  const avatar_url = getEl('editAvatar')?.value.trim() || null;
+  const update = {
+    phone: getEl('editPhone').value.trim() || null,
+    address: getEl('editAddress').value.trim() || null,
+    avatar_url: getEl('editAvatar').value.trim() || null,
+  };
 
+  button.disabled = true;
   try {
-    const updateData = {};
-    if (phone !== null) updateData.phone = phone;
-    if (address !== null) updateData.address = address;
-    if (avatar_url !== null) updateData.avatar_url = avatar_url;
-
-    const { error } = await supabaseClient.from('profiles').update(updateData).eq('id', profile.id);
+    const { data, error } = await supabaseClient.from('profiles').update(update).eq('id', profile.id)
+      .select('phone, address, avatar_url').single();
 
     if (error) throw error;
-
-    state.studentProfile.phone = phone;
-    state.studentProfile.address = address;
-    state.studentProfile.avatar_url = avatar_url;
-    if (state.dashboard) state.dashboard.student.avatarUrl = avatar_url;
+    Object.assign(state.studentProfile, data);
 
     showToast('Profile updated successfully');
     loadProfile();
     renderDashboard();
   } catch (err) {
     showToast('Error updating profile: ' + err.message, true);
+  } finally {
+    button.disabled = false;
   }
 });
 
@@ -2903,13 +2499,13 @@ async function cancelBooking(id) {
 function wireHelp() {
   getEl('helpForm')?.addEventListener('submit', event => {
     event.preventDefault();
-    if (helpBusy) return;
     const field = getEl('helpInput');
     const question = field.value;
     field.value = '';
     askHelpAssistant(question);
   });
 
+  // Suggested questions are fixed button text from the dashboard view.
   document.addEventListener('click', event => {
     if (event.target instanceof Element && event.target.closest('[data-help-book]')) {
       revealBooking(lastUnansweredQuestion);
@@ -2918,9 +2514,8 @@ function wireHelp() {
     const chip = event.target instanceof Element
       ? event.target.closest('[data-ask]')
       : null;
-    if (!chip || helpBusy) return;
-    const question = chip.dataset.ask || '';
-    askHelpAssistant(question);
+    if (!chip) return;
+    askHelpAssistant(chip.dataset.ask || '');
   });
 
   getEl('bookForm')?.addEventListener('submit', submitBooking);
@@ -3117,7 +2712,6 @@ async function init() {
   await Promise.all([
     dashboardReady,
     loadSafely('enrollment',   loadEnrollment),
-    loadSafely('billing',      loadBilling),
     loadSafely('grades',       loadGrades),
     loadSafely('clearance',    loadClearance),
     loadSafely('cor',          loadCor),
@@ -3158,15 +2752,18 @@ function startAcademicUpdates() {
     }
     if (all || changes.includes('grades')) jobs.push(loadGrades());
     if (all || changes.includes('activities')) jobs.push(loadNotifications());
-    const modal = getEl('prospectusModal');
     if ((all || changes.some(t => ['grades','enrollments','courses','course_offerings'].includes(t))) &&
-        (modal?.classList.contains('open') || modal?.style.display === 'flex' || document.querySelector('.prospectus-modal-dynamic'))) jobs.push(viewProspectus(true));
+        getEl('prospectusModal')?.open) jobs.push(viewProspectus(true));
     const results = await Promise.allSettled(jobs);
     if (results.some(r => r.status === 'rejected')) showToast('Some updates could not load. Reopen the affected section to retry.', true);
   });
 }
 
 // Wait for shared supabase-config.js to initialize window.__myimcc_supabase_client__
+document.querySelectorAll('[data-chat-open]').forEach(button => {
+  button.addEventListener('click', event => { event.preventDefault(); toggleChat(true); });
+});
+
 (function waitForSupabase() {
   if (window.__myimcc_supabase_client__) {
     supabaseClient = window.__myimcc_supabase_client__;

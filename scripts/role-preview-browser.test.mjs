@@ -136,7 +136,7 @@ try {
     if (role === 'dean') {
       assert.equal(await frame.getByText('Accreditation Compliance Checklist', {exact:true}).count(),0);
       await frame.locator('[data-page="compliance"]').click();
-      await frame.getByRole('heading', {name:'Graduation Readiness',exact:true}).waitFor();
+      await frame.getByRole('heading', {name:'Student Clearance',exact:true}).waitFor();
       if (process.env.DEAN_SCREENSHOT) await page.screenshot({path:process.env.DEAN_SCREENSHOT,animations:'disabled'});
       assert.equal(await frame.locator('[data-page="financial"]').count(),0);
       await frame.locator('a[href*="enrollment-requests"]').click();
@@ -186,7 +186,7 @@ try {
   await demoFrame.locator('summary').filter({hasText:"Finalize a student's enrollment"}).click();
   await demoFrame.getByRole('button',{name:'Finalize Enrollment',exact:true}).click();
   await demoFrame.locator('dialog').getByRole('button',{name:'Continue',exact:true}).click();
-  await demoFrame.locator('dialog').waitFor({state:'detached'});
+  await demoFrame.locator('dialog').waitFor({state:'hidden'});
   await demoFrame.waitForFunction(()=>!document.getElementById('refresh').disabled);
   assert(demoWrites.some(r=>r.body?.p_decision==='approved'));
   assert(demoWrites.some(r=>r.body?.p_decision==='rejected' && r.body?.p_review_note==='Demo prerequisite missing'));

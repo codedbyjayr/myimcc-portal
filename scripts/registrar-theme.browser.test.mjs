@@ -1,3 +1,4 @@
+import { dashboardMarkup } from './dashboard-markup.mjs';
 // Run with the existing browser tooling: node scripts/registrar-theme.browser.test.mjs
 import assert from 'node:assert/strict';
 import { readFile, mkdir } from 'node:fs/promises';
@@ -27,7 +28,7 @@ try {
   for (const root of ['../', '../review-assets/']) {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const source = new URL(root + 'staff/registrar-dashboard.html', import.meta.url);
-    const html = await readFile(source, 'utf8');
+    const html = await dashboardMarkup(source);
     await page.route('**/*', route => route.abort());
     await page.setContent(await page.evaluate(source => {
       const document = new DOMParser().parseFromString(source, 'text/html');
@@ -38,6 +39,9 @@ try {
       await page.addStyleTag({ content: await readFile(new URL(link[1], source), 'utf8') });
     }
     await page.evaluate(() => document.documentElement.dataset.theme = 'light');
+    for (const name of ['Appointments', 'Messages']) {
+      assert(await page.getByRole('button', { name: `${name} Coming soon`, exact: true }).isDisabled());
+    }
     const colors = await page.evaluate(() => ['.stat-card .head', '.stat-card .sub', '.quick-card > span:last-child', 'th', '.muted-note'].map(selector => ({
       selector, foreground: getComputedStyle(document.querySelector(selector)).color, background: getComputedStyle(document.body).backgroundColor
     })));

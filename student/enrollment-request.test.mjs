@@ -14,6 +14,7 @@ const context = vm.createContext({
   loadDashboard: async () => {}, loadEnrollment: async () => {},
 });
 vm.runInContext(submit, context);
+vm.runInContext(source.slice(source.indexOf('function enrollmentSelectionBlocked()'), source.indexOf("getEl('courseList')?.addEventListener")), context);
 vm.runInContext(source.slice(source.indexOf('function renderEnrollmentSummary()'), source.indexOf('function setEnrollStep(step)')), context);
 let enrollNow;
 button.addEventListener = (event, handler) => { assert.equal(event, 'click'); enrollNow = handler; };

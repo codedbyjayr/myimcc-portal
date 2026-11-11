@@ -29,16 +29,19 @@ function showBlockedState(profile) {
     }
 
     if (form) form.hidden = true;
-    panel.classList.add('visible');
+    panel.hidden = false;
     return true;
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
+(async function initSelectRole() {
+    const formError = document.getElementById('formError');
     let supabaseClient;
     try {
         supabaseClient = await getSupabaseClientAsync();
     } catch (e) {
         console.error("Failed to init Supabase", e);
+        formError.textContent = 'Unable to connect. Reload this page to try again.';
+        formError.hidden = false;
         return;
     }
 
@@ -48,16 +51,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const requestedRoleSelect = document.getElementById('requestedRole');
     const programSelect = document.getElementById('studentProgram');
     const yearSelect = document.getElementById('studentYear');
+    const academicFields = document.getElementById('studentAcademicFields');
     const updateAcademicFields = () => {
         const student = requestedRoleSelect.value === 'student';
-        document.getElementById('studentAcademicFields').hidden = !student;
+        academicFields.hidden = !student;
         programSelect.disabled = yearSelect.disabled = !student;
         programSelect.required = yearSelect.required = student;
     };
     requestedRoleSelect.addEventListener('change', updateAcademicFields);
     updateAcademicFields();
     const submitBtn = document.getElementById('submitBtn');
-    const formError = document.getElementById('formError');
 
     // Signing out is the only action a blocked account can take, so give it a
     // real handler. A button with no listener looks broken.
@@ -111,7 +114,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const { data: curriculum, error: curriculumError } = await window.IMCC.fetchAll(() =>
         supabaseClient.from('courses').select('program,year_level'));
-    programSelect.replaceChildren(new Option(curriculumError ? 'Programs could not load. Refresh to retry.' : 'Choose your program', ''));
+    programSelect.replaceChildren(new Option(curriculumError ? 'Programs could not load. Reload to retry.' : 'Choose your program', ''));
     if (!curriculumError) {
         const programs = [...new Set((curriculum || []).map(course => course.program).filter(Boolean))].sort();
         programs.forEach(program => programSelect.add(new Option(program, program)));
@@ -157,7 +160,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Submitting...';
 
-        // The database owns approval and validates student academic details.
+        // Only these columns. 'status' and 'role' are deliberately absent:
+        // the profiles_protect_privileged() trigger owns them and rejects
+        // any client attempt to set them, which made this form fail
+        // outright. The trigger decides the outcome: a student-pattern
+        // address asking for 'student' is approved on the spot, anything
+        // else is parked as pending for an administrator.
         const { error } = await supabaseClient
             .from('profiles')
             .update({
@@ -199,4 +207,5 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.location.href = 'awaiting-approval.html';
         }
     });
-});
+    submitBtn.disabled = false;
+})();
