@@ -51,3 +51,30 @@ assert.equal(button.disabled,false);
 const first=notice;
 context.showReadFailure('billing',async()=>{});
 assert.equal(notice,first,'Repeated failures do not duplicate notices');
+
+for (const path of ['./dashboard.js', '../review-assets/student/dashboard.js']) {
+  const dashboard = readFileSync(new URL(path, import.meta.url), 'utf8');
+  const billingStart = dashboard.indexOf('function csvField(');
+  const billingEnd = dashboard.indexOf("getEl('gradeYearFilter')", billingStart);
+  const receipt = `OR'123" <sample>`;
+  let click;
+  let toast;
+  class ReceiptButton {
+    dataset = { receipt };
+    closest(selector) { return selector === 'button[data-receipt]' ? this : null; }
+  }
+  const { csvField } = vm.runInNewContext(dashboard.slice(billingStart, billingEnd) + '\n({ csvField })', {
+    Element: ReceiptButton,
+    getEl: () => ({ addEventListener(event, handler) {
+      assert.equal(event, 'click');
+      click = handler;
+    } }),
+    showToast: message => { toast = message; },
+  });
+  click({ target: new ReceiptButton() });
+  assert.equal(toast, `OR #${receipt} recorded.`);
+  assert.equal(csvField('OR,123'), '"OR,123"');
+  assert.equal(csvField('Paid "in full"'), '"Paid ""in full"""');
+  assert.equal(csvField('=1+1'), '"\t=1+1"');
+  assert.equal(csvField(-50), '"-50"');
+}
