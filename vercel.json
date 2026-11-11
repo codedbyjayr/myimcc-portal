@@ -5,6 +5,7 @@
       "codex/backend-semester-release": false
     }
   },
+  "installCommand": "npm ci",
   "buildCommand": "npm run check:release && npm run build",
   "outputDirectory": ".",
   "rewrites": [

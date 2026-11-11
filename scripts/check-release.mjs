@@ -4,13 +4,17 @@ export async function checkRelease(env = process.env, request = fetch, { fronten
   if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) throw new Error('Release blocked: configure SUPABASE_URL and SUPABASE_ANON_KEY for the target database.');
   const rpc = frontend ? 'portal_frontend_release_ready' : 'portal_release_ready';
   const expected = frontend ? 'registrar-summer-v1' : 'semester-v3';
-  const response = await request(new URL(`/rest/v1/rpc/${rpc}`, env.SUPABASE_URL), {
+  const url = new URL(`/rest/v1/rpc/${rpc}`, env.SUPABASE_URL);
+  const response = await request(url, {
     headers: { apikey: env.SUPABASE_ANON_KEY },
     signal: AbortSignal.timeout(15000), redirect: 'error',
   });
-  if (!response.ok || await response.json() !== expected) {
+  if (!response.ok) {
+    throw new Error(`Release blocked: ${url.hostname} returned HTTP ${response.status} for ${rpc}. Check the target project, API key, and RPC availability.`);
+  }
+  if (await response.json() !== expected) {
     const migrations = frontend ? 'the academic backend, Registrar Summer publishing, and frontend readiness migrations' : 'the academic backend migrations';
-    throw new Error(`Release blocked: apply and verify ${migrations} on the target database.`);
+    throw new Error(`Release blocked: ${rpc} on ${url.hostname} did not return ${expected}. Apply and verify ${migrations} on that database.`);
   }
 }
 

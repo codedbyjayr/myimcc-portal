@@ -11,7 +11,9 @@ for (const [status, body] of [[404, {}], [200, null], [200, 'semester-v3'], [200
     return new Response(JSON.stringify(body), { status });
   });
   if (body === 'registrar-summer-v1') await operation;
-  else await assert.rejects(operation, /Release blocked/);
+  else await assert.rejects(operation, status === 404
+    ? /target\.invalid returned HTTP 404/
+    : /target\.invalid did not return registrar-summer-v1/);
 }
 await assert.rejects(checkRelease(env, async () => { throw new Error('Network unavailable'); }), /Network/);
 assert.equal(JSON.parse(readFileSync('vercel.json')).git.deploymentEnabled['codex/backend-semester-release'], false, 'Backend branch must not deploy the frontend');
